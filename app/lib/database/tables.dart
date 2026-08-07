@@ -7393,6 +7393,38 @@ class FinanceDatabase extends _$FinanceDatabase {
     return streamGroup.stream;
   }
 
+  // A restored/imported backup replaces this device's whole database via a
+  // raw file overwrite (see overwriteDefaultDB), so every row keeps its
+  // original dateTimeModified. Peers only pull rows "modified since I last
+  // synced with this device" (see getAllNew* above), and that original
+  // timestamp can predate what a peer already has recorded -- so restored
+  // rows silently never reach them. Stamping everything as modified now
+  // turns the restore into an ordinary last-write-wins change peers will
+  // pick up on their next sync, same as any other edit. Must run once,
+  // right after a restore/import, before the next sync push -- see
+  // "databaseJustImported" handling in initializeSettings().
+  Future<void> bumpAllModifiedTimestampsForResync() async {
+    DateTime now = DateTime.now();
+    await batch((batch) {
+      batch.update(wallets, WalletsCompanion(dateTimeModified: Value(now)));
+      batch.update(
+          transactions, TransactionsCompanion(dateTimeModified: Value(now)));
+      batch.update(
+          categories, CategoriesCompanion(dateTimeModified: Value(now)));
+      batch.update(budgets, BudgetsCompanion(dateTimeModified: Value(now)));
+      batch.update(categoryBudgetLimits,
+          CategoryBudgetLimitsCompanion(dateTimeModified: Value(now)));
+      batch.update(associatedTitles,
+          AssociatedTitlesCompanion(dateTimeModified: Value(now)));
+      batch.update(
+          objectives, ObjectivesCompanion(dateTimeModified: Value(now)));
+      batch.update(scannerTemplates,
+          ScannerTemplatesCompanion(dateTimeModified: Value(now)));
+      batch.update(
+          deleteLogs, DeleteLogsCompanion(dateTimeModified: Value(now)));
+    });
+  }
+
   // transactions not belonging to a category should be deleted
   Future<bool> deleteWanderingTransactions() async {
     List<TransactionCategory> allCategories = await getAllCategories();

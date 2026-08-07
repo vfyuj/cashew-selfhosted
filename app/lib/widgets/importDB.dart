@@ -2,6 +2,7 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/struct/syncClient.dart';
+import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/globalSnackbar.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/openSnackbar.dart';
@@ -39,6 +40,8 @@ Future<String?> importDBFileFromDevice(BuildContext context) async {
   }
 
   await cancelAndPreventSyncOperation();
+
+  await createSafetyBackupBeforeOverwrite(context);
 
   if (kIsWeb) {
     Uint8List fileBytes = result.files.single.bytes!;

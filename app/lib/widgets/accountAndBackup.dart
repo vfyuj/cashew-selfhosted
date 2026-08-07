@@ -363,6 +363,45 @@ BackupTransport? getBackupTransport() {
   return SelfHostedBackupTransport(SelfHostedClient(selfHostedSession!));
 }
 
+/// Best-effort safety net before a destructive local DB overwrite (restore
+/// or import, see [overwriteDefaultDB]): backs up the current state under
+/// its own timestamped filename so it never collides with -- or gets
+/// silently replaced by -- the user's regular named device backup. Never
+/// blocks or throws: a missing/unreachable backup destination just means no
+/// safety net for this restore, not a blocked restore. Per
+/// specs/01-local-first-invariant.md, the destructive action the user asked
+/// for must still proceed.
+Future<void> createSafetyBackupBeforeOverwrite(context) async {
+  try {
+    final transport = getBackupTransport();
+    if (transport == null) return;
+    DBFileInfo currentDBFileInfo = await getCurrentDBFileInfo();
+    String filename =
+        "pre-restore-${getCurrentDeviceName()}-${DateTime.now().millisecondsSinceEpoch}.sqlite";
+    await transport.putFile(filename, currentDBFileInfo.dbFileBytes);
+    openSnackbar(
+      SnackbarMessage(
+        title: "safety-backup-created".tr(),
+        description: "safety-backup-created-description".tr(),
+        icon: appStateSettings["outlinedIcons"]
+            ? Icons.backup_outlined
+            : Icons.backup_rounded,
+      ),
+    );
+  } catch (e) {
+    print("Error creating safety backup before overwrite: " + e.toString());
+    openSnackbar(
+      SnackbarMessage(
+        title: "safety-backup-failed".tr(),
+        description: e.toString(),
+        icon: appStateSettings["outlinedIcons"]
+            ? Icons.warning_outlined
+            : Icons.warning_rounded,
+      ),
+    );
+  }
+}
+
 Future<void> createBackup(
   context, {
   bool? silentBackup,
@@ -517,6 +556,8 @@ Future<void> loadBackup(BuildContext context, BackupTransport client,
     openLoadingPopup(context);
 
     await cancelAndPreventSyncOperation();
+
+    await createSafetyBackupBeforeOverwrite(context);
 
     List<int> dataStore = await client.getFile(file.name);
     await overwriteDefaultDB(Uint8List.fromList(dataStore));

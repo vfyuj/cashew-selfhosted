@@ -51,6 +51,12 @@ This is a formalization of the existing `SyncLog` concept as something emitted i
 
 Unchanged from today: last-write-wins per row by `dateTimeModified`. This is adequate because Stage 2 is still single-owner-multi-device (per Stage 1's scope). Revisit if Stage 4 introduces genuinely concurrent multi-person edits to the same records — do not attempt to solve that here.
 
+## Interaction with restore/import
+
+Stage 1 fixed a real bug (see its Status notes) where a restored backup's rows kept their original `dateTimeModified` and were silently skipped by peers' timestamp-diff pull. The fix there was to stamp every row as modified "now" right after a restore/import, so it looks like an ordinary edit to the old snapshot-diff mechanism.
+
+The event-log model here needs an equivalent, and it will not fall out for free: the outbox is fed by normal per-write hooks (`watchAllForAutoSync` today), and a raw-file DB overwrite bypasses those, same as it bypassed them in Stage 1. A restore/import must explicitly emit a fresh upsert event (current timestamp, next `sequence`) for every row it touches -- not just for writes made after the restore -- or restored data will silently never reach other connected devices under this stage's mechanism either.
+
 ## Non-goals for this stage
 
 - No change to conflict-resolution semantics.
