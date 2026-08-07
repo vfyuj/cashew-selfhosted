@@ -39,8 +39,14 @@ class AccountsPageState extends State<AccountsPage> {
   bool currentlyExporting = false;
   bool signingIn = false;
   String? signInError;
-  final TextEditingController serverUrlController =
-      TextEditingController(text: appStateSettings["serverUrl"]);
+  // On web the app is always served from the same origin as its own API
+  // (see DEPLOYMENT.md -- one container serves both), so there's exactly
+  // one correct server URL and asking the user to type it in is just a
+  // chance to get it wrong. Native builds are a single generic binary that
+  // could point at anyone's server, so those still need the manual field
+  // (same as e.g. a Nextcloud mobile app).
+  final TextEditingController serverUrlController = TextEditingController(
+      text: kIsWeb ? Uri.base.origin : appStateSettings["serverUrl"]);
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
@@ -126,14 +132,16 @@ class AccountsPageState extends State<AccountsPage> {
                           textAlign: TextAlign.center,
                         ),
                         SizedBox(height: 20),
-                        TextInput(
-                          labelText: "server-url".tr(),
-                          controller: serverUrlController,
-                          keyboardType: TextInputType.url,
-                          autocorrect: false,
-                          padding: EdgeInsetsDirectional.zero,
-                        ),
-                        SizedBox(height: 10),
+                        if (!kIsWeb) ...[
+                          TextInput(
+                            labelText: "server-url".tr(),
+                            controller: serverUrlController,
+                            keyboardType: TextInputType.url,
+                            autocorrect: false,
+                            padding: EdgeInsetsDirectional.zero,
+                          ),
+                          SizedBox(height: 10),
+                        ],
                         TextInput(
                           labelText: "email".tr(),
                           controller: emailController,
