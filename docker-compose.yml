@@ -1,7 +1,9 @@
 services:
-  # The API: auth, sync, backup. See specs/03-stage-1-kill-google.md.
-  server:
-    build: ./server
+  # One container: the Dart API and the Flutter web UI, served from the
+  # same origin on the same port (see /Dockerfile, server/lib/src/web_handler.dart).
+  # See specs/03-stage-1-kill-google.md.
+  app:
+    build: .
     ports:
       - "8080:8080"
     volumes:
@@ -9,16 +11,6 @@ services:
     environment:
       - PORT=8080
       - DATA_DIR=/data
-    restart: unless-stopped
-
-  # The actual app UI (Flutter web build), served as static files by nginx.
-  # Separate from `server` on purpose -- see app/Dockerfile. Put both behind
-  # one NPM proxy host with Custom Locations so there's a single public
-  # subdomain/cert; see DEPLOYMENT.md.
-  web:
-    build: ./app
-    ports:
-      - "8081:80"
     restart: unless-stopped
 
 volumes:

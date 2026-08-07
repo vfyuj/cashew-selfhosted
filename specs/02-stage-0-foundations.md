@@ -2,15 +2,15 @@
 
 No user-visible behavior change. Goal: every tool and skeleton needed for Stage 1 exists and is proven reachable.
 
-## Status (last updated 2026-08-07)
+## Status (last updated 2026-08-08)
 
 - [x] **Task 1 — dev environment.** Flutter pinned to 3.19.6 (only version compatible with upstream's `intl`/`share_plus` lock combo — newer stable Flutter breaks `pub get` or crashes dart2js on `share_plus` web). Android SDK 34/36 + build-tools + JDK 17 installed via Homebrew, all without sudo. `flutter build apk` and `flutter build web` both verified against pristine `upstream/`.
 - [x] Task 2a — placeholder name/id: pubspec name `cashew_selfhosted`, Android `applicationId` `com.selfhosted.cashew`, label "Cashew Selfhosted", web manifest/title updated. Verified via `aapt dump badging` that the built APK has a distinct package id from upstream's `com.budget.tracker_app`.
   - [ ] Task 2b — new icon assets (still using upstream's icon; blocked on choosing a real app name/identity).
 - [x] **Task 3 — repo restructure.** `/app` created (copy of `upstream/budget`, all `package:budget/` imports repointed to `package:cashew_selfhosted/`). `upstream/` verified untouched. `/server` created (task 4).
 - [x] **Task 4 — backend skeleton.** Dart `shelf` service in `/server`, `GET /health`, Dockerfile (multi-stage, `dart compile exe`) + root `docker-compose.yml`. Verified with `docker compose up --build` (via Homebrew `colima`) + `curl localhost:8080/health` → 200.
-- [x] Task 4b — web UI container. Originally missed: Task 4 only covered the API, so nothing ever served the actual Flutter web app (visiting the deployed domain returned the API's "Route not found" 404, since there was no route for `/`). Added `app/Dockerfile` (multi-stage: `ghcr.io/cirruslabs/flutter:3.19.6` builds `flutter build web --release`, then `nginx:alpine` serves the output) + `app/nginx.conf`, and a second `web` service in `docker-compose.yml` (port 8081). Verified locally: `docker compose build web` succeeds, `docker compose up -d` serves `curl localhost:8081/` → 200 alongside `curl localhost:8080/health` → 200.
-- [ ] **Task 5 — home server deployment.** Needs the operator's physical server; not reachable from this environment. Runbook written at `/DEPLOYMENT.md` — now covers both containers behind **one** NPM proxy host (Custom Locations split `/auth`, `/sync`, `/backup`, `/health` to the API container, everything else to the web container, so there's still only one subdomain/cert). This is the one Stage 0 task requiring manual follow-through on the operator's own hardware.
+- [x] Task 4b — web UI serving, now folded into the single server container. Originally shipped as a second container (`app/Dockerfile` + nginx, port 8081) behind an NPM path-split, because task 4 only covered the API and nothing served `/`. Simplified 2026-08-08: for a one-instance, two-user home deployment the two-container split (CORS middleware, nginx config, NPM Custom Locations) was complexity with no real payoff, so the Dart server now serves the compiled Flutter web build directly (`server/lib/src/web_handler.dart`, `shelf_static`, SPA fallback to `index.html`) from the same port as the API. One container, one origin, no CORS needed anywhere. `app/Dockerfile`/`app/nginx.conf` removed; build logic moved into the root `/Dockerfile` (two build stages — Flutter web, Dart compile — one final image). Verified locally: `flutter build web --release` + `dart run bin/server.dart` with `WEB_DIR` pointed at the build output — `curl localhost:<port>/` → 200 (no-cache `index.html`), an unknown path falls back to `index.html` (SPA routing), a real static asset caches normally, and `/auth/login`, `/sync/files` still hit the API (401, not swallowed by the web fallback).
+- [ ] **Task 5 — home server deployment.** Needs the operator's physical server; not reachable from this environment. Runbook written at `/DEPLOYMENT.md` — now a single container behind **one** plain NPM proxy host (no Custom Locations needed, since everything is on one port). This is the one Stage 0 task requiring manual follow-through on the operator's own hardware.
 
 ## Tasks
 
@@ -42,13 +42,13 @@ Target layout:
 - No database, no auth, no business logic yet — this task is purely "prove the container runs and is reachable."
 - **Done when**: `docker compose up` runs the container locally and `curl localhost:<port>/health` returns 200.
 
-### 4b. Web UI container
-- A second container (`app/Dockerfile`) that builds the Flutter web app from source and serves it as static files (nginx). Rebuilds from source on every `docker compose up --build` — no manual "build locally, copy files to server" step to remember on redeploys.
-- Kept as a separate container/image from the API on purpose (independent rebuild/redeploy), but designed to sit behind the **same** public subdomain as the API via reverse-proxy path routing (see task 5) rather than a second subdomain.
-- **Done when**: `docker compose up --build` runs both containers locally; `curl localhost:8081/` returns 200 with the app's `index.html`.
+### 4b. Web UI serving
+- The same `/server` Dart binary builds the Flutter web app from source (as a separate Docker build stage) and serves the compiled output directly alongside the API, on the same port. Rebuilds from source on every `docker compose up --build` — no manual "build locally, copy files to server" step to remember on redeploys.
+- One container/one image on purpose: for a one-instance, two-user home deployment, the API and the web UI don't need independent rebuild/redeploy or separate scaling, and a shared origin means the browser never makes a cross-origin request between them — no CORS, no reverse-proxy path routing to configure (see task 5).
+- **Done when**: `docker compose up --build` runs the container locally; `curl localhost:8080/` returns 200 with the app's `index.html`, alongside `curl localhost:8080/health` → 200.
 
 ### 5. Home server deployment
-- Reverse proxy entry + HTTPS on a new subdomain of the owner's existing domain, in front of **both** the API and web-UI containers (task 4, task 4b) — path-based routing (e.g. NPM Custom Locations) sending `/auth`, `/sync`, `/backup`, `/health` to the API container and everything else to the web-UI container, so there's one subdomain/cert, not two. (Confirm which reverse proxy is already in use for Nextcloud/Immich before writing config — do not assume.)
+- Reverse proxy entry + HTTPS on a new subdomain of the owner's existing domain, in front of the single container (task 4, task 4b) — a plain single-target proxy host, since the API and web UI share one port and there's nothing to split by path. (Confirm which reverse proxy is already in use for Nextcloud/Immich before writing config — do not assume.)
 - **Done when**: `curl https://<subdomain>/health` returns 200 from outside the home network (e.g., from a phone on cellular data), and opening `https://<subdomain>/` in a browser shows the app UI (not a 404/"Route not found").
 
 ## Non-goals for this stage

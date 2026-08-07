@@ -10,8 +10,9 @@ import 'package:server/src/auth/auth_service.dart';
 import 'package:server/src/backup/backup_routes.dart';
 import 'package:server/src/database.dart';
 import 'package:server/src/sync/sync_routes.dart';
+import 'package:server/src/web_handler.dart';
 
-Router _buildRouter(AuthService authService, String dataDir) {
+Router _buildApiRouter(AuthService authService, String dataDir) {
   final router = Router();
 
   router.get('/health', (Request request) {
@@ -36,13 +37,20 @@ Router _buildRouter(AuthService authService, String dataDir) {
 Future<void> main(List<String> args) async {
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final dataDir = Platform.environment['DATA_DIR'] ?? './data';
+  // Unset in local API-only dev; set (by the Dockerfile) to the compiled
+  // Flutter web build so one server serves both the UI and the API from
+  // the same origin -- no separate web container, no CORS needed.
+  final webDir = Platform.environment['WEB_DIR'];
 
   final db = openDatabase(dataDir);
   final authService = AuthService(db);
 
-  final handler = const Pipeline()
-      .addMiddleware(logRequests())
-      .addHandler(_buildRouter(authService, dataDir).call);
+  final apiHandler = _buildApiRouter(authService, dataDir).call;
+  final rootHandler = webDir == null
+      ? apiHandler
+      : Cascade().add(apiHandler).add(buildWebHandler(webDir)).handler;
+
+  final handler = const Pipeline().addMiddleware(logRequests()).addHandler(rootHandler);
 
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
   print('Server listening on port ${server.port}');
