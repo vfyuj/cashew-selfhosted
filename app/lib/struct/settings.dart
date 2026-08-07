@@ -73,6 +73,19 @@ Future<bool> initializeSettings() async {
         databaseCorruptedError = e.toString();
       }
     }
+
+    if (isDatabaseCorrupted == false) {
+      try {
+        // Restored data keeps its original dateTimeModified, which can
+        // predate what peers think they've already synced with this
+        // device -- without this, the restore would silently never reach
+        // them. See bumpAllModifiedTimestampsForResync().
+        await database.bumpAllModifiedTimestampsForResync();
+      } catch (e) {
+        print(
+            "Error bumping timestamps for resync after restore " + e.toString());
+      }
+    }
   }
 
   appStateSettings = userSettings;
