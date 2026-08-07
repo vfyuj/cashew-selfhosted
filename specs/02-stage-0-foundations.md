@@ -9,7 +9,8 @@ No user-visible behavior change. Goal: every tool and skeleton needed for Stage 
   - [ ] Task 2b — new icon assets (still using upstream's icon; blocked on choosing a real app name/identity).
 - [x] **Task 3 — repo restructure.** `/app` created (copy of `upstream/budget`, all `package:budget/` imports repointed to `package:cashew_selfhosted/`). `upstream/` verified untouched. `/server` created (task 4).
 - [x] **Task 4 — backend skeleton.** Dart `shelf` service in `/server`, `GET /health`, Dockerfile (multi-stage, `dart compile exe`) + root `docker-compose.yml`. Verified with `docker compose up --build` (via Homebrew `colima`) + `curl localhost:8080/health` → 200.
-- [ ] **Task 5 — home server deployment.** Needs the operator's physical server; not reachable from this environment. Runbook written at `/DEPLOYMENT.md` (Nginx Proxy Manager proxy-host fields, SSL, external curl test) — this is the one Stage 0 task requiring manual follow-through on the operator's own hardware.
+- [x] Task 4b — web UI container. Originally missed: Task 4 only covered the API, so nothing ever served the actual Flutter web app (visiting the deployed domain returned the API's "Route not found" 404, since there was no route for `/`). Added `app/Dockerfile` (multi-stage: `ghcr.io/cirruslabs/flutter:3.19.6` builds `flutter build web --release`, then `nginx:alpine` serves the output) + `app/nginx.conf`, and a second `web` service in `docker-compose.yml` (port 8081). Verified locally: `docker compose build web` succeeds, `docker compose up -d` serves `curl localhost:8081/` → 200 alongside `curl localhost:8080/health` → 200.
+- [ ] **Task 5 — home server deployment.** Needs the operator's physical server; not reachable from this environment. Runbook written at `/DEPLOYMENT.md` — now covers both containers behind **one** NPM proxy host (Custom Locations split `/auth`, `/sync`, `/backup`, `/health` to the API container, everything else to the web container, so there's still only one subdomain/cert). This is the one Stage 0 task requiring manual follow-through on the operator's own hardware.
 
 ## Tasks
 
@@ -41,9 +42,14 @@ Target layout:
 - No database, no auth, no business logic yet — this task is purely "prove the container runs and is reachable."
 - **Done when**: `docker compose up` runs the container locally and `curl localhost:<port>/health` returns 200.
 
+### 4b. Web UI container
+- A second container (`app/Dockerfile`) that builds the Flutter web app from source and serves it as static files (nginx). Rebuilds from source on every `docker compose up --build` — no manual "build locally, copy files to server" step to remember on redeploys.
+- Kept as a separate container/image from the API on purpose (independent rebuild/redeploy), but designed to sit behind the **same** public subdomain as the API via reverse-proxy path routing (see task 5) rather than a second subdomain.
+- **Done when**: `docker compose up --build` runs both containers locally; `curl localhost:8081/` returns 200 with the app's `index.html`.
+
 ### 5. Home server deployment
-- Reverse proxy entry + HTTPS on a new subdomain of the owner's existing domain, pointed at the container from task 4. (Confirm which reverse proxy is already in use for Nextcloud/Immich before writing config — do not assume.)
-- **Done when**: `curl https://<subdomain>/health` returns 200 from outside the home network (e.g., from a phone on cellular data).
+- Reverse proxy entry + HTTPS on a new subdomain of the owner's existing domain, in front of **both** the API and web-UI containers (task 4, task 4b) — path-based routing (e.g. NPM Custom Locations) sending `/auth`, `/sync`, `/backup`, `/health` to the API container and everything else to the web-UI container, so there's one subdomain/cert, not two. (Confirm which reverse proxy is already in use for Nextcloud/Immich before writing config — do not assume.)
+- **Done when**: `curl https://<subdomain>/health` returns 200 from outside the home network (e.g., from a phone on cellular data), and opening `https://<subdomain>/` in a browser shows the app UI (not a 404/"Route not found").
 
 ## Non-goals for this stage
 

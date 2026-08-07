@@ -1,4 +1,5 @@
 services:
+  # The API: auth, sync, backup. See specs/03-stage-1-kill-google.md.
   server:
     build: ./server
     ports:
@@ -8,6 +9,16 @@ services:
     environment:
       - PORT=8080
       - DATA_DIR=/data
+    restart: unless-stopped
+
+  # The actual app UI (Flutter web build), served as static files by nginx.
+  # Separate from `server` on purpose -- see app/Dockerfile. Put both behind
+  # one NPM proxy host with Custom Locations so there's a single public
+  # subdomain/cert; see DEPLOYMENT.md.
+  web:
+    build: ./app
+    ports:
+      - "8081:80"
     restart: unless-stopped
 
 volumes:
