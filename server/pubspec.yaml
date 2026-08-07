@@ -1,0 +1,19 @@
+name: server
+description: Self-hosted backend for the Cashew Selfhosted fork (auth, sync, backup).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  shelf: ^1.4.1
+  shelf_router: ^1.1.4
+  sqlite3: ^2.4.3
+  bcrypt: ^1.1.3
+  crypto: ^3.0.3
+  path: ^1.9.0
+
+dev_dependencies:
+  test: ^1.25.2
+  lints: ^4.0.0

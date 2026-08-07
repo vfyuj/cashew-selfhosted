@@ -1,0 +1,272 @@
+import 'package:cashew_selfhosted/colors.dart';
+import 'package:cashew_selfhosted/database/tables.dart';
+import 'package:cashew_selfhosted/functions.dart';
+import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
+import 'package:cashew_selfhosted/pages/homePage/homePageWalletSwitcher.dart';
+import 'package:cashew_selfhosted/pages/transactionFilters.dart';
+import 'package:cashew_selfhosted/pages/walletDetailsPage.dart';
+import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
+import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
+import 'package:cashew_selfhosted/widgets/util/keepAliveClientMixin.dart';
+import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
+import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
+import 'package:cashew_selfhosted/widgets/outlinedButtonStacked.dart';
+import 'package:cashew_selfhosted/widgets/periodCyclePicker.dart';
+import 'package:cashew_selfhosted/widgets/transactionsAmountBox.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+class HomePageNetWorth extends StatelessWidget {
+  const HomePageNetWorth({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return KeepAliveClientMixin(
+      child: StreamBuilder<List<TransactionWallet>>(
+          stream:
+              database.getAllPinnedWallets(HomePageWidgetDisplay.NetWorth).$1,
+          builder: (context, snapshot) {
+            if (snapshot.hasData ||
+                appStateSettings["netWorthAllWallets"] == true) {
+              List<String>? walletPks =
+                  (snapshot.data ?? []).map((item) => item.walletPk).toList();
+              if (walletPks.length <= 0 ||
+                  appStateSettings["netWorthAllWallets"] == true)
+                walletPks = null;
+              return Padding(
+                padding: const EdgeInsetsDirectional.only(
+                    bottom: 13, start: 13, end: 13),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: TransactionsAmountBox(
+                        onLongPress: () async {
+                          await openNetWorthSettings(context);
+                          homePageStateKey.currentState?.refreshState();
+                        },
+                        label: "net-worth".tr(),
+                        getTextColor: appStateSettings["netTotalsColorful"] !=
+                                true
+                            ? null
+                            : (double amount) {
+                                double? roundedWalletWithTotal =
+                                    (double.tryParse(absoluteZero(amount)
+                                        .toStringAsFixed(
+                                            Provider.of<AllWallets>(context)
+                                                    .indexedByPk[
+                                                        appStateSettings[
+                                                            "selectedWalletPk"]]
+                                                    ?.decimals ??
+                                                2)));
+                                return appStateSettings["netTotalsColorful"] ==
+                                        true
+                                    ? (roundedWalletWithTotal == 0
+                                        ? getColor(context, "black")
+                                        : amount > 0
+                                            ? getColor(context, "incomeAmount")
+                                            : getColor(
+                                                context, "expenseAmount"))
+                                    : getColor(context, "black");
+                              },
+                        absolute: false,
+                        currencyKey: Provider.of<AllWallets>(context)
+                            .indexedByPk[appStateSettings["selectedWalletPk"]]
+                            ?.currency,
+                        totalWithCountStream:
+                            database.watchTotalWithCountOfWallet(
+                          isIncome: null,
+                          allWallets: Provider.of<AllWallets>(context),
+                          followCustomPeriodCycle: true,
+                          cycleSettingsExtension: "NetWorth",
+                          searchFilters:
+                              SearchFilters(walletPks: walletPks ?? []),
+                        ),
+                        // getTextColor: (amount) => amount == 0
+                        //     ? getColor(context, "black")
+                        //     : amount > 0
+                        //         ? getColor(context, "incomeAmount")
+                        //         : getColor(context, "expenseAmount"),
+                        textColor: getColor(context, "black"),
+                        openPage: WalletDetailsPage(
+                          wallet: null,
+                          initialSearchFilters: SearchFilters(
+                            dateTimeRange:
+                                getDateTimeRangeForPassedSearchFilters(
+                              cycleSettingsExtension: "NetWorth",
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return SizedBox.shrink();
+          }),
+    );
+  }
+}
+
+class WalletPickerPeriodCycle extends StatefulWidget {
+  const WalletPickerPeriodCycle({
+    required this.allWalletsSettingKey,
+    required this.cycleSettingsExtension,
+    required this.homePageWidgetDisplay,
+    this.onlyShowCycleOption = false,
+    super.key,
+  });
+  final String? allWalletsSettingKey;
+  final String cycleSettingsExtension;
+  final HomePageWidgetDisplay? homePageWidgetDisplay;
+  final bool onlyShowCycleOption;
+
+  @override
+  State<WalletPickerPeriodCycle> createState() =>
+      _WalletPickerPeriodCycleState();
+}
+
+class _WalletPickerPeriodCycleState extends State<WalletPickerPeriodCycle> {
+  late bool allWalletsSelected =
+      appStateSettings[widget.allWalletsSettingKey] == true;
+
+  @override
+  Widget build(BuildContext context) {
+    // We can hide the all wallets selection if only one wallet
+    // If no wallets selected, all of them are by default, so even if user removes one
+    // and we didn't have any selected, we are okay!
+    bool showAllWalletsSelection = widget.homePageWidgetDisplay != null &&
+        widget.allWalletsSettingKey != null &&
+        Provider.of<AllWallets>(context).list.length > 1;
+    return Column(
+      children: [
+        if (showAllWalletsSelection)
+          Row(
+            children: [
+              Expanded(
+                child: AnimatedOpacity(
+                  duration: Duration(milliseconds: 500),
+                  opacity: allWalletsSelected ? 1 : 0.5,
+                  child: OutlinedButtonStacked(
+                    filled: allWalletsSelected,
+                    alignStart: true,
+                    alignBeside: true,
+                    padding: EdgeInsetsDirectional.only(
+                        start: 20, end: 15, top: 15, bottom: 15),
+                    showToggleSwitch: true,
+                    text: "all-accounts".tr(),
+                    iconData: appStateSettings["outlinedIcons"]
+                        ? Icons.account_balance_wallet_outlined
+                        : Icons.account_balance_wallet_rounded,
+                    onTap: () {
+                      updateSettings(
+                          widget.allWalletsSettingKey!, !allWalletsSelected,
+                          updateGlobalState: false);
+                      setState(() {
+                        allWalletsSelected = !allWalletsSelected;
+                      });
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        if (showAllWalletsSelection) SizedBox(height: 10),
+        // CheckItems(
+        //   triggerInitialOnChanged: false,
+        //   minVerticalPadding: 0,
+        //   allSelected: allWalletsSelected,
+        //   initial: (appStateSettings["netWorthSelectedWalletPks"] ?? [])
+        //       .cast<String>(),
+        //   items: [
+        //     for (String walletPk
+        //         in Provider.of<AllWallets>(context, listen: false)
+        //             .indexedByPk
+        //             .keys)
+        //       walletPk
+        //   ],
+        //   onChanged: (currentValues) {
+        //     updateSettings("netWorthAllWallets", false,
+        //         updateGlobalState: false);
+        //     setState(() {
+        //       allWalletsSelected = false;
+        //     });
+        //   },
+        //   displayFilter: (item, itemIndex) {
+        //     return Provider.of<AllWallets>(context, listen: false)
+        //         .indexedByPk[item]!
+        //         .name;
+        //   },
+        //   colorFilter: (item) {
+        //     return dynamicPastel(
+        //       context,
+        //       lightenPastel(
+        //         HexColor(
+        //             Provider.of<AllWallets>(context, listen: false)
+        //                 .indexedByPk[item]!
+        //                 .colour,
+        //             defaultColor: Theme.of(context).colorScheme.primary),
+        //         amount: 0.2,
+        //       ),
+        //       amount: 0.1,
+        //     );
+        //   },
+        // ),
+        if (showAllWalletsSelection)
+          AnimatedExpanded(
+            axis: Axis.vertical,
+            expand: allWalletsSelected == false,
+            child: EditHomePagePinnedWalletsPopup(
+              includeFramework: false,
+              homePageWidgetDisplay: widget.homePageWidgetDisplay!,
+              highlightSelected: true,
+              useCheckMarks: true,
+              onAnySelected: () {
+                updateSettings(widget.allWalletsSettingKey!, false,
+                    updateGlobalState: false);
+                setState(() {
+                  allWalletsSelected = false;
+                });
+              },
+              allSelected: allWalletsSelected,
+            ),
+          ),
+        Padding(
+          padding: showAllWalletsSelection
+              ? EdgeInsetsDirectional.zero
+              : const EdgeInsetsDirectional.only(top: 8.0),
+          child: HorizontalBreakAbove(
+            enabled: showAllWalletsSelection,
+            child: PeriodCyclePicker(
+              cycleSettingsExtension: widget.cycleSettingsExtension,
+              onlyShowCycleOption: widget.onlyShowCycleOption,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+Future openNetWorthSettings(BuildContext context) {
+  return openBottomSheet(
+    context,
+    PopupFramework(
+      title: "net-worth".tr(),
+      subtitle: "applies-to-homepage".tr() +
+          (getPlatform(ignoreEmulation: true) == PlatformOS.isAndroid
+              ? " " + "and-applies-to-widget".tr()
+              : ""),
+      child: WalletPickerPeriodCycle(
+        allWalletsSettingKey: "netWorthAllWallets",
+        cycleSettingsExtension: "NetWorth",
+        homePageWidgetDisplay: HomePageWidgetDisplay.NetWorth,
+      ),
+    ),
+  );
+}

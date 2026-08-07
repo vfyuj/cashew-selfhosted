@@ -1,0 +1,14 @@
+services:
+  server:
+    build: ./server
+    ports:
+      - "8080:8080"
+    volumes:
+      - server-data:/data
+    environment:
+      - PORT=8080
+      - DATA_DIR=/data
+    restart: unless-stopped
+
+volumes:
+  server-data:

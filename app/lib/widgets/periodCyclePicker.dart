@@ -1,0 +1,731 @@
+import 'package:cashew_selfhosted/database/tables.dart';
+import 'package:cashew_selfhosted/functions.dart';
+import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
+import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
+import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
+import 'package:cashew_selfhosted/widgets/outlinedButtonStacked.dart';
+import 'package:cashew_selfhosted/widgets/radioItems.dart';
+import 'package:cashew_selfhosted/widgets/selectAmount.dart';
+import 'package:cashew_selfhosted/widgets/tappable.dart';
+import 'package:cashew_selfhosted/widgets/tappableTextEntry.dart';
+import 'package:cashew_selfhosted/widgets/textWidgets.dart';
+import 'package:cashew_selfhosted/widgets/util/showDatePicker.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:cashew_selfhosted/colors.dart';
+import 'selectDateRange.dart';
+
+enum CycleType {
+  allTime,
+  dateRange, // e.g. September 10 to present day
+  pastDays, // e.g. last 10 days
+  cycle, //e.g. every 1 month starting Sept 13
+}
+
+class PeriodCyclePicker extends StatefulWidget {
+  const PeriodCyclePicker({
+    required this.cycleSettingsExtension,
+    this.onlyShowCycleOption = false,
+    super.key,
+  });
+  final String cycleSettingsExtension;
+  final bool onlyShowCycleOption;
+
+  @override
+  State<PeriodCyclePicker> createState() => _PeriodCyclePickerState();
+}
+
+class _PeriodCyclePickerState extends State<PeriodCyclePicker> {
+  late CycleType selectedCycle = CycleType.values[appStateSettings[
+          "selectedPeriodCycleType" + widget.cycleSettingsExtension] ??
+      0];
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (widget.onlyShowCycleOption == false)
+          CycleTypeEntry(
+            cycleSettingsExtension: widget.cycleSettingsExtension,
+            title: "all-time".tr(),
+            icon: appStateSettings["outlinedIcons"]
+                ? Icons.apps_outlined
+                : Icons.apps_rounded,
+            cycle: CycleType.allTime,
+            onTap: () {
+              setState(() {
+                selectedCycle = CycleType.allTime;
+              });
+            },
+            selectedCycle: selectedCycle,
+          ),
+        CycleTypeEntry(
+          cycleSettingsExtension: widget.cycleSettingsExtension,
+          title: "cycle".tr(),
+          icon: appStateSettings["outlinedIcons"]
+              ? Icons.timelapse_outlined
+              : Icons.timelapse_rounded,
+          cycle: CycleType.cycle,
+          onTap: () {
+            setState(() {
+              selectedCycle = CycleType.cycle;
+            });
+          },
+          extraWidget: CyclePeriodSelection(
+            cycleSettingsExtension: widget.cycleSettingsExtension,
+            selected: widget.onlyShowCycleOption
+                ? true
+                : selectedCycle == CycleType.cycle,
+          ),
+          selectedCycle:
+              widget.onlyShowCycleOption ? CycleType.cycle : selectedCycle,
+        ),
+        if (widget.onlyShowCycleOption == false)
+          CycleTypeEntry(
+            cycleSettingsExtension: widget.cycleSettingsExtension,
+            title: "past-days".tr(),
+            icon: appStateSettings["outlinedIcons"]
+                ? Icons.today_outlined
+                : Icons.today_rounded,
+            cycle: CycleType.pastDays,
+            onTap: () {
+              setState(() {
+                selectedCycle = CycleType.pastDays;
+              });
+            },
+            selectedCycle: selectedCycle,
+            extraWidget: PastDaysSelection(
+              cycleSettingsExtension: widget.cycleSettingsExtension,
+            ),
+          ),
+        if (widget.onlyShowCycleOption == false)
+          CycleTypeEntry(
+            cycleSettingsExtension: widget.cycleSettingsExtension,
+            title: "date-range".tr(),
+            icon: appStateSettings["outlinedIcons"]
+                ? Icons.date_range_outlined
+                : Icons.date_range_rounded,
+            cycle: CycleType.dateRange,
+            onTap: () {
+              setState(() {
+                selectedCycle = CycleType.dateRange;
+              });
+            },
+            extraWidget: SelectDateRange(
+              initialStartDate: DateTime.tryParse(appStateSettings[
+                      "customPeriodStartDate" +
+                          widget.cycleSettingsExtension] ??
+                  ""),
+              onSelectedStartDate: (DateTime? selectedStartDate) {
+                updateSettings(
+                    "customPeriodStartDate" + widget.cycleSettingsExtension,
+                    (selectedStartDate ?? DateTime.now()).toString(),
+                    updateGlobalState: false);
+              },
+              initialEndDate: DateTime.tryParse(appStateSettings[
+                      "customPeriodEndDate" + widget.cycleSettingsExtension] ??
+                  ""),
+              onSelectedEndDate: (DateTime? selectedEndDate) {
+                updateSettings(
+                    "customPeriodEndDate" + widget.cycleSettingsExtension,
+                    selectedEndDate.toString(),
+                    updateGlobalState: false);
+              },
+            ),
+            selectedCycle: selectedCycle,
+          ),
+      ],
+    );
+  }
+}
+
+class CycleTypeEntry extends StatelessWidget {
+  const CycleTypeEntry({
+    super.key,
+    required this.title,
+    required this.icon,
+    this.extraWidget,
+    required this.onTap,
+    required this.cycle,
+    required this.selectedCycle,
+    required this.cycleSettingsExtension,
+  });
+
+  final String title;
+  final IconData icon;
+  final Widget? extraWidget;
+  final VoidCallback onTap;
+  final CycleType cycle;
+  final CycleType selectedCycle;
+  final String cycleSettingsExtension;
+
+  @override
+  Widget build(BuildContext context) {
+    bool isSelected = cycle == selectedCycle;
+    return AnimatedOpacity(
+      duration: Duration(milliseconds: 500),
+      opacity: isSelected ? 1 : 0.5,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButtonStacked(
+                filled: isSelected,
+                alignStart: true,
+                alignBeside: true,
+                padding: EdgeInsetsDirectional.symmetric(
+                    horizontal: 20, vertical: 20),
+                text: title,
+                iconData: icon,
+                onTap: () {
+                  onTap();
+                  updateSettings(
+                      "selectedPeriodCycleType" + cycleSettingsExtension,
+                      cycle.index,
+                      updateGlobalState: false);
+                },
+                afterWidget: extraWidget == null
+                    ? null
+                    : IgnorePointer(
+                        ignoring: !isSelected,
+                        child: extraWidget,
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class CyclePeriodSelection extends StatefulWidget {
+  const CyclePeriodSelection({
+    super.key,
+    required this.cycleSettingsExtension,
+    required this.selected,
+  });
+  final String cycleSettingsExtension;
+  final bool selected;
+  @override
+  State<CyclePeriodSelection> createState() => _CyclePeriodSelectionState();
+}
+
+class _CyclePeriodSelectionState extends State<CyclePeriodSelection> {
+  late int selectedPeriodLength;
+  late DateTime selectedStartDate;
+  late DateTime? selectedEndDate;
+  late String selectedRecurrence;
+  String selectedRecurrenceDisplay = "month";
+  @override
+  void initState() {
+    selectedPeriodLength =
+        appStateSettings["cyclePeriodLength" + widget.cycleSettingsExtension] ??
+            1;
+    selectedStartDate = DateTime.tryParse(appStateSettings[
+            "cycleStartDate" + widget.cycleSettingsExtension]) ??
+        DateTime.now().firstDayOfMonth();
+    selectedRecurrence = enumRecurrence[BudgetReoccurence.values[
+            appStateSettings[
+                "cycleReoccurrence" + widget.cycleSettingsExtension]]] ??
+        "Monthly";
+
+    if (selectedPeriodLength == 1) {
+      selectedRecurrenceDisplay = nameRecurrence[selectedRecurrence];
+    } else {
+      selectedRecurrenceDisplay = namesRecurrence[selectedRecurrence];
+    }
+    super.initState();
+  }
+
+  Future<void> selectPeriodLength(BuildContext context) async {
+    openBottomSheet(
+      context,
+      PopupFramework(
+        title: "enter-period-length".tr(),
+        child: SelectAmountValue(
+          enableDecimal: false,
+          amountPassed: selectedPeriodLength.toString(),
+          setSelectedAmount: (amount, _) {
+            setSelectedPeriodLength(amount);
+          },
+          next: () async {
+            popRoute(context);
+          },
+          nextLabel: "set-period-length".tr(),
+        ),
+      ),
+    );
+  }
+
+  void setSelectedPeriodLength(double period) {
+    try {
+      setState(() {
+        selectedPeriodLength = period.toInt();
+        if (selectedPeriodLength == 0) {
+          selectedPeriodLength = 1;
+        }
+        if (selectedPeriodLength == 1) {
+          selectedRecurrenceDisplay = nameRecurrence[selectedRecurrence];
+        } else {
+          selectedRecurrenceDisplay = namesRecurrence[selectedRecurrence];
+        }
+      });
+    } catch (e) {
+      setState(() {
+        selectedPeriodLength = 1;
+        if (selectedPeriodLength == 1) {
+          selectedRecurrenceDisplay = nameRecurrence[selectedRecurrence];
+        } else {
+          selectedRecurrenceDisplay = namesRecurrence[selectedRecurrence];
+        }
+      });
+    }
+    updateSettings("cyclePeriodLength" + widget.cycleSettingsExtension,
+        selectedPeriodLength,
+        updateGlobalState: false);
+    return;
+  }
+
+  Future<void> selectRecurrence(BuildContext context) async {
+    openBottomSheet(
+      context,
+      PopupFramework(
+        title: "select-period".tr(),
+        child: RadioItems(
+          items: ["Daily", "Weekly", "Monthly", "Yearly"],
+          initial: selectedRecurrence,
+          displayFilter: (item) {
+            return item.toString().toLowerCase().tr();
+          },
+          onChanged: (value) {
+            setState(() {
+              selectedRecurrence = value;
+              updateSettings(
+                  "cycleReoccurrence" + widget.cycleSettingsExtension,
+                  enumRecurrence[value].index,
+                  updateGlobalState: false);
+              if (selectedPeriodLength == 1) {
+                selectedRecurrenceDisplay = nameRecurrence[value];
+              } else {
+                selectedRecurrenceDisplay = namesRecurrence[value];
+              }
+            });
+            popRoute(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> selectStartDate(BuildContext context) async {
+    final DateTime? picked =
+        await showCustomDatePicker(context, selectedStartDate);
+    setSelectedStartDate(picked);
+  }
+
+  setSelectedStartDate(DateTime? date) {
+    if (date != null && date != selectedStartDate) {
+      updateSettings(
+          "cycleStartDate" + widget.cycleSettingsExtension, date.toString(),
+          updateGlobalState: false);
+      setState(() {
+        selectedStartDate = date;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.only(start: 10, end: 10),
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.end,
+            alignment: WrapAlignment.center,
+            children: [
+              Padding(
+                padding: const EdgeInsetsDirectional.only(
+                  bottom: 15,
+                  end: 10,
+                  start: 10,
+                ),
+                child: TextFont(
+                  text: "every".tr(),
+                  fontSize: 20,
+                ),
+              ),
+              IntrinsicWidth(
+                child: Row(
+                  children: [
+                    TappableTextEntry(
+                      title: selectedPeriodLength.toString(),
+                      placeholder: "0",
+                      showPlaceHolderWhenTextEquals: "0",
+                      onTap: () {
+                        selectPeriodLength(context);
+                      },
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                      internalPadding: EdgeInsetsDirectional.symmetric(
+                          vertical: 4, horizontal: 9),
+                      padding: EdgeInsetsDirectional.symmetric(
+                          vertical: 10, horizontal: 3),
+                    ),
+                    TappableTextEntry(
+                      title: selectedRecurrenceDisplay
+                          .toString()
+                          .toLowerCase()
+                          .tr()
+                          .toLowerCase(),
+                      placeholder: "",
+                      onTap: () {
+                        selectRecurrence(context);
+                      },
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                      internalPadding: EdgeInsetsDirectional.symmetric(
+                          vertical: 4, horizontal: 5),
+                      padding: EdgeInsetsDirectional.symmetric(
+                          vertical: 10, horizontal: 3),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsetsDirectional.symmetric(horizontal: 10),
+          child: Tappable(
+            onTap: () {
+              selectStartDate(context);
+            },
+            color: Colors.transparent,
+            borderRadius: 15,
+            child: Container(
+              padding:
+                  EdgeInsetsDirectional.symmetric(horizontal: 5, vertical: 8),
+              child: Center(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  runAlignment: WrapAlignment.center,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(bottom: 5.8),
+                      child: TextFont(
+                        text: "beginning".tr() + " ",
+                        fontSize: 20,
+                      ),
+                    ),
+                    IgnorePointer(
+                      child: TappableTextEntry(
+                        title: getWordedDateShortMore(selectedStartDate),
+                        placeholder: "",
+                        onTap: () {},
+                        fontSize: 25,
+                        fontWeight: FontWeight.bold,
+                        internalPadding: EdgeInsetsDirectional.symmetric(
+                            vertical: 2, horizontal: 4),
+                        padding: EdgeInsetsDirectional.symmetric(
+                            vertical: 0, horizontal: 5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Builder(builder: (context) {
+          DateTimeRange budgetRange = getBudgetDate(
+            Budget(
+              startDate: selectedStartDate,
+              periodLength: selectedPeriodLength,
+              reoccurrence: enumRecurrence[selectedRecurrence],
+              budgetPk: "-1",
+              name: "",
+              amount: 0,
+              endDate: DateTime.now(),
+              addedTransactionsOnly: false,
+              dateCreated: DateTime.now(),
+              pinned: false,
+              order: -1,
+              walletFk: "",
+              isAbsoluteSpendingLimit: false,
+              income: false,
+              archived: false,
+            ),
+            DateTime.now(),
+          );
+          return Padding(
+            padding: const EdgeInsetsDirectional.only(
+              bottom: 0,
+              top: 15,
+            ),
+            child: TextFont(
+              text: "(" +
+                  getWordedDateShortMore(budgetRange.start) +
+                  " – " +
+                  getWordedDateShortMore(budgetRange.end) +
+                  ")",
+              fontSize: 16,
+              maxLines: 3,
+              textColor: Theme.of(context).brightness == Brightness.dark &&
+                      appStateSettings["materialYou"] == false &&
+                      widget.selected
+                  ? getColor(context, "black").withOpacity(
+                      0.5) //Fix contrast when selected and not material you and dark mode
+                  : getColor(context, "textLight"),
+              textAlign: TextAlign.center,
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+Budget getCustomCycleTempBudget(String cycleSettingsExtension) {
+  return Budget(
+    startDate: DateTime.tryParse(
+            appStateSettings["cycleStartDate" + cycleSettingsExtension] ??
+                "") ??
+        DateTime.now(),
+    periodLength:
+        appStateSettings["cyclePeriodLength" + cycleSettingsExtension] ?? 1,
+    reoccurrence: BudgetReoccurence.values[
+        appStateSettings["cycleReoccurrence" + cycleSettingsExtension] ?? 0],
+    budgetPk: "-1",
+    name: "",
+    amount: 0,
+    endDate: DateTime.now(),
+    addedTransactionsOnly: false,
+    dateCreated: DateTime.now(),
+    pinned: false,
+    order: -1,
+    walletFk: "",
+    isAbsoluteSpendingLimit: false,
+    income: false,
+    archived: false,
+  );
+}
+
+DateTime getCycleDatePastToDetermineBudgetDate(
+    String cycleSettingsExtension, int index) {
+  return getDatePastToDetermineBudgetDate(
+    index,
+    getCustomCycleTempBudget(cycleSettingsExtension),
+  );
+}
+
+DateTimeRange getCycleDateTimeRange(String cycleSettingsExtension,
+    {DateTime? currentDate}) {
+  return getBudgetDate(
+    getCustomCycleTempBudget(cycleSettingsExtension),
+    currentDate ?? DateTime.now(),
+  );
+}
+
+DateTime? getStartDateOfSelectedCustomPeriod(
+  String cycleSettingsExtension, {
+  DateTimeRange? forcedDateTimeRange,
+}) {
+  if (forcedDateTimeRange != null) {
+    return forcedDateTimeRange.start.justDay();
+  }
+  CycleType selectedPeriodType = CycleType.values[
+      appStateSettings["selectedPeriodCycleType" + cycleSettingsExtension] ??
+          0];
+  if (selectedPeriodType == CycleType.allTime) {
+    return null;
+  } else if (selectedPeriodType == CycleType.cycle) {
+    DateTimeRange budgetRange = getCycleDateTimeRange(cycleSettingsExtension);
+    DateTime startDate = budgetRange.start;
+    return startDate.justDay();
+  } else if (selectedPeriodType == CycleType.pastDays) {
+    DateTime startDate = DateTime.now().subtract(Duration(
+        days: (appStateSettings[
+                "customPeriodPastDays" + cycleSettingsExtension] ??
+            0)));
+    if (startDate.year <= 1900) return DateTime(1900);
+    if (startDate.isAfter(DateTime.now())) return DateTime(1900);
+    return startDate.justDay();
+  } else if (selectedPeriodType == CycleType.dateRange) {
+    DateTime startDate = DateTime.tryParse(appStateSettings[
+                "customPeriodStartDate" + cycleSettingsExtension] ??
+            "") ??
+        DateTime.now();
+    return startDate.justDay();
+  }
+  return null;
+}
+
+DateTime? getEndDateOfSelectedCustomPeriod(
+  String cycleSettingsExtension, {
+  DateTimeRange? forcedDateTimeRange,
+}) {
+  if (forcedDateTimeRange != null) {
+    return forcedDateTimeRange.end.justDay();
+  }
+
+  CycleType selectedPeriodType = CycleType.values[
+      appStateSettings["selectedPeriodCycleType" + cycleSettingsExtension] ??
+          0];
+
+  // If it is a cycle, we want the end date to be null (display everything up to today!)
+  // Therefore, do not add this code in!
+  if (selectedPeriodType == CycleType.cycle) {
+    DateTimeRange budgetRange = getCycleDateTimeRange(cycleSettingsExtension);
+    DateTime endDate = budgetRange.end.justDay();
+    return endDate.justDay();
+  }
+
+  if (selectedPeriodType == CycleType.pastDays) {
+    DateTime endDate = DateTime.now().justDay();
+    return endDate.justDay();
+  }
+
+  if (selectedPeriodType == CycleType.dateRange) {
+    DateTime? endDate = DateTime.tryParse(
+        appStateSettings["customPeriodEndDate" + cycleSettingsExtension] ?? "");
+    return endDate == null
+        ? null
+        : DateTime(endDate.year, endDate.month, endDate.day, 23, 59);
+  }
+  return null;
+}
+
+String getLabelOfSelectedCustomPeriod(String cycleSettingsExtension) {
+  CycleType selectedPeriodType = CycleType.values[
+      appStateSettings["selectedPeriodCycleType" + cycleSettingsExtension] ??
+          0];
+  if (selectedPeriodType == CycleType.allTime) {
+    return "all-time".tr();
+  } else if (selectedPeriodType == CycleType.cycle) {
+    DateTimeRange dateRange = getCycleDateTimeRange(cycleSettingsExtension);
+    return getWordedDateShort(dateRange.start) +
+        " – " +
+        getWordedDateShort(dateRange.end);
+  } else if (selectedPeriodType == CycleType.pastDays) {
+    int days =
+        appStateSettings["customPeriodPastDays" + cycleSettingsExtension] ?? 1;
+    return "previous".tr() +
+        " " +
+        days.toString() +
+        " " +
+        (days == 1 ? "day".tr() : "days".tr());
+  } else if (selectedPeriodType == CycleType.dateRange) {
+    DateTime startDate =
+        getStartDateOfSelectedCustomPeriod(cycleSettingsExtension) ??
+            DateTime.now();
+    DateTime? endDate =
+        getEndDateOfSelectedCustomPeriod(cycleSettingsExtension);
+    return getWordedDateShort(startDate) +
+        (endDate == null
+            ? " " + "onwards".tr().toLowerCase()
+            : (" – " + getWordedDateShort(endDate)));
+  }
+  return "";
+}
+
+class PastDaysSelection extends StatefulWidget {
+  const PastDaysSelection({super.key, required this.cycleSettingsExtension});
+  final String cycleSettingsExtension;
+  @override
+  State<PastDaysSelection> createState() => _PastDaysSelectionState();
+}
+
+class _PastDaysSelectionState extends State<PastDaysSelection> {
+  late int selectedPeriodLength;
+
+  @override
+  void initState() {
+    selectedPeriodLength = appStateSettings[
+            "customPeriodPastDays" + widget.cycleSettingsExtension] ??
+        1;
+    super.initState();
+  }
+
+  Future<void> selectPeriodLength(BuildContext context) async {
+    openBottomSheet(
+      context,
+      PopupFramework(
+        title: "enter-period-length".tr(),
+        child: SelectAmountValue(
+          enableDecimal: false,
+          amountPassed: selectedPeriodLength.toString(),
+          setSelectedAmount: (amount, _) {
+            setSelectedPeriodLength(amount);
+          },
+          next: () async {
+            popRoute(context);
+          },
+          nextLabel: "set-period-length".tr(),
+        ),
+      ),
+    );
+  }
+
+  void setSelectedPeriodLength(double period) {
+    try {
+      setState(() {
+        selectedPeriodLength = period.toInt();
+        if (selectedPeriodLength == 0) {
+          selectedPeriodLength = 1;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        selectedPeriodLength = 0;
+      });
+    }
+    updateSettings("customPeriodPastDays" + widget.cycleSettingsExtension,
+        selectedPeriodLength,
+        updateGlobalState: false);
+    return;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.only(start: 10, end: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextFont(
+                text: "previous".tr(),
+                fontSize: 20,
+              ),
+              Flexible(
+                child: TappableTextEntry(
+                  title: selectedPeriodLength.toString(),
+                  placeholder: "0",
+                  showPlaceHolderWhenTextEquals: "0",
+                  onTap: () {
+                    selectPeriodLength(context);
+                  },
+                  fontSize: 25,
+                  fontWeight: FontWeight.bold,
+                  internalPadding: EdgeInsetsDirectional.symmetric(
+                      vertical: 4, horizontal: 9),
+                  padding: EdgeInsetsDirectional.symmetric(
+                      vertical: 10, horizontal: 3),
+                ),
+              ),
+              TextFont(
+                text: selectedPeriodLength == 1 ? "day".tr() : "days".tr(),
+                fontSize: 20,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

@@ -1,0 +1,76 @@
+import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
+import 'package:cashew_selfhosted/widgets/notificationsSettings.dart';
+import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
+import 'package:cashew_selfhosted/widgets/statusBox.dart';
+import 'package:cashew_selfhosted/widgets/util/onAppResume.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:app_settings/app_settings.dart';
+
+class NotificationsPage extends StatefulWidget {
+  const NotificationsPage({Key? key}) : super(key: key);
+
+  @override
+  State<NotificationsPage> createState() => _NotificationsPageState();
+}
+
+class _NotificationsPageState extends State<NotificationsPage> {
+  bool notificationsEnabled = false;
+
+  @override
+  void initState() {
+    Future.delayed(Duration.zero, () async {
+      await _checkNotificationEnabled();
+    });
+    super.initState();
+  }
+
+  _checkNotificationEnabled() async {
+    bool status = await checkNotificationsPermissionAll();
+    setState(() {
+      notificationsEnabled = status;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OnAppResume(
+      onAppResume: () async {
+        await _checkNotificationEnabled();
+      },
+      child: PageFramework(
+        horizontalPaddingConstrained: true,
+        dragDownToDismiss: true,
+        title: "notifications".tr(),
+        listWidgets: [
+          AnimatedExpanded(
+            expand: notificationsEnabled == false,
+            duration: Duration(milliseconds: 100),
+            child: StatusBox(
+              title: "notifications-disabled".tr(),
+              description: "notifications-disabled-description".tr(),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.warning_outlined
+                  : Icons.warning_rounded,
+              color: Theme.of(context).colorScheme.error,
+              onTap: () {
+                AppSettings.openAppSettings(type: AppSettingsType.notification);
+              },
+            ),
+          ),
+          AnimatedOpacity(
+            opacity: notificationsEnabled ? 1 : 0.5,
+            duration: Duration(milliseconds: 300),
+            child: Column(
+              children: [
+                DailyNotificationsSettings(),
+                UpcomingTransactionsNotificationsSettings()
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}

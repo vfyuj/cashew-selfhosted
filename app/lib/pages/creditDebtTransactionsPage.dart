@@ -1,0 +1,656 @@
+import 'package:cashew_selfhosted/colors.dart';
+import 'package:cashew_selfhosted/database/tables.dart';
+import 'package:cashew_selfhosted/functions.dart';
+import 'package:cashew_selfhosted/pages/addObjectivePage.dart';
+import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
+import 'package:cashew_selfhosted/pages/editObjectivesPage.dart';
+import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
+import 'package:cashew_selfhosted/pages/upcomingOverdueTransactionsPage.dart';
+import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
+import 'package:cashew_selfhosted/widgets/button.dart';
+import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
+import 'package:cashew_selfhosted/widgets/extraInfoBoxes.dart';
+import 'package:cashew_selfhosted/widgets/fab.dart';
+import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
+import 'package:cashew_selfhosted/widgets/incomeExpenseTabSelector.dart';
+import 'package:cashew_selfhosted/widgets/listItem.dart';
+import 'package:cashew_selfhosted/widgets/navigationSidebar.dart';
+import 'package:cashew_selfhosted/widgets/noResults.dart';
+import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
+import 'package:cashew_selfhosted/widgets/openPopup.dart';
+import 'package:cashew_selfhosted/widgets/outlinedButtonStacked.dart';
+import 'package:cashew_selfhosted/widgets/selectedTransactionsAppBar.dart';
+import 'package:cashew_selfhosted/widgets/fadeIn.dart';
+import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
+import 'package:cashew_selfhosted/widgets/slidingSelectorIncomeExpense.dart';
+import 'package:cashew_selfhosted/widgets/transactionEntry/transactionEntry.dart';
+import 'package:cashew_selfhosted/widgets/util/sliverPinnedOverlapInjector.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:implicitly_animated_reorderable_list/implicitly_animated_reorderable_list.dart';
+import 'package:implicitly_animated_reorderable_list/transitions.dart';
+import 'package:cashew_selfhosted/widgets/textInput.dart';
+import 'package:sliver_tools/sliver_tools.dart';
+
+class CreditDebtTransactions extends StatefulWidget {
+  const CreditDebtTransactions({required this.isCredit, super.key});
+  final bool? isCredit;
+
+  @override
+  State<CreditDebtTransactions> createState() => CreditDebtTransactionsState();
+}
+
+class CreditDebtTransactionsState extends State<CreditDebtTransactions>
+    with SingleTickerProviderStateMixin {
+  String pageId = "CreditDebt";
+  late ScrollController _scrollController = ScrollController();
+  late TabController _tabController = TabController(
+    length: 2,
+    vsync: this,
+    initialIndex: appStateSettings["loansLastPage"] == 1 ? 1 : 0,
+  );
+
+  late bool? isCredit = widget.isCredit;
+  String? searchValue;
+  FocusNode _searchFocusNode = FocusNode();
+  int? numberLongTerm;
+  GlobalKey<PageFrameworkState> pageState = GlobalKey();
+
+  void scrollToTop() {
+    pageState.currentState?.scrollToTop();
+  }
+
+  @override
+  void initState() {
+    _tabController.addListener(onTabController);
+    super.initState();
+  }
+
+  void onTabController() {
+    updateSettings(
+      "loansLastPage",
+      _tabController.index == 1 ? 1 : 0,
+      updateGlobalState: false,
+    );
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(onTabController);
+    _tabController.dispose();
+    // PageFramework takes care of the dispose lifecycle
+    // _scrollController.dispose();
+    super.dispose();
+  }
+
+  List<Widget> oneTimeLoanList(bool hasSomeLongTermLoans) {
+    return [
+      StreamBuilder<List<Transaction>>(
+        stream: database.watchAllCreditDebtTransactions(isCredit, searchValue),
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            if (snapshot.data!.length <= 0) {
+              return SliverToBoxAdapter(
+                child: Center(
+                  child: Column(
+                    children: [
+                      NoResults(
+                        message: "no-transactions-found".tr(),
+                      ),
+                      if (hasSomeLongTermLoans)
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(top: 20),
+                          child: ExtraInfoButton(
+                            onTap: () {
+                              _tabController.animateTo(1);
+                            },
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer
+                                .withOpacity(0.4),
+                            icon: appStateSettings["outlinedIcons"]
+                                ? Icons.av_timer_outlined
+                                : Icons.av_timer_rounded,
+                            text: "view-long-term-loans".tr(),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return SliverImplicitlyAnimatedList<Transaction>(
+              spawnIsolate: false,
+              items: snapshot.data!,
+              areItemsTheSame: (a, b) => a.transactionPk == b.transactionPk,
+              insertDuration: Duration(milliseconds: 500),
+              removeDuration: Duration(milliseconds: 500),
+              updateDuration: Duration(milliseconds: 500),
+              itemBuilder: (BuildContext context, Animation<double> animation,
+                  Transaction item, int index) {
+                return SizeFadeTransition(
+                  sizeFraction: 0.7,
+                  key: ValueKey(item.transactionPk),
+                  curve: Curves.easeInOut,
+                  animation: animation,
+                  child: TransactionEntry(
+                    openPage: AddTransactionPage(
+                      transaction: item,
+                      routesToPopAfterDelete: RoutesToPopAfterDelete.One,
+                    ),
+                    transaction: item,
+                    listID: "CreditDebt",
+                    key: ValueKey(item.transactionPk),
+                    transactionAfter:
+                        nullIfIndexOutOfRange(snapshot.data!, index + 1),
+                    transactionBefore:
+                        nullIfIndexOutOfRange(snapshot.data!, index - 1),
+                  ),
+                );
+              },
+            );
+          } else {
+            return SliverToBoxAdapter();
+          }
+        },
+      ),
+      SliverToBoxAdapter(
+        child: SizedBox(height: 75),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    List<Widget> longTermLoansList = [
+      ObjectiveList(
+        showExamplesIfEmpty: false,
+        objectiveType: ObjectiveType.loan,
+        showAddButton: true,
+        searchFor: searchValue,
+        isIncome: isCredit,
+      ),
+    ];
+
+    List<Widget> loanInfoAppBar = [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsetsDirectional.only(bottom: 8.0),
+          child: CenteredAmountAndNumTransactions(
+            totalWithCountStream: database.watchTotalWithCountOfCreditDebt(
+              allWallets: Provider.of<AllWallets>(context),
+              isCredit: isCredit,
+              searchString: searchValue,
+              selectedTab: _tabController.index,
+            ),
+            totalWithCountStream2:
+                database.watchTotalWithCountOfCreditDebtLongTermLoansOffset(
+              allWallets: Provider.of<AllWallets>(context),
+              isCredit: isCredit,
+              searchString: searchValue,
+              selectedTab: _tabController.index,
+            ),
+            showIncomeArrow: false,
+            getInitialText: (totalAmount) {
+              if (totalAmount < 0) {
+                return "you-get".tr();
+              } else if (totalAmount > 0) {
+                return "you-owe".tr();
+              } else {
+                return null;
+              }
+            },
+            getTextColor: (totalAmount) {
+              return isCredit == null
+                  ? totalAmount == 0
+                      ? getColor(context, "black")
+                      : totalAmount < 0
+                          ? getColor(context, "unPaidUpcoming")
+                          : getColor(context, "unPaidOverdue")
+                  : isCredit == true
+                      ? getColor(context, "unPaidUpcoming")
+                      : getColor(context, "unPaidOverdue");
+            },
+            textColor: Colors.black,
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsetsDirectional.symmetric(
+              horizontal: getHorizontalPaddingConstrained(context)),
+          child: Row(
+            children: [
+              SizedBox(width: 13),
+              Flexible(
+                child: AnimatedSize(
+                  clipBehavior: Clip.none,
+                  duration: Duration(milliseconds: 500),
+                  child: SlidingSelectorIncomeExpense(
+                    useHorizontalPaddingConstrained: false,
+                    initialIndex: isCredit == null
+                        ? 0
+                        : isCredit == true
+                            ? 1
+                            : 2,
+                    onSelected: (int index) {
+                      if (index == 1)
+                        isCredit = null;
+                      else if (index == 2)
+                        isCredit = true;
+                      else if (index == 3) isCredit = false;
+                      setState(() {});
+                    },
+                    options: ["all", "lent", "borrowed"],
+                    customPadding: EdgeInsetsDirectional.zero,
+                  ),
+                ),
+              ),
+              AnimatedSizeSwitcher(
+                child: searchValue == null
+                    ? Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 7.0),
+                        child: ButtonIcon(
+                          key: ValueKey(1),
+                          onTap: () {
+                            setState(() {
+                              searchValue = "";
+                            });
+                            _searchFocusNode.requestFocus();
+                          },
+                          icon: Icons.search,
+                        ),
+                      )
+                    : Container(
+                        key: ValueKey(2),
+                      ),
+              ),
+              SizedBox(width: 13),
+            ],
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsetsDirectional.symmetric(
+              horizontal: getHorizontalPaddingConstrained(context)),
+          child: AnimatedExpanded(
+            expand: searchValue != null,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.only(top: 8),
+              child: TextInput(
+                labelText: "search-loans-placeholder".tr(),
+                icon: appStateSettings["outlinedIcons"]
+                    ? Icons.search_outlined
+                    : Icons.search_rounded,
+                focusNode: _searchFocusNode,
+                onSubmitted: (value) {
+                  setState(() {
+                    searchValue = value == "" ? null : value;
+                  });
+                },
+                onChanged: (value) {
+                  setState(() {
+                    searchValue = value == "" ? null : value;
+                  });
+                },
+                autoFocus: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: SizedBox(height: 10),
+      ),
+    ];
+
+    return WillPopScope(
+      onWillPop: () async {
+        if ((globalSelectedID.value[pageId] ?? []).length > 0) {
+          globalSelectedID.value[pageId] = [];
+          globalSelectedID.notifyListeners();
+          return false;
+        } else {
+          return true;
+        }
+      },
+      child: StreamBuilder<List<Objective?>>(
+          stream: database.watchAllObjectives(
+            objectiveType: ObjectiveType.loan,
+            hideArchived: true,
+            showDifferenceLoans: null,
+          ),
+          builder: (context, allLoanObjectivesSnapshot) {
+            return PageFramework(
+              key: pageState,
+              scrollController: _scrollController,
+              resizeToAvoidBottomInset: true,
+              actions: [
+                (allLoanObjectivesSnapshot.data?.length ?? 0) <= 0
+                    ? StreamBuilder<List<Objective?>>(
+                        stream: database.watchAllObjectives(
+                            objectiveType: ObjectiveType.loan,
+                            hideArchived: false,
+                            showDifferenceLoans: null,
+                            limit: 1),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData == false)
+                            return SizedBox.shrink();
+                          if ((snapshot.data?.length ?? 0) <= 0)
+                            return SizedBox.shrink();
+                          return CustomPopupMenuButton(
+                            showButtons: enableDoubleColumn(context),
+                            keepOutFirst: true,
+                            items: [
+                              DropdownItemMenu(
+                                id: "edit-loans",
+                                label: "edit".tr(),
+                                icon: appStateSettings["outlinedIcons"]
+                                    ? Icons.edit_outlined
+                                    : Icons.edit_rounded,
+                                action: () {
+                                  pushRoute(
+                                    context,
+                                    EditObjectivesPage(
+                                      objectiveType: ObjectiveType.loan,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      )
+                    : SizedBox.shrink(),
+              ],
+              floatingActionButton: AnimateFABDelayed(
+                fab: AddFAB(
+                  tooltip: isCredit == true || isCredit == null
+                      ? "add-credit".tr()
+                      : "add-debt".tr(),
+                  onTap: () {
+                    openBottomSheet(
+                      context,
+                      AddLoanPopup(
+                        selectedTransactionType:
+                            isCredit == true || isCredit == null
+                                ? TransactionSpecialType.credit
+                                : TransactionSpecialType.debt,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              listID: pageId,
+              title: "loans".tr(),
+              dragDownToDismiss: true,
+              bodyBuilder: (scrollController, scrollPhysics, sliverAppBar) {
+                if (allLoanObjectivesSnapshot.hasData == false)
+                  return SizedBox.shrink();
+                if ((allLoanObjectivesSnapshot.data?.length ?? 0) <= 0) {
+                  numberLongTerm = 0;
+                  _tabController.index = 0;
+                  return CustomScrollView(
+                    controller: _scrollController,
+                    slivers: [
+                      sliverAppBar,
+                      ...loanInfoAppBar,
+                      ...oneTimeLoanList(false)
+                    ],
+                  );
+                }
+                // Set the tab to long term if none were added previously, but one was added
+                if (numberLongTerm == 0) {
+                  _tabController.index = 1;
+                  numberLongTerm = allLoanObjectivesSnapshot.data?.length ?? 0;
+                }
+                return NestedScrollView(
+                  controller: _scrollController,
+                  headerSliverBuilder:
+                      (BuildContext contextHeader, bool innerBoxIsScrolled) {
+                    return <Widget>[
+                      SliverOverlapAbsorber(
+                        handle: NestedScrollView.sliverOverlapAbsorberHandleFor(
+                            contextHeader),
+                        sliver: MultiSliver(
+                          children: [
+                            sliverAppBar,
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: EdgeInsetsDirectional.only(bottom: 13),
+                                child: Padding(
+                                  padding: EdgeInsetsDirectional.symmetric(
+                                    horizontal: getHorizontalPaddingConstrained(
+                                          context,
+                                          enabled:
+                                              enableDoubleColumn(context) ==
+                                                  false,
+                                        ) +
+                                        13,
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsetsDirectional.symmetric(
+                                      horizontal:
+                                          getHorizontalPaddingConstrained(
+                                              context),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: IncomeExpenseTabSelector(
+                                            hasBorderRadius: true,
+                                            onTabChanged: (_) {},
+                                            initialTabIsIncome: false,
+                                            showIcons: false,
+                                            tabController: _tabController,
+                                            expenseLabel: "one-time".tr(),
+                                            expenseCustomIcon: Icon(
+                                              appStateSettings["outlinedIcons"]
+                                                  ? Icons
+                                                      .event_available_outlined
+                                                  : Icons
+                                                      .event_available_rounded,
+                                            ),
+                                            incomeLabel: "long-term".tr(),
+                                            incomeCustomIcon: Icon(
+                                              appStateSettings["outlinedIcons"]
+                                                  ? Icons.av_timer_outlined
+                                                  : Icons.av_timer_rounded,
+                                            ),
+                                          ),
+                                        ),
+                                        AnimatedBuilder(
+                                          animation: _tabController.animation!,
+                                          builder: (BuildContext context,
+                                              Widget? child) {
+                                            return ClipRRect(
+                                              borderRadius:
+                                                  BorderRadiusDirectional
+                                                      .circular(15),
+                                              child: SizeTransition(
+                                                sizeFactor:
+                                                    _tabController.animation!,
+                                                axis: Axis.horizontal,
+                                                child: FadeTransition(
+                                                  opacity:
+                                                      _tabController.animation!,
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsetsDirectional
+                                                            .only(start: 7),
+                                                    child: ButtonIcon(
+                                                      size: 48,
+                                                      iconPadding: 25,
+                                                      key: ValueKey(2),
+                                                      onTap: () {
+                                                        pushRoute(
+                                                          context,
+                                                          EditObjectivesPage(
+                                                            objectiveType:
+                                                                ObjectiveType
+                                                                    .loan,
+                                                          ),
+                                                        );
+                                                      },
+                                                      icon: appStateSettings[
+                                                              "outlinedIcons"]
+                                                          ? Icons.edit_outlined
+                                                          : Icons.edit_rounded,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            ...loanInfoAppBar,
+                          ],
+                        ),
+                      ),
+                    ];
+                  },
+                  body: Builder(
+                    builder: (contextPageView) {
+                      return TabBarView(
+                        controller: _tabController,
+                        children: [
+                          CustomScrollView(
+                            slivers: [
+                              SliverPinnedOverlapInjector(
+                                handle: NestedScrollView
+                                    .sliverOverlapAbsorberHandleFor(
+                                  contextPageView,
+                                ),
+                              ),
+                              ...oneTimeLoanList(true)
+                            ],
+                          ),
+                          CustomScrollView(
+                            slivers: [
+                              SliverPinnedOverlapInjector(
+                                handle: NestedScrollView
+                                    .sliverOverlapAbsorberHandleFor(
+                                  contextPageView,
+                                ),
+                              ),
+                              ObjectiveListDifferenceLoan(
+                                searchFor: searchValue,
+                              ),
+                              ...longTermLoansList
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                );
+              },
+              selectedTransactionsAppBar: SelectedTransactionsAppBar(
+                pageID: pageId,
+                enableSettleAllButton: true,
+              ),
+            );
+          }),
+    );
+  }
+}
+
+class AddLoanPopup extends StatelessWidget {
+  const AddLoanPopup({required this.selectedTransactionType, super.key});
+  final TransactionSpecialType selectedTransactionType;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupFramework(
+      title: "add-loan".tr(),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButtonStacked(
+                  alignStart: true,
+                  alignBeside: true,
+                  padding: EdgeInsetsDirectional.symmetric(
+                      horizontal: 20, vertical: 20),
+                  text: "long-term-loan".tr(),
+                  iconData: appStateSettings["outlinedIcons"]
+                      ? Icons.av_timer_outlined
+                      : Icons.av_timer_rounded,
+                  onTap: () {
+                    popRoute(context);
+                    pushRoute(
+                      context,
+                      AddObjectivePage(
+                        routesToPopAfterDelete: RoutesToPopAfterDelete.None,
+                        objectiveType: ObjectiveType.loan,
+                        selectedIncome: selectedTransactionType ==
+                            TransactionSpecialType.credit,
+                      ),
+                    );
+                  },
+                  afterWidget: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListItem(
+                        "long-term-loan-description-1".tr(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 13),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButtonStacked(
+                  alignStart: true,
+                  alignBeside: true,
+                  padding: EdgeInsetsDirectional.symmetric(
+                      horizontal: 20, vertical: 20),
+                  text: "one-time-loan".tr(),
+                  iconData: appStateSettings["outlinedIcons"]
+                      ? Icons.event_available_outlined
+                      : Icons.event_available_rounded,
+                  onTap: () {
+                    popRoute(context);
+                    pushRoute(
+                      context,
+                      AddTransactionPage(
+                        routesToPopAfterDelete: RoutesToPopAfterDelete.None,
+                        selectedType: selectedTransactionType,
+                      ),
+                    );
+                  },
+                  afterWidget: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListItem(
+                        "one-time-loan-description-1".tr(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

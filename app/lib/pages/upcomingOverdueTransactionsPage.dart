@@ -1,0 +1,553 @@
+import 'package:cashew_selfhosted/colors.dart';
+import 'package:cashew_selfhosted/database/tables.dart';
+import 'package:cashew_selfhosted/functions.dart';
+import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
+import 'package:cashew_selfhosted/pages/subscriptionsPage.dart';
+import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/initializeNotifications.dart';
+import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/struct/upcomingTransactionsFunctions.dart';
+import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
+import 'package:cashew_selfhosted/widgets/button.dart';
+import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
+import 'package:cashew_selfhosted/widgets/fab.dart';
+import 'package:cashew_selfhosted/widgets/fadeIn.dart';
+import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
+import 'package:cashew_selfhosted/widgets/navigationSidebar.dart';
+import 'package:cashew_selfhosted/widgets/noResults.dart';
+import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
+import 'package:cashew_selfhosted/widgets/openPopup.dart';
+import 'package:cashew_selfhosted/widgets/selectedTransactionsAppBar.dart';
+import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
+import 'package:cashew_selfhosted/widgets/settingsContainers.dart';
+import 'package:cashew_selfhosted/widgets/slidingSelectorIncomeExpense.dart';
+import 'package:cashew_selfhosted/widgets/tappable.dart';
+import 'package:cashew_selfhosted/widgets/textWidgets.dart';
+import 'package:cashew_selfhosted/widgets/transactionEntry/transactionEntry.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:implicitly_animated_reorderable_list/implicitly_animated_reorderable_list.dart';
+import 'package:implicitly_animated_reorderable_list/transitions.dart';
+import 'package:provider/provider.dart';
+import 'package:cashew_selfhosted/widgets/textInput.dart';
+
+import 'package:cashew_selfhosted/widgets/transactionEntry/incomeAmountArrow.dart';
+
+class UpcomingOverdueTransactions extends StatefulWidget {
+  const UpcomingOverdueTransactions(
+      {required this.overdueTransactions, super.key});
+  final bool? overdueTransactions;
+
+  @override
+  State<UpcomingOverdueTransactions> createState() =>
+      UpcomingOverdueTransactionsState();
+}
+
+class UpcomingOverdueTransactionsState
+    extends State<UpcomingOverdueTransactions> {
+  late bool? overdueTransactions = widget.overdueTransactions;
+  String? searchValue;
+  FocusNode _searchFocusNode = FocusNode();
+  SelectedSubscriptionsType selectedType = SelectedSubscriptionsType
+      .values[appStateSettings["selectedSubscriptionType"]];
+  GlobalKey<PageFrameworkState> pageState = GlobalKey();
+
+  void scrollToTop() {
+    pageState.currentState?.scrollToTop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String pageId = "OverdueUpcoming";
+    return WillPopScope(
+      onWillPop: () async {
+        if ((globalSelectedID.value[pageId] ?? []).length > 0) {
+          globalSelectedID.value[pageId] = [];
+          globalSelectedID.notifyListeners();
+          return false;
+        } else {
+          return true;
+        }
+      },
+      child: PageFramework(
+        key: pageState,
+        resizeToAvoidBottomInset: true,
+        floatingActionButton: AnimateFABDelayed(
+          enabled: overdueTransactions == null,
+          fab: AnimateFABDelayed(
+            fab: AddFAB(
+              tooltip: "add-upcoming".tr(),
+              openPage: AddTransactionPage(
+                selectedType: TransactionSpecialType.upcoming,
+                routesToPopAfterDelete: RoutesToPopAfterDelete.None,
+              ),
+            ),
+          ),
+        ),
+        listID: pageId,
+        title: "scheduled".tr(),
+        dragDownToDismiss: true,
+        actions: [
+          CustomPopupMenuButton(
+            showButtons: enableDoubleColumn(context),
+            keepOutFirst: true,
+            items: [
+              DropdownItemMenu(
+                id: "settings",
+                label: "settings".tr(),
+                icon: appStateSettings["outlinedIcons"]
+                    ? Icons.more_vert_outlined
+                    : Icons.more_vert_rounded,
+                action: () {
+                  openBottomSheet(
+                      context,
+                      PopupFramework(
+                        hasPadding: false,
+                        child: UpcomingOverdueSettings(),
+                      ));
+                },
+              ),
+            ],
+          ),
+        ],
+        slivers: [
+          SliverToBoxAdapter(
+              child: AnimatedSizeSwitcher(
+            child: overdueTransactions == null
+                ? TotalUpcomingHeaderPeriodSwitcher(
+                    transactionListStream:
+                        database.watchAllOverdueUpcomingTransactions(
+                            overdueTransactions,
+                            searchString: searchValue),
+                    selectedType: selectedType,
+                    setSelectedType: (chosenType) {
+                      setState(() {
+                        selectedType = chosenType;
+                      });
+                    },
+                    selectedSubtitleTranslation: (selectedType) {
+                      return selectedType == SelectedSubscriptionsType.yearly
+                          ? "yearly-upcoming".tr()
+                          : selectedType == SelectedSubscriptionsType.monthly
+                              ? "monthly-upcoming".tr()
+                              : "total-upcoming".tr();
+                    },
+                  )
+                : CenteredAmountAndNumTransactions(
+                    totalWithCountStream:
+                        database.watchTotalWithCountOfUpcomingOverdue(
+                      allWallets: Provider.of<AllWallets>(context),
+                      isOverdueTransactions: overdueTransactions,
+                      searchString: searchValue,
+                    ),
+                    textColor: overdueTransactions == null
+                        ? getColor(context, "black")
+                        : overdueTransactions == true
+                            ? getColor(context, "unPaidOverdue")
+                            : getColor(context, "unPaidUpcoming"),
+                  ),
+          )),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsetsDirectional.symmetric(
+                  horizontal: getHorizontalPaddingConstrained(context)),
+              child: Row(
+                children: [
+                  SizedBox(width: 13),
+                  Flexible(
+                    child: AnimatedSize(
+                      clipBehavior: Clip.none,
+                      duration: Duration(milliseconds: 500),
+                      child: SlidingSelectorIncomeExpense(
+                        useHorizontalPaddingConstrained: false,
+                        initialIndex: overdueTransactions == null
+                            ? 0
+                            : overdueTransactions == false
+                                ? 1
+                                : 2,
+                        onSelected: (int index) {
+                          if (index == 1)
+                            overdueTransactions = null;
+                          else if (index == 2)
+                            overdueTransactions = false;
+                          else if (index == 3) overdueTransactions = true;
+                          setState(() {});
+                        },
+                        options: ["all", "upcoming", "overdue"],
+                        customPadding: EdgeInsetsDirectional.zero,
+                      ),
+                    ),
+                  ),
+                  AnimatedSizeSwitcher(
+                    child: searchValue == null
+                        ? Padding(
+                            padding:
+                                const EdgeInsetsDirectional.only(start: 7.0),
+                            child: ButtonIcon(
+                              key: ValueKey(1),
+                              onTap: () {
+                                setState(() {
+                                  searchValue = "";
+                                });
+                                _searchFocusNode.requestFocus();
+                              },
+                              icon: appStateSettings["outlinedIcons"]
+                                  ? Icons.search_outlined
+                                  : Icons.search_rounded,
+                            ),
+                          )
+                        : Container(
+                            key: ValueKey(2),
+                          ),
+                  ),
+                  SizedBox(width: 13),
+                ],
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsetsDirectional.symmetric(
+                  horizontal: getHorizontalPaddingConstrained(context)),
+              child: AnimatedExpanded(
+                expand: searchValue != null,
+                child: Padding(
+                  padding:
+                      const EdgeInsetsDirectional.only(bottom: 4.0, top: 8),
+                  child: TextInput(
+                    labelText: "search-transactions-placeholder".tr(),
+                    icon: appStateSettings["outlinedIcons"]
+                        ? Icons.search_outlined
+                        : Icons.search_rounded,
+                    focusNode: _searchFocusNode,
+                    onSubmitted: (value) {
+                      setState(() {
+                        searchValue = value == "" ? null : value;
+                      });
+                    },
+                    onChanged: (value) {
+                      setState(() {
+                        searchValue = value == "" ? null : value;
+                      });
+                    },
+                    autoFocus: false,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(height: 15),
+          ),
+          StreamBuilder<List<Transaction>>(
+            stream: database.watchAllOverdueUpcomingTransactions(
+                overdueTransactions,
+                searchString: searchValue),
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                if (snapshot.data!.length <= 0) {
+                  return SliverToBoxAdapter(
+                    child: Center(
+                      child: NoResults(message: "no-transactions-found".tr()),
+                    ),
+                  );
+                }
+                return SliverImplicitlyAnimatedList<Transaction>(
+                  spawnIsolate: false,
+                  items: snapshot.data!,
+                  areItemsTheSame: (a, b) => a.transactionPk == b.transactionPk,
+                  insertDuration: Duration(milliseconds: 500),
+                  removeDuration: Duration(milliseconds: 500),
+                  updateDuration: Duration(milliseconds: 500),
+                  itemBuilder: (BuildContext context,
+                      Animation<double> animation,
+                      Transaction item,
+                      int index) {
+                    return SizeFadeTransition(
+                      sizeFraction: 0.7,
+                      curve: Curves.easeInOut,
+                      animation: animation,
+                      child: Column(
+                        key: ValueKey(item.transactionPk),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          HorizontalBreak(
+                              padding: EdgeInsetsDirectional.only(
+                                  top: 4, bottom: 6)),
+                          TransactionEntry(
+                            aboveWidget: UpcomingTransactionDateHeader(
+                              selectedType: selectedType,
+                              transaction: item,
+                            ),
+                            openPage: AddTransactionPage(
+                              transaction: item,
+                              routesToPopAfterDelete:
+                                  RoutesToPopAfterDelete.One,
+                            ),
+                            transaction: item,
+                            listID: pageId,
+                          ),
+                          if (index == (snapshot.data?.length ?? 0) - 1)
+                            HorizontalBreak(
+                                padding: EdgeInsetsDirectional.only(
+                                    top: 4, bottom: 6)),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              } else {
+                return SliverToBoxAdapter();
+              }
+            },
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(height: 75),
+          ),
+        ],
+        selectedTransactionsAppBar: SelectedTransactionsAppBar(
+          pageID: pageId,
+        ),
+      ),
+    );
+  }
+}
+
+class DoubleTotalWithCountStreamBuilder extends StatelessWidget {
+  const DoubleTotalWithCountStreamBuilder({
+    required this.totalWithCountStream,
+    this.totalWithCountStream2,
+    required this.builder,
+    super.key,
+  });
+
+  final Stream<TotalWithCount?> totalWithCountStream;
+  final Stream<TotalWithCount?>? totalWithCountStream2;
+  final Widget Function(BuildContext, AsyncSnapshot<TotalWithCount?>) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (totalWithCountStream2 != null) {
+      return StreamBuilder<TotalWithCount?>(
+        stream: totalWithCountStream,
+        builder: (context, snapshot1) {
+          return StreamBuilder<TotalWithCount?>(
+            stream: totalWithCountStream2,
+            builder: (context, snapshot2) {
+              final total1 = snapshot1.data;
+              final total2 = snapshot2.data;
+              return builder(
+                context,
+                AsyncSnapshot<TotalWithCount>.withData(
+                  ConnectionState.done,
+                  TotalWithCount(
+                    total: (total1?.total ?? 0) + (total2?.total ?? 0),
+                    count: (total1?.count ?? 0) + (total2?.count ?? 0),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    }
+    return StreamBuilder<TotalWithCount?>(
+      stream: totalWithCountStream,
+      builder: builder,
+    );
+  }
+}
+
+class CenteredAmountAndNumTransactions extends StatelessWidget {
+  const CenteredAmountAndNumTransactions({
+    required this.totalWithCountStream,
+    this.totalWithCountStream2,
+    required this.textColor,
+    this.getTextColor,
+    this.getInitialText,
+    this.showIncomeArrow = true,
+    super.key,
+  });
+
+  final Stream<TotalWithCount?> totalWithCountStream;
+  final Stream<TotalWithCount?>? totalWithCountStream2;
+  final Color textColor;
+  final String? Function(double totalAmount)? getInitialText;
+  final Color? Function(double totalAmount)? getTextColor;
+  final bool showIncomeArrow;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(height: 10),
+        DoubleTotalWithCountStreamBuilder(
+          totalWithCountStream: totalWithCountStream,
+          totalWithCountStream2: totalWithCountStream2,
+          builder: (context, snapshot) {
+            double totalSpent = snapshot.data?.total ?? 0;
+            int totalCount = snapshot.data?.count ?? 0;
+            return Column(
+              children: [
+                AnimatedSizeSwitcher(
+                  child: getInitialText != null &&
+                          getInitialText!(totalSpent) != null
+                      ? TextFont(
+                          key: ValueKey(getInitialText!(totalSpent) ?? ""),
+                          text: getInitialText!(totalSpent) ?? "",
+                          fontSize: 16,
+                          textColor: getColor(context, "textLight"),
+                        )
+                      : Container(
+                          key: ValueKey(2),
+                        ),
+                ),
+                Tappable(
+                  color: Colors.transparent,
+                  borderRadius: 15,
+                  onLongPress: () {
+                    copyToClipboard(
+                      convertToMoney(
+                        Provider.of<AllWallets>(context, listen: false),
+                        totalSpent.abs(),
+                        finalNumber: totalSpent,
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.all(10),
+                    child: AmountWithColorAndArrow(
+                      showIncomeArrow: showIncomeArrow,
+                      totalSpent: totalSpent,
+                      absoluteValueWhenNoArrow: true,
+                      fontSize: 30,
+                      iconSize: 30,
+                      iconWidth: 20,
+                      getTextColor: getTextColor,
+                      textColor: textColor,
+                    ),
+                  ),
+                ),
+                TextFont(
+                  text: totalCount.toString() +
+                      " " +
+                      (totalCount == 1
+                          ? "transaction".tr().toLowerCase()
+                          : "transactions".tr().toLowerCase()),
+                  fontSize: 16,
+                  textColor: getColor(context, "textLight"),
+                ),
+              ],
+            );
+          },
+        ),
+        SizedBox(height: 20),
+      ],
+    );
+  }
+}
+
+class AutoPayUpcomingSetting extends StatelessWidget {
+  const AutoPayUpcomingSetting({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsContainerSwitch(
+      title: "pay-upcoming".tr(),
+      description: "pay-upcoming-description".tr(),
+      onSwitched: (value) async {
+        // Need to change setting first, otherwise the function would not run!
+        await updateSettings("automaticallyPayUpcoming", value,
+            updateGlobalState: false);
+        await markUpcomingAsPaid();
+        await setUpcomingNotifications(context);
+      },
+      initialValue: appStateSettings["automaticallyPayUpcoming"],
+      icon: getTransactionTypeIcon(TransactionSpecialType.upcoming),
+    );
+  }
+}
+
+class AutoPayRepetitiveSetting extends StatelessWidget {
+  const AutoPayRepetitiveSetting({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsContainerSwitch(
+      title: "pay-repetitive".tr(),
+      description: "pay-repetitive-description".tr(),
+      onSwitched: (value) async {
+        // Need to change setting first, otherwise the function would not run!
+        await updateSettings("automaticallyPayRepetitive", value,
+            updateGlobalState: false);
+        // Repetitive and subscriptions are handled by the same function
+        await markSubscriptionsAsPaid(context);
+        await setUpcomingNotifications(context);
+      },
+      initialValue: appStateSettings["automaticallyPayRepetitive"],
+      icon: getTransactionTypeIcon(TransactionSpecialType.repetitive),
+    );
+  }
+}
+
+class MarkAsPaidOnDaySetting extends StatelessWidget {
+  const MarkAsPaidOnDaySetting({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsContainerDropdown(
+      title: "paid-date".tr(),
+      icon: appStateSettings["outlinedIcons"]
+          ? Icons.event_available_outlined
+          : Icons.event_available_rounded,
+      initial: appStateSettings["markAsPaidOnOriginalDay"].toString(),
+      items: ["false", "true"],
+      onChanged: (value) async {
+        updateSettings(
+            "markAsPaidOnOriginalDay", value == "true" ? true : false,
+            updateGlobalState: false);
+      },
+      getLabel: (item) {
+        if (item == "false") return "current-date".tr().capitalizeFirst;
+        if (item == "true") return "transaction-date".tr().capitalizeFirst;
+      },
+    );
+  }
+}
+
+class UpcomingOverdueSettings extends StatelessWidget {
+  const UpcomingOverdueSettings({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        AutoPayUpcomingSetting(),
+        AutoPayRepetitiveSetting(),
+        AutoPaySubscriptionsSetting(),
+        AutoPaySettingDescription(),
+      ],
+    );
+  }
+}
+
+class AutoPaySettingDescription extends StatelessWidget {
+  const AutoPaySettingDescription({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(
+          top: 13, bottom: 3, start: 25, end: 25),
+      child: TextFont(
+        text: "auto-pay-description".tr(),
+        fontSize: 14,
+        textColor: getColor(context, "textLight"),
+        textAlign: TextAlign.center,
+        maxLines: 5,
+      ),
+    );
+  }
+}

@@ -1,0 +1,8 @@
+# Reference-only clone of upstream Cashew, kept local for diffing/porting.
+# Not part of this fork's source -- see CLAUDE.md.
+/upstream/
+
+.DS_Store
+
+# Personal Claude Code permission grants, not shared config.
+.claude/settings.local.json
