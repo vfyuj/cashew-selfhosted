@@ -7,20 +7,30 @@ This step can't be done from this dev environment — it requires access to your
 On the home server (wherever Nextcloud/Immich already run):
 
 ```
-git clone <this repo> cashew-selfhosted   # or copy the repo over
+git clone https://github.com/vfyuj/cashew-selfhosted.git
 cd cashew-selfhosted
 docker compose up --build -d
 ```
 
 Confirm locally on that machine: `curl localhost:8080/health` → `{"status":"ok"}`.
 
-## 2. Pick a subdomain
+## 2. Create your account(s)
+
+No public self-registration (see specs/03-stage-1-kill-google.md) — provision each person via the CLI baked into the server image:
+
+```
+docker compose exec server /app/bin/create_user your@email.tld
+```
+
+This prints a one-time temporary password. There's no password-reset flow — re-run the same command to issue a new temporary password if you lose it. Repeat once per person (e.g. yourself, then your spouse).
+
+## 3. Pick a subdomain
 
 Placeholder used below: `cashew.yourdomain.tld` — replace with your actual domain and whatever subdomain you prefer (e.g. `budget.`, `money.`, matching however Nextcloud/Immich are named, like `nextcloud.yourdomain.tld`).
 
 Add a DNS record (A or CNAME, same pattern as your existing subdomains) pointing `cashew.yourdomain.tld` at your home server's public IP / dynamic DNS host — however you already do this for Nextcloud/Immich.
 
-## 3. Nginx Proxy Manager: add a Proxy Host
+## 4. Nginx Proxy Manager: add a Proxy Host
 
 In the NPM web UI → **Proxy Hosts** → **Add Proxy Host**:
 
@@ -41,7 +51,7 @@ Under the **SSL** tab:
 
 Save.
 
-## 4. Verify from outside the home network
+## 5. Verify from outside the home network
 
 From a phone on cellular data (not home wifi):
 
@@ -51,6 +61,12 @@ curl https://cashew.yourdomain.tld/health
 
 Expected: `{"status":"ok"}` with a valid HTTPS certificate (no browser warning).
 
-## 5. Record what you used
+## 6. Sign in from the app
 
-Once done, note here (or wherever you track infra) what subdomain and forward IP/port you actually used, since Stage 1's app-side "server URL" field will need this exact URL.
+In the app's sign-in screen (Backup page → sign in), enter:
+- **Server URL**: `https://cashew.yourdomain.tld` (your actual subdomain from step 3)
+- **Email** / **Password**: from step 2. There's no in-app password-change flow yet (see specs/03-stage-1-kill-google.md) — you keep using the temporary password `create_user` printed, or re-run it to issue a new one.
+
+## 7. Record what you used
+
+Once done, note here (or wherever you track infra) what subdomain and forward IP/port you actually used, since the app's "server URL" field needs this exact URL on every device.
