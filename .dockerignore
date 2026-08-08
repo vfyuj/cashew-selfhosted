@@ -1,0 +1,20 @@
+# Keeps `docker compose up --build`'s context small — none of this is
+# needed inside the image (Dockerfile only COPYs app/ and server/ source,
+# and flutter/dart regenerate their own build output inside the container).
+upstream/
+.claude/
+.git/
+
+app/build/
+app/.dart_tool/
+app/android/.gradle/
+app/android/app/build/
+app/ios/Pods/
+app/ios/.symlinks/
+
+server/.dart_tool/
+server/build/
+
+specs/
+*.md
+LICENSE
