@@ -19,7 +19,7 @@ Router buildAuthRouter(AuthService authService) {
       final session = authService.login(email, password);
       return Response.ok(jsonEncode({
         'sessionToken': session.token,
-        'expiresAt': session.expiresAt.toIso8601String(),
+        'expiresAt': session.expiresAt.toUtc().toIso8601String(),
       }), headers: {'content-type': 'application/json'});
     } on InvalidCredentialsException {
       return Response(401, body: jsonEncode({'error': 'invalid email or password'}));
@@ -36,7 +36,7 @@ Router buildAuthRouter(AuthService authService) {
       final session = authService.refresh(sessionToken);
       return Response.ok(jsonEncode({
         'sessionToken': session.token,
-        'expiresAt': session.expiresAt.toIso8601String(),
+        'expiresAt': session.expiresAt.toUtc().toIso8601String(),
       }), headers: {'content-type': 'application/json'});
     } on InvalidSessionException {
       return Response(401, body: jsonEncode({'error': 'invalid or expired session'}));
