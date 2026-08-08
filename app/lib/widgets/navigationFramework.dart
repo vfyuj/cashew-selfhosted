@@ -31,6 +31,7 @@ import 'package:cashew_selfhosted/pages/creditDebtTransactionsPage.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/defaultPreferences.dart';
+import 'package:cashew_selfhosted/struct/liveSyncClient.dart';
 import 'package:cashew_selfhosted/struct/navBarIconsData.dart';
 import 'package:cashew_selfhosted/struct/quickActions.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
@@ -311,7 +312,11 @@ Future<bool> runAllCloudFunctions(BuildContext context,
   try {
     loadingIndeterminateKey.currentState?.setVisibility(true);
     await runForceSignIn(context);
-    await syncData(context);
+    // Stage 2 live sync (specs/04-stage-2-instant-sync.md) replaces the old
+    // whole-database syncData() as the automatic mechanism here. syncData()
+    // itself is untouched and still reachable from the "manage synced
+    // devices" screen for manual use.
+    await runLiveSyncCycle();
     if (appStateSettings["emailScanningPullToRefresh"] ||
         entireAppLoaded == false) {
       loadingIndeterminateKey.currentState?.setVisibility(true);
@@ -459,9 +464,18 @@ class PageNavigationFrameworkState extends State<PageNavigationFramework> {
         // Users can visually see the last time of sync, especially on web where sign-in is not automatic,
         // so it shouldn't be an issue
         if (runningCloudFunctions == false && selfHostedSession != null) {
-          createSyncBackup(changeMadeSync: true);
+          // Stage 2 live sync -- debounced push+pull, cheap enough to run on
+          // every local change (unlike the old whole-database
+          // createSyncBackup, which stayed opt-in via "syncEveryChange").
+          // See specs/04-stage-2-instant-sync.md.
+          triggerLiveSyncDebounced();
         }
       });
+
+      // Periodic timer + websocket wake-up for changes made on *other*
+      // devices. Idempotent and safe to call before sign-in -- see
+      // specs/04-stage-2-instant-sync.md.
+      startLiveSync();
 
       if (kIsWeb) {
         // On web, disable the browser's context menu since this example uses a custom

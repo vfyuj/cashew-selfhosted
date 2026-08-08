@@ -1,0 +1,12 @@
+# drift 2.16+ generates a "manager" query API (`$$WalletsTableTableManager`
+# and friends) by default. This fork doesn't use it -- every query goes
+# through the hand-written methods on FinanceDatabase inherited from
+# upstream -- and leaving it on adds ~3000 lines to tables.g.dart, which
+# buries real changes to that file in review. Turned off so the generated
+# output stays comparable to what upstream Cashew's older drift produced.
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          generate_manager: false

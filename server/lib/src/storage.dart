@@ -10,6 +10,11 @@ class FileMetadata {
 
   Map<String, dynamic> toJson() => {
         'filename': filename,
+        // .toUtc() before formatting so the string carries a `Z`. FileStat's
+        // modified time is a *local* DateTime, and toIso8601String() on a
+        // local DateTime emits no timezone designator at all -- which
+        // DateTime.parse on the client then reads as client-local, shifting
+        // every displayed backup time by the client's UTC offset.
         'modifiedTime': modifiedTime.toUtc().toIso8601String(),
         'size': size,
       };

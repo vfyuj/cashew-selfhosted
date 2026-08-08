@@ -8,6 +8,7 @@ import 'package:cashew_selfhosted/main.dart';
 import 'package:cashew_selfhosted/pages/aboutPage.dart';
 import 'package:cashew_selfhosted/pages/accountsPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/liveSyncClient.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/webdavClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
@@ -895,6 +896,58 @@ class _BackupManagementState extends State<BackupManagement> {
                         ? Icons.all_inbox_outlined
                         : Icons.all_inbox_rounded,
                   ),
+                )
+              : SizedBox.shrink(),
+          // Reset Sync -- the escape hatch upstream Cashew also ships. A change
+          // feed can end up in a state no client can make progress against,
+          // and without this the only remedy is editing the server database by
+          // hand. See specs/04-stage-2-instant-sync.md.
+          // English literals rather than .tr() keys: assets/translations is
+          // regenerated from upstream Cashew's Google Sheet, which would drop
+          // any fork-local key on the next run. Same choice liveSyncClient.dart
+          // already makes for its snackbars. "reset"/"cancel" are existing
+          // upstream keys, so those stay translated.
+          widget.isClientSync
+              ? SettingsContainer(
+                  enableBorderRadius: true,
+                  title: "Reset Sync",
+                  description: "Reset the remote sync database",
+                  icon: appStateSettings["outlinedIcons"]
+                      ? Icons.restart_alt_outlined
+                      : Icons.restart_alt_rounded,
+                  onTap: () {
+                    openPopup(
+                      context,
+                      icon: appStateSettings["outlinedIcons"]
+                          ? Icons.restart_alt_outlined
+                          : Icons.restart_alt_rounded,
+                      title: "Reset Sync",
+                      description:
+                          "Clears the server sync database to reinitialize syncing between devices. "
+                          "This device's data is then uploaded as the new baseline. "
+                          "Local data and stored backups remain intact.",
+                      onSubmit: () async {
+                        popRoute(context);
+                        await openLoadingPopupTryCatch(() async {
+                          final success = await resetLiveSync();
+                          if (success == false) {
+                            throw "Could not reach the server to reset syncing.";
+                          }
+                          openSnackbar(SnackbarMessage(
+                            title: "Sync reset",
+                            description:
+                                "Other devices will re-sync automatically",
+                            icon: appStateSettings["outlinedIcons"]
+                                ? Icons.check_circle_outlined
+                                : Icons.check_circle_rounded,
+                          ));
+                        });
+                      },
+                      onSubmitLabel: "reset".tr(),
+                      onCancel: () => popRoute(context),
+                      onCancelLabel: "cancel".tr(),
+                    );
+                  },
                 )
               : SizedBox.shrink(),
           widget.isManaging && widget.isClientSync == false

@@ -56,6 +56,15 @@ Deliberately mirrors today's Google Drive appDataFolder calls closely, so the ex
 
 ### Endpoints (all scoped server-side to the authenticated user — never trust a client-supplied user id)
 - `GET /sync/files` → `[{deviceId, filename, modifiedTime, size}]` (equivalent to `driveApi.files.list(spaces: 'appDataFolder')`)
+
+**`modifiedTime` must be UTC with a `Z`** (`stat.modified.toUtc().toIso8601String()` in
+`storage.dart`). `FileStat.modified` is a *local* `DateTime`, and `toIso8601String()` on a local
+`DateTime` emits no timezone designator at all — which `DateTime.parse` on the client then reads
+as *client*-local. Shipping it bare made every backup timestamp display off by the client's UTC
+offset (2h for CEST against a UTC container) while the home screen's own "last synced" stayed
+correct, because that one is written locally and never round-trips through the server. It also
+skewed `syncClient.dart`'s "has this peer changed since last sync" comparison by the same amount.
+The app's display sites already call `.toLocal()`, so emitting a correct `Z` is the whole fix.
 - `PUT /sync/files/:filename` (binary body, the device's SQLite snapshot) → `200`
 - `GET /sync/files/:filename` → binary stream
 - `DELETE /sync/files/:filename` → `200`
