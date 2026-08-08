@@ -10,7 +10,7 @@ class FileMetadata {
 
   Map<String, dynamic> toJson() => {
         'filename': filename,
-        'modifiedTime': modifiedTime.toIso8601String(),
+        'modifiedTime': modifiedTime.toUtc().toIso8601String(),
         'size': size,
       };
 }
