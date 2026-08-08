@@ -13,20 +13,36 @@ reconstruction on the receiving device. Both fixed, with regression tests. That 
 exposed how a stuck cycle degenerates into a fleet-wide push storm, and motivated the Reset Sync
 escape hatch. Still needs the on-device acceptance pass below.
 
-- [x] Server: `POST /sync/reset`, `min_retained_seq` / 409 rebootstrap now actually used
-- [x] App: Reset Sync button, rebootstrap handling, per-change pull resilience
-- [x] Push handler notifies peers only when something actually changed
-
 - [x] Server: `sync_records` / `sync_state` schema
 - [x] Server: `POST /sync/push`, `GET /sync/pull`
 - [x] Server: `/sync-stream` WebSocket wake-up + in-memory hub
+- [x] Server: `POST /sync/reset`; `min_retained_seq` / 409 rebootstrap now actually used
+- [x] Server: push notifies peers only when something actually changed
 - [x] App: `insertOrIgnore` merge-bug fix in `processSyncLogs`
 - [x] App: `liveSyncClient.dart` push/pull cycle (cursor-scan design — see below, this deviates
   from the outbox/trigger design originally sketched here)
 - [x] App: WebSocket client, reconnect/backoff
 - [x] App: wired to app start, local-change debounce, periodic timer, app resume, websocket wake
-- [ ] Verified against a real server deployment (airplane-mode test, two-device test) — the user
-  tests manually; not run by the agent in this session.
+- [x] App: `JsonTypeConverter2` on every list converter; per-change pull resilience
+- [x] App: Reset Sync button + rebootstrap handling
+- [ ] Verified against a real server deployment (airplane-mode test, two-device test) — the owner
+  tests manually, per "Testing & verification workflow" in `CLAUDE.md`.
+- [ ] **Regression pass not done.** An earlier WebSocket attempt at this stage was reverted after
+  breaking the "Add Account" button on `accountsPage.dart` and reintroducing a restore-propagation
+  race (device A restores and syncs; device B edits before pulling A's restore; A reloads and rolls
+  forward past B's edit). This implementation is a different, later attempt and neither symptom has
+  been re-checked. Check both before trusting this stage, along with sign-in, account creation, and
+  the existing full-snapshot sync/backup UI.
+
+**Empirical note (owner testing, 2026-08-08)**, carried over from the previous plan and still
+relevant: comparing "sync on every change" against a vanilla Cashew instance, the vanilla/Google
+Drive loading bar is very slow and clearly visible while this fork's is barely visible — despite
+both doing full-snapshot-per-change work at the time. That gap is almost certainly Google Drive's
+API latency (OAuth handling, real internet round-trips) versus a self-hosted server on the same
+LAN. Two implications: don't assume "slow sync" reports are about payload size alone, the network
+path matters at least as much; and this stage's payoff grows with transaction history rather than
+being urgent on a small database. Worth re-measuring on a realistically-sized database (years of
+transactions, not a fresh test account).
 
 ## Why replace the Stage 1 mechanism
 

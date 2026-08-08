@@ -29,7 +29,7 @@ This is how upstream Cashew already works: data lives locally by default, Google
 
 ## Acceptance test ("airplane mode test")
 
-Run this after any change touching auth, sync, or app startup:
+The owner runs this manually after any change touching auth, sync, or app startup — see "Testing & verification workflow" in `CLAUDE.md`. The agent's job is to get a working build running locally (or built as an APK) and hand over what's needed to run the steps below, not to attempt to simulate them itself:
 
 1. Enable airplane mode on the test device.
 2. Force-quit and relaunch the app.

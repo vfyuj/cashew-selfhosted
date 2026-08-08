@@ -7,7 +7,7 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 ## Why (do not re-litigate these — they are settled decisions)
 
 - Web auth breaks on page reload (Firebase Auth Web session-persistence issue on Flutter web reinit).
-- Sync requires manually triggering before switching devices and is slow — see "Why sync is slow" in `03-stage-1-kill-google.md` and the event design in `04-stage-2-instant-sync.md` for the root cause and the fix.
+- Sync requires manually triggering before switching devices and is slow — see "Why sync is slow today" in `04-stage-2-instant-sync.md` for the root cause and the fix.
 - Backups to Google Drive work, but the owner wants a self-hosted alternative (own server and/or Nextcloud/WebDAV).
 - Upstream's maintainer has repeatedly and thoughtfully declined self-hosting/multi-user support (relational DB architecture doesn't support live collection sync without a middle server; unwilling to bear cost/liability of hosting users' financial data). This fork exists because that's a reasonable position for upstream and a real gap for this owner. **This will never be upstreamed. Treat it as permanently diverging.**
 
@@ -31,15 +31,15 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 ## Glossary
 
 - **appDataFolder-equivalent**: the new server's per-user file storage, replacing Google Drive's hidden app-scoped Drive folder.
-- **Snapshot-diff sync**: today's mechanism (upload/download full SQLite files, diff by timestamp). Kept as the Stage 1 transport (just repointed at the new server) and as the Stage 2 offline catch-up fallback.
-- **Event-push sync**: Stage 2's mechanism — individual row changes streamed as they happen instead of reconstructed from diffed snapshots.
+- **Snapshot-diff sync**: today's mechanism (upload/download full SQLite files, diff by timestamp). This is the Stage 1 transport (just repointed at the new server) and stays the always-available fallback in Stage 2 — for a device's first-ever sync, or one that's been offline long enough that the incremental log no longer covers the gap.
+- **Incremental sync**: Stage 2's addition — individual row changes uploaded/downloaded directly as small JSON deltas (via a durable per-user change log on the server) instead of moving a whole SQLite file, so a trigger only transfers what actually changed. Still triggered by the same user actions as today (pull-to-refresh, app foreground, manual sync) — **not** a persistent connection or real-time push; an earlier attempt at real-time/event-push sync was tried and reverted (see `04-stage-2-instant-sync.md`).
 - **SyncLog / DeleteLog**: upstream's existing merge-log types. Reused, not replaced.
 
 ## Roadmap index
 
 1. `02-stage-0-foundations.md` — dev environment, fork identity, empty server skeleton deployed.
 2. `03-stage-1-kill-google.md` — self-hosted auth + repointed snapshot sync/backup. First real release.
-3. `04-stage-2-instant-sync.md` — event-push real-time sync.
+3. `04-stage-2-instant-sync.md` — incremental sync on top of Stage 1's snapshot-diff, triggered by the same user actions as today (not real-time push — see that file for why).
 4. Stage 3 (public-fork readiness) and Stage 4 (multi-user/ACL) specs are intentionally **not yet written** — they depend on decisions we'll make while executing Stages 1-2, and writing them now risks locking in guesses. Write them when the preceding stage is actually done.
 
 ## Explicit non-goals (do not build these unless a spec above says to)
