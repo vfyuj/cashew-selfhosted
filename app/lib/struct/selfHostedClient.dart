@@ -103,6 +103,32 @@ String _normalizeServerUrl(String serverUrl) {
   return url;
 }
 
+/// Response shape for `POST /sync/push` (specs/04-stage-2-instant-sync.md).
+class SyncPushResult {
+  final DateTime serverTime;
+  final int conflictCount;
+  SyncPushResult({required this.serverTime, required this.conflictCount});
+}
+
+/// Response shape for `GET /sync/pull`.
+class SyncPullResult {
+  final List<Map<String, dynamic>> changes;
+  final int nextCursor;
+  final bool hasMore;
+  SyncPullResult({required this.changes, required this.nextCursor, required this.hasMore});
+}
+
+/// Thrown when `GET /sync/pull` answers `409 rebootstrap`: the client's cursor
+/// points below what the server still retains, which is what a Reset Sync on
+/// another device leaves behind. The only valid response is to drop both local
+/// cursors and start over from scratch. See specs/04-stage-2-instant-sync.md.
+class SyncRebootstrapRequiredException implements Exception {
+  /// Where the server's feed now starts. The client resumes from here rather
+  /// than from 0 -- resuming from 0 would just trip the same 409 again.
+  final int minRetainedSeq;
+  SyncRebootstrapRequiredException(this.minRetainedSeq);
+}
+
 class InvalidLoginException implements Exception {}
 
 /// Logs in against the configured self-hosted server and persists the
@@ -302,6 +328,64 @@ class SelfHostedClient implements BackupTransport {
                 headers: _authHeader)
             .timeout(const Duration(seconds: 20));
         _throwIfUnauthenticated(response);
+      });
+
+  /// Stage 2 row-level change feed -- see specs/04-stage-2-instant-sync.md.
+  Future<SyncPushResult> pushSyncChanges({
+    required String deviceId,
+    required List<Map<String, dynamic>> changes,
+  }) =>
+      _withRefreshRetry(() async {
+        final response = await http
+            .post(Uri.parse('${session.serverUrl}/sync/push'),
+                headers: {..._authHeader, 'content-type': 'application/json'},
+                body: jsonEncode({'deviceId': deviceId, 'changes': changes}))
+            .timeout(const Duration(seconds: 30));
+        _throwIfUnauthenticated(response);
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return SyncPushResult(
+          serverTime: DateTime.fromMillisecondsSinceEpoch(body['serverTime'] as int),
+          conflictCount: body['conflictCount'] as int,
+        );
+      });
+
+  Future<SyncPullResult> pullSyncChanges({required int since, int limit = 500}) =>
+      _withRefreshRetry(() async {
+        final response = await http
+            .get(Uri.parse('${session.serverUrl}/sync/pull?since=$since&limit=$limit'),
+                headers: _authHeader)
+            .timeout(const Duration(seconds: 30));
+        _throwIfUnauthenticated(response);
+        if (response.statusCode == 409) {
+          final body = jsonDecode(response.body) as Map<String, dynamic>;
+          throw SyncRebootstrapRequiredException(
+              (body['minRetainedSeq'] as int?) ?? 0);
+        }
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return SyncPullResult(
+          changes: (body['changes'] as List).cast<Map<String, dynamic>>(),
+          nextCursor: body['nextCursor'] as int,
+          hasMore: body['hasMore'] as bool,
+        );
+      });
+
+  /// Clears the server's row-level change feed for this user. Local databases
+  /// and stored backups are untouched -- the next device to run a cycle
+  /// re-uploads its own data and becomes the new baseline. Mirrors upstream
+  /// Cashew's "Reset Sync". See specs/04-stage-2-instant-sync.md.
+  /// Returns the feed's new starting seq, which the caller stores as its pull
+  /// cursor.
+  Future<int> resetSyncDatabase() => _withRefreshRetry(() async {
+        final response = await http
+            .post(Uri.parse('${session.serverUrl}/sync/reset'),
+                headers: _authHeader)
+            .timeout(const Duration(seconds: 30));
+        _throwIfUnauthenticated(response);
+        if (response.statusCode != 200) {
+          throw Exception('Reset sync failed: ${response.statusCode}');
+        }
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return (body['minRetainedSeq'] as int?) ?? 0;
       });
 }
 

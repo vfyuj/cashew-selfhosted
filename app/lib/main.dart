@@ -16,6 +16,7 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/struct/notificationsGlobal.dart';
+import 'package:cashew_selfhosted/struct/liveSyncClient.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/widgets/navigationSidebar.dart';
 import 'package:cashew_selfhosted/widgets/globalLoadingProgress.dart';
@@ -153,6 +154,9 @@ class App extends StatelessWidget {
           updateGlobalAppLifecycleState: true,
           onAppResume: () async {
             await setHighRefreshRate();
+            // Catch up immediately on resume rather than waiting for the
+            // next periodic tick -- see specs/04-stage-2-instant-sync.md.
+            runLiveSyncCycle();
           },
           child: InitializeBiometrics(
             child: InitializeNotificationService(

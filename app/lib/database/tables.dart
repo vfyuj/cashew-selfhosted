@@ -129,7 +129,18 @@ enum MethodAdded {
 
 enum SharedStatus { waiting, shared, error }
 
-class IntListInColumnConverter extends TypeConverter<List<int>, String> {
+/// Every list converter below mixes in [JsonTypeConverter2]. Drift applies a
+/// plain [TypeConverter] to SQL only: the generated `toJson` would emit the
+/// raw Dart list and `fromJson` would cast the decoded `List<dynamic>`
+/// straight back to `List<T>`, which throws. That is not hypothetical -- it
+/// broke live sync twice, and the `List<String>` case is especially nasty
+/// because it *encodes* fine, so pushes succeed and only the pull dies.
+/// See specs/04-stage-2-instant-sync.md.
+///
+/// The JSON form is a real JSON array (the same list `toSql` encodes into its
+/// string), so payloads already stored on the server stay readable.
+class IntListInColumnConverter extends TypeConverter<List<int>, String>
+    with JsonTypeConverter2<List<int>, String, List<dynamic>> {
   const IntListInColumnConverter();
   @override
   List<int> fromSql(String string_from_db) {
@@ -140,19 +151,34 @@ class IntListInColumnConverter extends TypeConverter<List<int>, String> {
   String toSql(List<int> ints) {
     return json.encode(ints);
   }
+
+  @override
+  List<dynamic> toJson(List<int> ints) => ints;
+
+  @override
+  List<int> fromJson(List<dynamic> jsonValue) =>
+      jsonValue.map((dynamic item) => (item as num).toInt()).toList();
 }
 
+/// The [JsonTypeConverter2] mixin is what makes this converter apply to the
+/// generated data class's `toJson`/`fromJson`, not just its SQL mapping.
+/// Drift ignores a plain [TypeConverter] when (de)serializing JSON, so without
+/// it `toJson` emits the raw `List<BudgetTransactionFilters>` -- enum
+/// instances `jsonEncode` cannot encode -- and `fromJson` tries to cast a
+/// decoded `List<dynamic>` straight to `List<BudgetTransactionFilters>`.
+/// Both directions broke live sync; see specs/04-stage-2-instant-sync.md.
+/// JSON uses the same enum-index list as [toSql], just unwrapped from its
+/// string encoding.
 class BudgetTransactionFiltersListInColumnConverter
-    extends TypeConverter<List<BudgetTransactionFilters>, String> {
+    extends TypeConverter<List<BudgetTransactionFilters>, String>
+    with
+        JsonTypeConverter2<List<BudgetTransactionFilters>, String,
+            List<dynamic>> {
   const BudgetTransactionFiltersListInColumnConverter();
   @override
   List<BudgetTransactionFilters> fromSql(String string_from_db) {
     List<int> ints = List<int>.from(json.decode(string_from_db));
-    List<BudgetTransactionFilters> filters = ints
-        .where((i) => i >= 0 && i < BudgetTransactionFilters.values.length)
-        .map((i) => BudgetTransactionFilters.values[i])
-        .toList();
-    return filters;
+    return _fromIndices(ints);
   }
 
   @override
@@ -160,19 +186,34 @@ class BudgetTransactionFiltersListInColumnConverter
     List<int> ints = filters.map((filter) => filter.index).toList();
     return json.encode(ints);
   }
+
+  @override
+  List<dynamic> toJson(List<BudgetTransactionFilters> filters) =>
+      filters.map((filter) => filter.index).toList();
+
+  @override
+  List<BudgetTransactionFilters> fromJson(List<dynamic> jsonValue) =>
+      _fromIndices(jsonValue.cast<int>());
+
+  List<BudgetTransactionFilters> _fromIndices(List<int> ints) => ints
+      .where((i) => i >= 0 && i < BudgetTransactionFilters.values.length)
+      .map((i) => BudgetTransactionFilters.values[i])
+      .toList();
 }
 
+/// Same JSON-mapping fix as [BudgetTransactionFiltersListInColumnConverter] --
+/// see the comment there. This one is the column that actually bit: every
+/// wallet gets a non-null `homePageWidgetDisplay` by default, so every push
+/// batch contained an unencodable value.
 class HomePageWidgetDisplayListInColumnConverter
-    extends TypeConverter<List<HomePageWidgetDisplay>, String> {
+    extends TypeConverter<List<HomePageWidgetDisplay>, String>
+    with
+        JsonTypeConverter2<List<HomePageWidgetDisplay>, String, List<dynamic>> {
   const HomePageWidgetDisplayListInColumnConverter();
   @override
   List<HomePageWidgetDisplay> fromSql(String string_from_db) {
     List<int> ints = List<int>.from(json.decode(string_from_db));
-    List<HomePageWidgetDisplay> widgetDisplays = ints
-        .where((i) => i >= 0 && i < HomePageWidgetDisplay.values.length)
-        .map((i) => HomePageWidgetDisplay.values[i])
-        .toList();
-    return widgetDisplays;
+    return _fromIndices(ints);
   }
 
   @override
@@ -180,25 +221,53 @@ class HomePageWidgetDisplayListInColumnConverter
     List<int> ints = filters.map((filter) => filter.index).toList();
     return json.encode(ints);
   }
+
+  @override
+  List<dynamic> toJson(List<HomePageWidgetDisplay> filters) =>
+      filters.map((filter) => filter.index).toList();
+
+  @override
+  List<HomePageWidgetDisplay> fromJson(List<dynamic> jsonValue) =>
+      _fromIndices(jsonValue.cast<int>());
+
+  List<HomePageWidgetDisplay> _fromIndices(List<int> ints) => ints
+      .where((i) => i >= 0 && i < HomePageWidgetDisplay.values.length)
+      .map((i) => HomePageWidgetDisplay.values[i])
+      .toList();
 }
 
-class StringListInColumnConverter extends TypeConverter<List<String>, String> {
+/// This is the one that actually broke the pull: `walletFks`, `categoryFks`,
+/// `sharedMembers` and friends on Budgets, plus `budgetFksExclude` on
+/// Transactions. A `List<String>` is perfectly JSON-encodable, so pushes went
+/// out clean and only reconstruction on the receiving device threw
+/// `List<dynamic> is not a subtype of List<String>?`.
+class StringListInColumnConverter extends TypeConverter<List<String>, String>
+    with JsonTypeConverter2<List<String>, String, List<dynamic>> {
   const StringListInColumnConverter();
   @override
   List<String> fromSql(String string_from_db) {
-    List<dynamic> dynamicList = List<dynamic>.from(json.decode(string_from_db));
-    List<String> stringList =
-        dynamicList.map((dynamic item) => item.toString()).toList();
-    return stringList;
+    return _asStrings(List<dynamic>.from(json.decode(string_from_db)));
   }
 
   @override
   String toSql(List<String> strings) {
     return json.encode(strings);
   }
+
+  @override
+  List<dynamic> toJson(List<String> strings) => strings;
+
+  @override
+  List<String> fromJson(List<dynamic> jsonValue) => _asStrings(jsonValue);
+
+  // toString() rather than a cast, matching what fromSql has always done:
+  // legacy rows can hold numbers where strings are expected.
+  List<String> _asStrings(List<dynamic> items) =>
+      items.map((dynamic item) => item.toString()).toList();
 }
 
-class DoubleListInColumnConverter extends TypeConverter<List<double>, String> {
+class DoubleListInColumnConverter extends TypeConverter<List<double>, String>
+    with JsonTypeConverter2<List<double>, String, List<dynamic>> {
   const DoubleListInColumnConverter();
   @override
   List<double> fromSql(String string_from_db) {
@@ -209,6 +278,14 @@ class DoubleListInColumnConverter extends TypeConverter<List<double>, String> {
   String toSql(List<double> doubles) {
     return json.encode(doubles);
   }
+
+  @override
+  List<dynamic> toJson(List<double> doubles) => doubles;
+
+  // (item as num) because JSON round-trips a whole double back as an int.
+  @override
+  List<double> fromJson(List<dynamic> jsonValue) =>
+      jsonValue.map((dynamic item) => (item as num).toDouble()).toList();
 }
 
 enum DeleteLogType {
@@ -3707,8 +3784,13 @@ class FinanceDatabase extends _$FinanceDatabase {
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
+          // insertOrIgnore, not insertOrReplace: the guarded update above
+          // already applied the LWW comparison. insertOrReplace would
+          // unconditionally overwrite on primary-key conflict regardless of
+          // timestamp, silently undoing that guard for any row that already
+          // existed locally (see specs/04-stage-2-instant-sync.md).
           batch.insert(wallets, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrReplace);
+              mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.TransactionCategory) {
           batch.update(
             categories,
@@ -3720,7 +3802,7 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
           batch.insert(categories, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrReplace);
+              mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.Budget) {
           batch.update(
             budgets,
@@ -3732,7 +3814,7 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
           batch.insert(budgets, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrReplace);
+              mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.CategoryBudgetLimit) {
           batch.update(
             categoryBudgetLimits,
@@ -3744,7 +3826,7 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
           batch.insert(categoryBudgetLimits, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrReplace);
+              mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.Transaction) {
           batch.update(
             transactions,
@@ -3756,7 +3838,7 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
           batch.insert(transactions, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrReplace);
+              mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType ==
             UpdateLogType.TransactionAssociatedTitle) {
           batch.update(
@@ -3769,7 +3851,7 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
           batch.insert(associatedTitles, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrReplace);
+              mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.ScannerTemplate) {
           batch.update(
             scannerTemplates,
@@ -3781,7 +3863,7 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
           batch.insert(scannerTemplates, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrReplace);
+              mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.Objective) {
           batch.update(
             objectives,
@@ -3793,7 +3875,7 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
           batch.insert(objectives, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrReplace);
+              mode: InsertMode.insertOrIgnore);
         }
       }
     });

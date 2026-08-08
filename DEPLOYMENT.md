@@ -53,7 +53,7 @@ In the NPM web UI → **Proxy Hosts** → **Add Proxy Host**:
 - **Forward Port**: `8080`
 - **Cache Assets**: off (fine either way, but the app already sets its own no-cache headers on the files that need it — see `server/lib/src/web_handler.dart`)
 - **Block Common Exploits**: on
-- **Websockets Support**: off for now (not needed until Stage 2)
+- **Websockets Support**: **on** — required for live sync's `/sync-stream` endpoint (specs/04-stage-2-instant-sync.md). Sync still works with this off (falls back to a 45s poll), just without the near-instant push.
 
 Under the **SSL** tab:
 - Request a new **Let's Encrypt** certificate for `cashew.yourdomain.tld`

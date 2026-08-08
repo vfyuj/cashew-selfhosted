@@ -205,12 +205,12 @@ class $WalletsTable extends Wallets
     return $WalletsTable(attachedDatabase, alias);
   }
 
-  static TypeConverter<List<HomePageWidgetDisplay>, String>
+  static JsonTypeConverter2<List<HomePageWidgetDisplay>, String, List<dynamic>>
       $converterhomePageWidgetDisplay =
       const HomePageWidgetDisplayListInColumnConverter();
-  static TypeConverter<List<HomePageWidgetDisplay>?, String?>
-      $converterhomePageWidgetDisplayn =
-      NullAwareTypeConverter.wrap($converterhomePageWidgetDisplay);
+  static JsonTypeConverter2<List<HomePageWidgetDisplay>?, String?,
+          List<dynamic>?> $converterhomePageWidgetDisplayn =
+      JsonTypeConverter2.asNullable($converterhomePageWidgetDisplay);
 }
 
 class TransactionWallet extends DataClass
@@ -262,9 +262,9 @@ class TransactionWallet extends DataClass
     }
     map['decimals'] = Variable<int>(decimals);
     if (!nullToAbsent || homePageWidgetDisplay != null) {
-      final converter = $WalletsTable.$converterhomePageWidgetDisplayn;
-      map['home_page_widget_display'] =
-          Variable<String>(converter.toSql(homePageWidgetDisplay));
+      map['home_page_widget_display'] = Variable<String>($WalletsTable
+          .$converterhomePageWidgetDisplayn
+          .toSql(homePageWidgetDisplay));
     }
     return map;
   }
@@ -311,8 +311,9 @@ class TransactionWallet extends DataClass
       currency: serializer.fromJson<String?>(json['currency']),
       currencyFormat: serializer.fromJson<String?>(json['currencyFormat']),
       decimals: serializer.fromJson<int>(json['decimals']),
-      homePageWidgetDisplay: serializer.fromJson<List<HomePageWidgetDisplay>?>(
-          json['homePageWidgetDisplay']),
+      homePageWidgetDisplay: $WalletsTable.$converterhomePageWidgetDisplayn
+          .fromJson(serializer
+              .fromJson<List<dynamic>?>(json['homePageWidgetDisplay'])),
     );
   }
   @override
@@ -329,8 +330,9 @@ class TransactionWallet extends DataClass
       'currency': serializer.toJson<String?>(currency),
       'currencyFormat': serializer.toJson<String?>(currencyFormat),
       'decimals': serializer.toJson<int>(decimals),
-      'homePageWidgetDisplay': serializer
-          .toJson<List<HomePageWidgetDisplay>?>(homePageWidgetDisplay),
+      'homePageWidgetDisplay': serializer.toJson<List<dynamic>?>($WalletsTable
+          .$converterhomePageWidgetDisplayn
+          .toJson(homePageWidgetDisplay)),
     };
   }
 
@@ -550,10 +552,9 @@ class WalletsCompanion extends UpdateCompanion<TransactionWallet> {
       map['decimals'] = Variable<int>(decimals.value);
     }
     if (homePageWidgetDisplay.present) {
-      final converter = $WalletsTable.$converterhomePageWidgetDisplayn;
-
-      map['home_page_widget_display'] =
-          Variable<String>(converter.toSql(homePageWidgetDisplay.value));
+      map['home_page_widget_display'] = Variable<String>($WalletsTable
+          .$converterhomePageWidgetDisplayn
+          .toSql(homePageWidgetDisplay.value));
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -840,8 +841,8 @@ class TransactionCategory extends DataClass
     map['order'] = Variable<int>(order);
     map['income'] = Variable<bool>(income);
     if (!nullToAbsent || methodAdded != null) {
-      final converter = $CategoriesTable.$convertermethodAddedn;
-      map['method_added'] = Variable<int>(converter.toSql(methodAdded));
+      map['method_added'] = Variable<int>(
+          $CategoriesTable.$convertermethodAddedn.toSql(methodAdded));
     }
     if (!nullToAbsent || mainCategoryPk != null) {
       map['main_category_pk'] = Variable<String>(mainCategoryPk);
@@ -1123,9 +1124,8 @@ class CategoriesCompanion extends UpdateCompanion<TransactionCategory> {
       map['income'] = Variable<bool>(income.value);
     }
     if (methodAdded.present) {
-      final converter = $CategoriesTable.$convertermethodAddedn;
-
-      map['method_added'] = Variable<int>(converter.toSql(methodAdded.value));
+      map['method_added'] = Variable<int>(
+          $CategoriesTable.$convertermethodAddedn.toSql(methodAdded.value));
     }
     if (mainCategoryPk.present) {
       map['main_category_pk'] = Variable<String>(mainCategoryPk.value);
@@ -1461,8 +1461,7 @@ class Objective extends DataClass implements Insertable<Objective> {
     final map = <String, Expression>{};
     map['objective_pk'] = Variable<String>(objectivePk);
     {
-      final converter = $ObjectivesTable.$convertertype;
-      map['type'] = Variable<int>(converter.toSql(type));
+      map['type'] = Variable<int>($ObjectivesTable.$convertertype.toSql(type));
     }
     map['name'] = Variable<String>(name);
     map['amount'] = Variable<double>(amount);
@@ -1798,9 +1797,8 @@ class ObjectivesCompanion extends UpdateCompanion<Objective> {
       map['objective_pk'] = Variable<String>(objectivePk.value);
     }
     if (type.present) {
-      final converter = $ObjectivesTable.$convertertype;
-
-      map['type'] = Variable<int>(converter.toSql(type.value));
+      map['type'] =
+          Variable<int>($ObjectivesTable.$convertertype.toSql(type.value));
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -2431,10 +2429,11 @@ class $TransactionsTable extends Transactions
       const EnumIndexConverter<SharedStatus>(SharedStatus.values);
   static JsonTypeConverter2<SharedStatus?, int?, int?> $convertersharedStatusn =
       JsonTypeConverter2.asNullable($convertersharedStatus);
-  static TypeConverter<List<String>, String> $converterbudgetFksExclude =
-      const StringListInColumnConverter();
-  static TypeConverter<List<String>?, String?> $converterbudgetFksExcluden =
-      NullAwareTypeConverter.wrap($converterbudgetFksExclude);
+  static JsonTypeConverter2<List<String>, String, List<dynamic>>
+      $converterbudgetFksExclude = const StringListInColumnConverter();
+  static JsonTypeConverter2<List<String>?, String?, List<dynamic>?>
+      $converterbudgetFksExcluden =
+      JsonTypeConverter2.asNullable($converterbudgetFksExclude);
 }
 
 class Transaction extends DataClass implements Insertable<Transaction> {
@@ -2528,8 +2527,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       map['period_length'] = Variable<int>(periodLength);
     }
     if (!nullToAbsent || reoccurrence != null) {
-      final converter = $TransactionsTable.$converterreoccurrencen;
-      map['reoccurrence'] = Variable<int>(converter.toSql(reoccurrence));
+      map['reoccurrence'] = Variable<int>(
+          $TransactionsTable.$converterreoccurrencen.toSql(reoccurrence));
     }
     if (!nullToAbsent || endDate != null) {
       map['end_date'] = Variable<DateTime>(endDate);
@@ -2539,8 +2538,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           Variable<bool>(upcomingTransactionNotification);
     }
     if (!nullToAbsent || type != null) {
-      final converter = $TransactionsTable.$convertertypen;
-      map['type'] = Variable<int>(converter.toSql(type));
+      map['type'] =
+          Variable<int>($TransactionsTable.$convertertypen.toSql(type));
     }
     map['paid'] = Variable<bool>(paid);
     if (!nullToAbsent || createdAnotherFutureTransaction != null) {
@@ -2549,8 +2548,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     map['skip_paid'] = Variable<bool>(skipPaid);
     if (!nullToAbsent || methodAdded != null) {
-      final converter = $TransactionsTable.$convertermethodAddedn;
-      map['method_added'] = Variable<int>(converter.toSql(methodAdded));
+      map['method_added'] = Variable<int>(
+          $TransactionsTable.$convertermethodAddedn.toSql(methodAdded));
     }
     if (!nullToAbsent || transactionOwnerEmail != null) {
       map['transaction_owner_email'] = Variable<String>(transactionOwnerEmail);
@@ -2566,8 +2565,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       map['shared_old_key'] = Variable<String>(sharedOldKey);
     }
     if (!nullToAbsent || sharedStatus != null) {
-      final converter = $TransactionsTable.$convertersharedStatusn;
-      map['shared_status'] = Variable<int>(converter.toSql(sharedStatus));
+      map['shared_status'] = Variable<int>(
+          $TransactionsTable.$convertersharedStatusn.toSql(sharedStatus));
     }
     if (!nullToAbsent || sharedDateUpdated != null) {
       map['shared_date_updated'] = Variable<DateTime>(sharedDateUpdated);
@@ -2583,9 +2582,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       map['objective_loan_fk'] = Variable<String>(objectiveLoanFk);
     }
     if (!nullToAbsent || budgetFksExclude != null) {
-      final converter = $TransactionsTable.$converterbudgetFksExcluden;
-      map['budget_fks_exclude'] =
-          Variable<String>(converter.toSql(budgetFksExclude));
+      map['budget_fks_exclude'] = Variable<String>($TransactionsTable
+          .$converterbudgetFksExcluden
+          .toSql(budgetFksExclude));
     }
     return map;
   }
@@ -2715,8 +2714,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           serializer.fromJson<String?>(json['sharedReferenceBudgetPk']),
       objectiveFk: serializer.fromJson<String?>(json['objectiveFk']),
       objectiveLoanFk: serializer.fromJson<String?>(json['objectiveLoanFk']),
-      budgetFksExclude:
-          serializer.fromJson<List<String>?>(json['budgetFksExclude']),
+      budgetFksExclude: $TransactionsTable.$converterbudgetFksExcluden.fromJson(
+          serializer.fromJson<List<dynamic>?>(json['budgetFksExclude'])),
     );
   }
   @override
@@ -2762,7 +2761,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           serializer.toJson<String?>(sharedReferenceBudgetPk),
       'objectiveFk': serializer.toJson<String?>(objectiveFk),
       'objectiveLoanFk': serializer.toJson<String?>(objectiveLoanFk),
-      'budgetFksExclude': serializer.toJson<List<String>?>(budgetFksExclude),
+      'budgetFksExclude': serializer.toJson<List<dynamic>?>($TransactionsTable
+          .$converterbudgetFksExcluden
+          .toJson(budgetFksExclude)),
     };
   }
 
@@ -3271,9 +3272,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       map['period_length'] = Variable<int>(periodLength.value);
     }
     if (reoccurrence.present) {
-      final converter = $TransactionsTable.$converterreoccurrencen;
-
-      map['reoccurrence'] = Variable<int>(converter.toSql(reoccurrence.value));
+      map['reoccurrence'] = Variable<int>(
+          $TransactionsTable.$converterreoccurrencen.toSql(reoccurrence.value));
     }
     if (endDate.present) {
       map['end_date'] = Variable<DateTime>(endDate.value);
@@ -3283,9 +3283,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           Variable<bool>(upcomingTransactionNotification.value);
     }
     if (type.present) {
-      final converter = $TransactionsTable.$convertertypen;
-
-      map['type'] = Variable<int>(converter.toSql(type.value));
+      map['type'] =
+          Variable<int>($TransactionsTable.$convertertypen.toSql(type.value));
     }
     if (paid.present) {
       map['paid'] = Variable<bool>(paid.value);
@@ -3298,9 +3297,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       map['skip_paid'] = Variable<bool>(skipPaid.value);
     }
     if (methodAdded.present) {
-      final converter = $TransactionsTable.$convertermethodAddedn;
-
-      map['method_added'] = Variable<int>(converter.toSql(methodAdded.value));
+      map['method_added'] = Variable<int>(
+          $TransactionsTable.$convertermethodAddedn.toSql(methodAdded.value));
     }
     if (transactionOwnerEmail.present) {
       map['transaction_owner_email'] =
@@ -3317,9 +3315,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       map['shared_old_key'] = Variable<String>(sharedOldKey.value);
     }
     if (sharedStatus.present) {
-      final converter = $TransactionsTable.$convertersharedStatusn;
-
-      map['shared_status'] = Variable<int>(converter.toSql(sharedStatus.value));
+      map['shared_status'] = Variable<int>(
+          $TransactionsTable.$convertersharedStatusn.toSql(sharedStatus.value));
     }
     if (sharedDateUpdated.present) {
       map['shared_date_updated'] = Variable<DateTime>(sharedDateUpdated.value);
@@ -3335,10 +3332,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       map['objective_loan_fk'] = Variable<String>(objectiveLoanFk.value);
     }
     if (budgetFksExclude.present) {
-      final converter = $TransactionsTable.$converterbudgetFksExcluden;
-
-      map['budget_fks_exclude'] =
-          Variable<String>(converter.toSql(budgetFksExclude.value));
+      map['budget_fks_exclude'] = Variable<String>($TransactionsTable
+          .$converterbudgetFksExcluden
+          .toSql(budgetFksExclude.value));
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -3842,49 +3838,53 @@ class $BudgetsTable extends Budgets with TableInfo<$BudgetsTable, Budget> {
     return $BudgetsTable(attachedDatabase, alias);
   }
 
-  static TypeConverter<List<String>, String> $converterwalletFks =
-      const StringListInColumnConverter();
-  static TypeConverter<List<String>?, String?> $converterwalletFksn =
-      NullAwareTypeConverter.wrap($converterwalletFks);
-  static TypeConverter<List<String>, String> $convertercategoryFks =
-      const StringListInColumnConverter();
-  static TypeConverter<List<String>?, String?> $convertercategoryFksn =
-      NullAwareTypeConverter.wrap($convertercategoryFks);
-  static TypeConverter<List<String>, String> $convertercategoryFksExclude =
-      const StringListInColumnConverter();
-  static TypeConverter<List<String>?, String?> $convertercategoryFksExcluden =
-      NullAwareTypeConverter.wrap($convertercategoryFksExclude);
+  static JsonTypeConverter2<List<String>, String, List<dynamic>>
+      $converterwalletFks = const StringListInColumnConverter();
+  static JsonTypeConverter2<List<String>?, String?, List<dynamic>?>
+      $converterwalletFksn = JsonTypeConverter2.asNullable($converterwalletFks);
+  static JsonTypeConverter2<List<String>, String, List<dynamic>>
+      $convertercategoryFks = const StringListInColumnConverter();
+  static JsonTypeConverter2<List<String>?, String?, List<dynamic>?>
+      $convertercategoryFksn =
+      JsonTypeConverter2.asNullable($convertercategoryFks);
+  static JsonTypeConverter2<List<String>, String, List<dynamic>>
+      $convertercategoryFksExclude = const StringListInColumnConverter();
+  static JsonTypeConverter2<List<String>?, String?, List<dynamic>?>
+      $convertercategoryFksExcluden =
+      JsonTypeConverter2.asNullable($convertercategoryFksExclude);
   static JsonTypeConverter2<BudgetReoccurence, int, int>
       $converterreoccurrence =
       const EnumIndexConverter<BudgetReoccurence>(BudgetReoccurence.values);
   static JsonTypeConverter2<BudgetReoccurence?, int?, int?>
       $converterreoccurrencen =
       JsonTypeConverter2.asNullable($converterreoccurrence);
-  static TypeConverter<List<BudgetTransactionFilters>, String>
-      $converterbudgetTransactionFilters =
+  static JsonTypeConverter2<List<BudgetTransactionFilters>, String,
+          List<dynamic>> $converterbudgetTransactionFilters =
       const BudgetTransactionFiltersListInColumnConverter();
-  static TypeConverter<List<BudgetTransactionFilters>?, String?>
-      $converterbudgetTransactionFiltersn =
-      NullAwareTypeConverter.wrap($converterbudgetTransactionFilters);
-  static TypeConverter<List<String>, String>
+  static JsonTypeConverter2<List<BudgetTransactionFilters>?, String?,
+          List<dynamic>?> $converterbudgetTransactionFiltersn =
+      JsonTypeConverter2.asNullable($converterbudgetTransactionFilters);
+  static JsonTypeConverter2<List<String>, String, List<dynamic>>
       $convertermemberTransactionFilters = const StringListInColumnConverter();
-  static TypeConverter<List<String>?, String?>
+  static JsonTypeConverter2<List<String>?, String?, List<dynamic>?>
       $convertermemberTransactionFiltersn =
-      NullAwareTypeConverter.wrap($convertermemberTransactionFilters);
+      JsonTypeConverter2.asNullable($convertermemberTransactionFilters);
   static JsonTypeConverter2<SharedOwnerMember, int, int>
       $convertersharedOwnerMember =
       const EnumIndexConverter<SharedOwnerMember>(SharedOwnerMember.values);
   static JsonTypeConverter2<SharedOwnerMember?, int?, int?>
       $convertersharedOwnerMembern =
       JsonTypeConverter2.asNullable($convertersharedOwnerMember);
-  static TypeConverter<List<String>, String> $convertersharedMembers =
-      const StringListInColumnConverter();
-  static TypeConverter<List<String>?, String?> $convertersharedMembersn =
-      NullAwareTypeConverter.wrap($convertersharedMembers);
-  static TypeConverter<List<String>, String> $convertersharedAllMembersEver =
-      const StringListInColumnConverter();
-  static TypeConverter<List<String>?, String?> $convertersharedAllMembersEvern =
-      NullAwareTypeConverter.wrap($convertersharedAllMembersEver);
+  static JsonTypeConverter2<List<String>, String, List<dynamic>>
+      $convertersharedMembers = const StringListInColumnConverter();
+  static JsonTypeConverter2<List<String>?, String?, List<dynamic>?>
+      $convertersharedMembersn =
+      JsonTypeConverter2.asNullable($convertersharedMembers);
+  static JsonTypeConverter2<List<String>, String, List<dynamic>>
+      $convertersharedAllMembersEver = const StringListInColumnConverter();
+  static JsonTypeConverter2<List<String>?, String?, List<dynamic>?>
+      $convertersharedAllMembersEvern =
+      JsonTypeConverter2.asNullable($convertersharedAllMembersEver);
 }
 
 class Budget extends DataClass implements Insertable<Budget> {
@@ -3955,25 +3955,25 @@ class Budget extends DataClass implements Insertable<Budget> {
     map['start_date'] = Variable<DateTime>(startDate);
     map['end_date'] = Variable<DateTime>(endDate);
     if (!nullToAbsent || walletFks != null) {
-      final converter = $BudgetsTable.$converterwalletFksn;
-      map['wallet_fks'] = Variable<String>(converter.toSql(walletFks));
+      map['wallet_fks'] =
+          Variable<String>($BudgetsTable.$converterwalletFksn.toSql(walletFks));
     }
     if (!nullToAbsent || categoryFks != null) {
-      final converter = $BudgetsTable.$convertercategoryFksn;
-      map['category_fks'] = Variable<String>(converter.toSql(categoryFks));
+      map['category_fks'] = Variable<String>(
+          $BudgetsTable.$convertercategoryFksn.toSql(categoryFks));
     }
     if (!nullToAbsent || categoryFksExclude != null) {
-      final converter = $BudgetsTable.$convertercategoryFksExcluden;
-      map['category_fks_exclude'] =
-          Variable<String>(converter.toSql(categoryFksExclude));
+      map['category_fks_exclude'] = Variable<String>($BudgetsTable
+          .$convertercategoryFksExcluden
+          .toSql(categoryFksExclude));
     }
     map['income'] = Variable<bool>(income);
     map['archived'] = Variable<bool>(archived);
     map['added_transactions_only'] = Variable<bool>(addedTransactionsOnly);
     map['period_length'] = Variable<int>(periodLength);
     if (!nullToAbsent || reoccurrence != null) {
-      final converter = $BudgetsTable.$converterreoccurrencen;
-      map['reoccurrence'] = Variable<int>(converter.toSql(reoccurrence));
+      map['reoccurrence'] = Variable<int>(
+          $BudgetsTable.$converterreoccurrencen.toSql(reoccurrence));
     }
     map['date_created'] = Variable<DateTime>(dateCreated);
     if (!nullToAbsent || dateTimeModified != null) {
@@ -3983,34 +3983,33 @@ class Budget extends DataClass implements Insertable<Budget> {
     map['order'] = Variable<int>(order);
     map['wallet_fk'] = Variable<String>(walletFk);
     if (!nullToAbsent || budgetTransactionFilters != null) {
-      final converter = $BudgetsTable.$converterbudgetTransactionFiltersn;
-      map['budget_transaction_filters'] =
-          Variable<String>(converter.toSql(budgetTransactionFilters));
+      map['budget_transaction_filters'] = Variable<String>($BudgetsTable
+          .$converterbudgetTransactionFiltersn
+          .toSql(budgetTransactionFilters));
     }
     if (!nullToAbsent || memberTransactionFilters != null) {
-      final converter = $BudgetsTable.$convertermemberTransactionFiltersn;
-      map['member_transaction_filters'] =
-          Variable<String>(converter.toSql(memberTransactionFilters));
+      map['member_transaction_filters'] = Variable<String>($BudgetsTable
+          .$convertermemberTransactionFiltersn
+          .toSql(memberTransactionFilters));
     }
     if (!nullToAbsent || sharedKey != null) {
       map['shared_key'] = Variable<String>(sharedKey);
     }
     if (!nullToAbsent || sharedOwnerMember != null) {
-      final converter = $BudgetsTable.$convertersharedOwnerMembern;
-      map['shared_owner_member'] =
-          Variable<int>(converter.toSql(sharedOwnerMember));
+      map['shared_owner_member'] = Variable<int>(
+          $BudgetsTable.$convertersharedOwnerMembern.toSql(sharedOwnerMember));
     }
     if (!nullToAbsent || sharedDateUpdated != null) {
       map['shared_date_updated'] = Variable<DateTime>(sharedDateUpdated);
     }
     if (!nullToAbsent || sharedMembers != null) {
-      final converter = $BudgetsTable.$convertersharedMembersn;
-      map['shared_members'] = Variable<String>(converter.toSql(sharedMembers));
+      map['shared_members'] = Variable<String>(
+          $BudgetsTable.$convertersharedMembersn.toSql(sharedMembers));
     }
     if (!nullToAbsent || sharedAllMembersEver != null) {
-      final converter = $BudgetsTable.$convertersharedAllMembersEvern;
-      map['shared_all_members_ever'] =
-          Variable<String>(converter.toSql(sharedAllMembersEver));
+      map['shared_all_members_ever'] = Variable<String>($BudgetsTable
+          .$convertersharedAllMembersEvern
+          .toSql(sharedAllMembersEver));
     }
     map['is_absolute_spending_limit'] = Variable<bool>(isAbsoluteSpendingLimit);
     return map;
@@ -4083,10 +4082,12 @@ class Budget extends DataClass implements Insertable<Budget> {
       colour: serializer.fromJson<String?>(json['colour']),
       startDate: serializer.fromJson<DateTime>(json['startDate']),
       endDate: serializer.fromJson<DateTime>(json['endDate']),
-      walletFks: serializer.fromJson<List<String>?>(json['walletFks']),
-      categoryFks: serializer.fromJson<List<String>?>(json['categoryFks']),
-      categoryFksExclude:
-          serializer.fromJson<List<String>?>(json['categoryFksExclude']),
+      walletFks: $BudgetsTable.$converterwalletFksn
+          .fromJson(serializer.fromJson<List<dynamic>?>(json['walletFks'])),
+      categoryFks: $BudgetsTable.$convertercategoryFksn
+          .fromJson(serializer.fromJson<List<dynamic>?>(json['categoryFks'])),
+      categoryFksExclude: $BudgetsTable.$convertercategoryFksExcluden.fromJson(
+          serializer.fromJson<List<dynamic>?>(json['categoryFksExclude'])),
       income: serializer.fromJson<bool>(json['income']),
       archived: serializer.fromJson<bool>(json['archived']),
       addedTransactionsOnly:
@@ -4101,18 +4102,21 @@ class Budget extends DataClass implements Insertable<Budget> {
       order: serializer.fromJson<int>(json['order']),
       walletFk: serializer.fromJson<String>(json['walletFk']),
       budgetTransactionFilters:
-          serializer.fromJson<List<BudgetTransactionFilters>?>(
-              json['budgetTransactionFilters']),
+          $BudgetsTable.$converterbudgetTransactionFiltersn.fromJson(serializer
+              .fromJson<List<dynamic>?>(json['budgetTransactionFilters'])),
       memberTransactionFilters:
-          serializer.fromJson<List<String>?>(json['memberTransactionFilters']),
+          $BudgetsTable.$convertermemberTransactionFiltersn.fromJson(serializer
+              .fromJson<List<dynamic>?>(json['memberTransactionFilters'])),
       sharedKey: serializer.fromJson<String?>(json['sharedKey']),
       sharedOwnerMember: $BudgetsTable.$convertersharedOwnerMembern
           .fromJson(serializer.fromJson<int?>(json['sharedOwnerMember'])),
       sharedDateUpdated:
           serializer.fromJson<DateTime?>(json['sharedDateUpdated']),
-      sharedMembers: serializer.fromJson<List<String>?>(json['sharedMembers']),
-      sharedAllMembersEver:
-          serializer.fromJson<List<String>?>(json['sharedAllMembersEver']),
+      sharedMembers: $BudgetsTable.$convertersharedMembersn
+          .fromJson(serializer.fromJson<List<dynamic>?>(json['sharedMembers'])),
+      sharedAllMembersEver: $BudgetsTable.$convertersharedAllMembersEvern
+          .fromJson(serializer
+              .fromJson<List<dynamic>?>(json['sharedAllMembersEver'])),
       isAbsoluteSpendingLimit:
           serializer.fromJson<bool>(json['isAbsoluteSpendingLimit']),
     );
@@ -4127,10 +4131,13 @@ class Budget extends DataClass implements Insertable<Budget> {
       'colour': serializer.toJson<String?>(colour),
       'startDate': serializer.toJson<DateTime>(startDate),
       'endDate': serializer.toJson<DateTime>(endDate),
-      'walletFks': serializer.toJson<List<String>?>(walletFks),
-      'categoryFks': serializer.toJson<List<String>?>(categoryFks),
-      'categoryFksExclude':
-          serializer.toJson<List<String>?>(categoryFksExclude),
+      'walletFks': serializer.toJson<List<dynamic>?>(
+          $BudgetsTable.$converterwalletFksn.toJson(walletFks)),
+      'categoryFks': serializer.toJson<List<dynamic>?>(
+          $BudgetsTable.$convertercategoryFksn.toJson(categoryFks)),
+      'categoryFksExclude': serializer.toJson<List<dynamic>?>($BudgetsTable
+          .$convertercategoryFksExcluden
+          .toJson(categoryFksExclude)),
       'income': serializer.toJson<bool>(income),
       'archived': serializer.toJson<bool>(archived),
       'addedTransactionsOnly': serializer.toJson<bool>(addedTransactionsOnly),
@@ -4142,17 +4149,21 @@ class Budget extends DataClass implements Insertable<Budget> {
       'pinned': serializer.toJson<bool>(pinned),
       'order': serializer.toJson<int>(order),
       'walletFk': serializer.toJson<String>(walletFk),
-      'budgetTransactionFilters': serializer
-          .toJson<List<BudgetTransactionFilters>?>(budgetTransactionFilters),
-      'memberTransactionFilters':
-          serializer.toJson<List<String>?>(memberTransactionFilters),
+      'budgetTransactionFilters': serializer.toJson<List<dynamic>?>(
+          $BudgetsTable.$converterbudgetTransactionFiltersn
+              .toJson(budgetTransactionFilters)),
+      'memberTransactionFilters': serializer.toJson<List<dynamic>?>(
+          $BudgetsTable.$convertermemberTransactionFiltersn
+              .toJson(memberTransactionFilters)),
       'sharedKey': serializer.toJson<String?>(sharedKey),
       'sharedOwnerMember': serializer.toJson<int?>(
           $BudgetsTable.$convertersharedOwnerMembern.toJson(sharedOwnerMember)),
       'sharedDateUpdated': serializer.toJson<DateTime?>(sharedDateUpdated),
-      'sharedMembers': serializer.toJson<List<String>?>(sharedMembers),
-      'sharedAllMembersEver':
-          serializer.toJson<List<String>?>(sharedAllMembersEver),
+      'sharedMembers': serializer.toJson<List<dynamic>?>(
+          $BudgetsTable.$convertersharedMembersn.toJson(sharedMembers)),
+      'sharedAllMembersEver': serializer.toJson<List<dynamic>?>($BudgetsTable
+          .$convertersharedAllMembersEvern
+          .toJson(sharedAllMembersEver)),
       'isAbsoluteSpendingLimit':
           serializer.toJson<bool>(isAbsoluteSpendingLimit),
     };
@@ -4580,21 +4591,17 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
       map['end_date'] = Variable<DateTime>(endDate.value);
     }
     if (walletFks.present) {
-      final converter = $BudgetsTable.$converterwalletFksn;
-
-      map['wallet_fks'] = Variable<String>(converter.toSql(walletFks.value));
+      map['wallet_fks'] = Variable<String>(
+          $BudgetsTable.$converterwalletFksn.toSql(walletFks.value));
     }
     if (categoryFks.present) {
-      final converter = $BudgetsTable.$convertercategoryFksn;
-
-      map['category_fks'] =
-          Variable<String>(converter.toSql(categoryFks.value));
+      map['category_fks'] = Variable<String>(
+          $BudgetsTable.$convertercategoryFksn.toSql(categoryFks.value));
     }
     if (categoryFksExclude.present) {
-      final converter = $BudgetsTable.$convertercategoryFksExcluden;
-
-      map['category_fks_exclude'] =
-          Variable<String>(converter.toSql(categoryFksExclude.value));
+      map['category_fks_exclude'] = Variable<String>($BudgetsTable
+          .$convertercategoryFksExcluden
+          .toSql(categoryFksExclude.value));
     }
     if (income.present) {
       map['income'] = Variable<bool>(income.value);
@@ -4610,9 +4617,8 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
       map['period_length'] = Variable<int>(periodLength.value);
     }
     if (reoccurrence.present) {
-      final converter = $BudgetsTable.$converterreoccurrencen;
-
-      map['reoccurrence'] = Variable<int>(converter.toSql(reoccurrence.value));
+      map['reoccurrence'] = Variable<int>(
+          $BudgetsTable.$converterreoccurrencen.toSql(reoccurrence.value));
     }
     if (dateCreated.present) {
       map['date_created'] = Variable<DateTime>(dateCreated.value);
@@ -4630,40 +4636,34 @@ class BudgetsCompanion extends UpdateCompanion<Budget> {
       map['wallet_fk'] = Variable<String>(walletFk.value);
     }
     if (budgetTransactionFilters.present) {
-      final converter = $BudgetsTable.$converterbudgetTransactionFiltersn;
-
-      map['budget_transaction_filters'] =
-          Variable<String>(converter.toSql(budgetTransactionFilters.value));
+      map['budget_transaction_filters'] = Variable<String>($BudgetsTable
+          .$converterbudgetTransactionFiltersn
+          .toSql(budgetTransactionFilters.value));
     }
     if (memberTransactionFilters.present) {
-      final converter = $BudgetsTable.$convertermemberTransactionFiltersn;
-
-      map['member_transaction_filters'] =
-          Variable<String>(converter.toSql(memberTransactionFilters.value));
+      map['member_transaction_filters'] = Variable<String>($BudgetsTable
+          .$convertermemberTransactionFiltersn
+          .toSql(memberTransactionFilters.value));
     }
     if (sharedKey.present) {
       map['shared_key'] = Variable<String>(sharedKey.value);
     }
     if (sharedOwnerMember.present) {
-      final converter = $BudgetsTable.$convertersharedOwnerMembern;
-
-      map['shared_owner_member'] =
-          Variable<int>(converter.toSql(sharedOwnerMember.value));
+      map['shared_owner_member'] = Variable<int>($BudgetsTable
+          .$convertersharedOwnerMembern
+          .toSql(sharedOwnerMember.value));
     }
     if (sharedDateUpdated.present) {
       map['shared_date_updated'] = Variable<DateTime>(sharedDateUpdated.value);
     }
     if (sharedMembers.present) {
-      final converter = $BudgetsTable.$convertersharedMembersn;
-
-      map['shared_members'] =
-          Variable<String>(converter.toSql(sharedMembers.value));
+      map['shared_members'] = Variable<String>(
+          $BudgetsTable.$convertersharedMembersn.toSql(sharedMembers.value));
     }
     if (sharedAllMembersEver.present) {
-      final converter = $BudgetsTable.$convertersharedAllMembersEvern;
-
-      map['shared_all_members_ever'] =
-          Variable<String>(converter.toSql(sharedAllMembersEver.value));
+      map['shared_all_members_ever'] = Variable<String>($BudgetsTable
+          .$convertersharedAllMembersEvern
+          .toSql(sharedAllMembersEver.value));
     }
     if (isAbsoluteSpendingLimit.present) {
       map['is_absolute_spending_limit'] =
@@ -6454,8 +6454,7 @@ class DeleteLog extends DataClass implements Insertable<DeleteLog> {
     map['delete_log_pk'] = Variable<String>(deleteLogPk);
     map['entry_pk'] = Variable<String>(entryPk);
     {
-      final converter = $DeleteLogsTable.$convertertype;
-      map['type'] = Variable<int>(converter.toSql(type));
+      map['type'] = Variable<int>($DeleteLogsTable.$convertertype.toSql(type));
     }
     map['date_time_modified'] = Variable<DateTime>(dateTimeModified);
     return map;
@@ -6589,9 +6588,8 @@ class DeleteLogsCompanion extends UpdateCompanion<DeleteLog> {
       map['entry_pk'] = Variable<String>(entryPk.value);
     }
     if (type.present) {
-      final converter = $DeleteLogsTable.$convertertype;
-
-      map['type'] = Variable<int>(converter.toSql(type.value));
+      map['type'] =
+          Variable<int>($DeleteLogsTable.$convertertype.toSql(type.value));
     }
     if (dateTimeModified.present) {
       map['date_time_modified'] = Variable<DateTime>(dateTimeModified.value);
