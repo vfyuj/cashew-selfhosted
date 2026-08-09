@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/defaultCategories.dart';
+import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 
 //Initialize default values in database
 Future<bool> initializeDefaultDatabase() async {
@@ -19,6 +20,12 @@ Future<bool> initializeDefaultDatabase() async {
       customDateTimeModified: DateTime(0),
     );
   }
+
+  // Runs on every launch, so it backfills the envelope budget for the default
+  // categories above, for categories that predate this feature, and for any
+  // that arrived over sync. Idempotent, and local only - never blocks on the
+  // network, per specs/01-local-first-invariant.md.
+  await ensureMainCategoryBudgetsExist();
   return true;
 }
 

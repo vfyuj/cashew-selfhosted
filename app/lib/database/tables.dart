@@ -5065,6 +5065,11 @@ class FinanceDatabase extends _$FinanceDatabase {
     // print("DELETING");
     // print(categoryPk);
     await createDeleteLog(DeleteLogType.TransactionCategory, categoryPk);
+    // A main category's envelope budget is keyed by the category's own pk, so
+    // it dies with the category. Same precedent as
+    // deleteCategoryBudgetLimitsInCategory above.
+    await createDeleteLog(DeleteLogType.Budget, categoryPk);
+    await (delete(budgets)..where((b) => b.budgetPk.equals(categoryPk))).go();
     // Delete any category with same key, or subcategory with that key
     return (delete(categories)
           ..where((c) =>

@@ -12,7 +12,8 @@ not scheduled** — nothing in this folder is approved for implementation until 
    the stage docs. A feature that only works when signed in is wrong.
 2. Anything touching a Drift table also touches this fork's sync path. Upstream ships whole SQLite
    files; **this fork also ships row-level JSON deltas** (`app/lib/struct/liveSyncClient.dart`), so a
-   schema change that upstream could make safely can break sync here. See BL-001 §C3.
+   schema change that upstream could make safely can break sync here. See BL-001 §2, which avoided
+   a schema change partly for this reason.
 3. Prefer small, surgical diffs. Same warning as `CLAUDE.md`: large diffs in this codebase are a
    warning sign, not a sign of thoroughness.
 4. Don't start a backlog item while Stage 2 is in flight if it touches the same tables.
@@ -21,7 +22,7 @@ not scheduled** — nothing in this folder is approved for implementation until 
 
 | ID | Title | Status | Blocked on |
 |---|---|---|---|
-| [BL-001](BL-001-category-locked-budgets.md) | Category-locked budgets, income-relative targets, planned-vs-actual summary | Reviewed, needs owner decisions | Stage 2 landing; 6 open decisions in §4 |
+| [BL-001](BL-001-category-locked-budgets.md) | Category budgets, percent-of-income entry, share-of-plan labels | Implemented 2026-08-09, needs owner acceptance pass | — |
 | [BL-002](BL-002-onboarding-create-main-account.md) | Onboarding screen 2: "Create a budget" → "Create main account", add What-is-an-Account explainer | Reviewed, needs owner decision | 1 open decision in §4 |
 | [BL-003](BL-003-upstream-legacy-translations-and-docs.md) | Reminder: decide what to do with upstream-origin translations pipeline and in-app doc/policy links | Reminder / inventory only | Per-item decisions in §3 |
 | [BL-004](BL-004-public-readme-for-selfhosted-deploy.md) | Public README.md for the GitHub repo describing self-hosted deployment | Reviewed, needs owner decisions | 2 open decisions in §5 |

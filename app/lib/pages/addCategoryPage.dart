@@ -6,6 +6,7 @@ import 'package:cashew_selfhosted/pages/editAssociatedTitlesPage.dart';
 import 'package:cashew_selfhosted/pages/editCategoriesPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/categoryIcon.dart';
 import 'package:cashew_selfhosted/widgets/editRowEntry.dart';
@@ -155,6 +156,10 @@ class _AddCategoryPageState extends State<AddCategoryPage>
       insert: widget.category == null,
       createdCategory,
     );
+    // A new main category needs its envelope budget. Reconciling is cheaper to
+    // reason about than threading the generated categoryPk back out of the
+    // insert, and it is a no-op when nothing is missing.
+    await ensureMainCategoryBudgetsExist();
     if (canSelectIfSubCategoryOrMainCategory() &&
         mainCategoryPkForSubcategoryWhenCreating != null) {
       TransactionCategory categoryMain = await database

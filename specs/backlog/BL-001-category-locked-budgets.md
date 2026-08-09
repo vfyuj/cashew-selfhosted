@@ -1,376 +1,273 @@
-# BL-001 — Category-Locked Budgets with Income-Relative Targets, and a Planned-vs-Actual Net Summary
+# BL-001 — Category budgets, percent-of-income entry, and share-of-plan labels
 
-**Status:** Reviewed and corrected. **Not approved for implementation.** Six product decisions in §4
-need the owner's answer first, and §3 recommends deferring the start until Stage 2 lands.
+**Status:** Implemented 2026-08-09 on branch `claude/new-budgeting-system-88283e`. Not yet
+acceptance-tested by the owner.
 
-**Origin:** owner-submitted feature request, reviewed 2026-08-09 against the actual fork source.
+**Origin:** owner-submitted feature request (2026-08-09), reviewed against the fork source, then
+**redesigned by the owner** the same day around a hard "no schema changes" constraint. This document
+describes what was built. The earlier schema-based design is summarised in §8 for context — it is
+superseded, not deferred.
 
 **Local-first check:** ✅ no conflict with `specs/01-local-first-invariant.md`. Everything here is
 local Drift reads/writes and local computation. Nothing gates on auth or connectivity.
 
+**Upstream-compatibility check:** ✅ `app/lib/database/tables.dart` is untouched. `schemaVersionGlobal`
+is still 46 and the 10 tables are byte-identical to upstream's, so the hard invariant in `CLAUDE.md`
+holds and original-Cashew backups still import.
+
 ---
 
-## 1. What the request asks for
+## 1. What this delivers
 
-Today Cashew's budget↔category relationship is optional and loose: a `Budget` is a top-level entity
-that *may* reference some categories, and a category may belong to zero, one, or many budgets. This
-request makes it **mandatory and 1:1** for main categories (expense and income), adds a
-**percent-of-income** target type as an alternative to a fixed amount, and adds a **Planned vs.
-Actual** month summary:
+The household runs a spreadsheet with two columns — expense categories and income categories, each
+with a planned figure. That is envelope budgeting, and Cashew has no first-class notion of it: a
+`Budget` may reference any number of categories, and nothing ties one to a single category.
 
-- `x` = Σ(planned target of every main **income** category budget) − Σ(effective target of every main
-  **expense** category budget)
-- `y` = Σ(actual income transactions) − Σ(actual expense transactions), for the month
+This adds that notion **without storing anything new**:
 
-Motivation: the household already runs a spreadsheet with two columns — expense categories and income
-categories, each with a planned figure. That's envelope budgeting. Cashew's nearest existing feature,
-*Category Spending Goals*, is a nested breakdown inside one umbrella `Budget`, where a per-category
-percentage is a percentage of *that budget's own fixed target* — never of income.
+1. Every main category automatically gets one budget — its envelope.
+2. The budgets list splits into **Main Categories** and **Custom** tabs.
+3. An expense budget's target can be entered as a **percentage of planned income**, which is resolved
+   to a plain number at entry time.
+4. Each category budget card shows its **share of total planned expenses**.
 
 ### Worked example
 
-Income auto-budgets (fixed): Salary 2000 + Freelance 300 → **planned income = 2300**.
-Expense auto-budgets: Rent 800, Groceries 400, Savings 10% of income → 230, Fun 150 → **planned
-expenses = 1580**. `x = 2300 − 1580 = 720` (planned surplus).
-If actual paid transactions this month are 1420 expense / 2100 income: `y = 2100 − 1420 = 680`.
+Income budgets: Salary 2000 + Freelance 300 → **planned income = 2300**.
+Entering "10%" on the Savings envelope writes `230` into its amount field — a plain number, no
+different from typing it. With Rent 800, Groceries 400, Savings 230, Fun 150, total planned expenses
+is 1580, so the Rent card reads `50.6% of plan`.
 
 ---
 
-## 2. Verification pass — what the request got right
+## 2. The load-bearing constraint: nothing new is stored
 
-The request was written against a direct read of the source, and it holds up. Every one of these was
-checked against this fork and is accurate:
+The original design added two columns to `Budgets` (`budgetAmountType`, `linkedCategoryPk`) and bumped
+the schema to 47. The owner rejected that outright. Everything below follows from it:
 
-| Claim | Verified at |
+- **No `linkedCategoryPk`.** "This budget belongs to a main category" is *derived* — see §3.
+- **No `budgetAmountType`.** A percentage is never persisted; it is resolved once, at entry — see §5.
+- **No migration, no `schema_versions.dart` regeneration, no `drift_schemas/` file.**
+- **No sync-compatibility risk.** The original design's biggest hazard (`Budget.fromJson` throwing on
+  a device still on schema 46, old→new, taking the whole apply batch with it — see
+  `app/lib/struct/liveSyncClient.dart`) does not exist, because the payload shape never changed.
+
+The rule of thumb for anyone extending this: if a feature here seems to need a new column, it is
+probably the wrong feature.
+
+---
+
+## 3. Deriving "this budget belongs to a main category"
+
+`app/lib/struct/mainCategoryBudgets.dart` — `PlannedBudgetTotals.isMainCategoryBudget`.
+
+A non-archived budget belongs to a main category when:
+
+- its `categoryFks` holds **exactly one** entry, **and**
+- that entry is a **main** category (`Categories.mainCategoryPk == null`).
+
+Everything else is a custom budget. `categoryFksExclude` is deliberately ignored — narrowing an
+envelope with exclusions doesn't stop it being that category's envelope.
+
+Two derived totals sit on the same class:
+
+| Quantity | Definition | Used by |
+|---|---|---|
+| **Total planned expenses** | Σ target of every main-category budget with `income == false` | share label denominator (§6) |
+| **Planned income** | Σ target of **every** non-archived budget with `income == true` | percent-of-income entry (§5) |
+
+Planned income deliberately counts *all* income budgets, not just main-category ones, so a single
+catch-all income budget still produces a sensible number. Note this app labels income budgets
+**"savings budgets"** in the UI (`IncomeExpenseTabSelector` in `app/lib/pages/addBudgetPage.dart`),
+which is the wording the empty state uses.
+
+Both are computed in primary currency via the existing `budgetAmountToPrimaryCurrency`
+(`app/lib/struct/currencyFunctions.dart`) — whose signature and all 9 call sites are **unchanged**,
+which was the explicit goal of the original review's §C2.
+
+### Caching
+
+`watchPlannedBudgetTotals()` is a single app-wide broadcast stream over
+`watchAllBudgets(hideArchived: true)` plus a category fetch, with `latestPlannedBudgetTotals` retained
+for `StreamBuilder.initialData`. This exists so N budget cards on screen share one pair of database
+reads instead of opening N. The underlying subscription is intentionally never cancelled — it lives as
+long as the app. `getPlannedBudgetTotals()` is the one-shot equivalent for code outside a widget tree.
+
+---
+
+## 4. Auto-created category budgets
+
+`ensureMainCategoryBudgetsExist()` in `app/lib/struct/mainCategoryBudgets.dart`.
+
+**`budgetPk` is the `categoryPk`.** This is what makes two devices that create the same category
+converge on one row instead of each minting a uuid and silently doubling the planned totals after
+sync — the failure mode called out as the most likely production bug in the original review (§C10).
+
+**It reconciles; it does not hook creation.** One idempotent pass creates a budget for every main
+category that lacks one. That single implementation covers three cases the original design needed
+separate machinery for: new categories, the one-time backfill for categories predating the feature,
+and categories that arrived over sync rather than being created locally. It also sidesteps the fact
+that `createOrUpdateCategory(insert: true)` blanks the pk so Drift can generate it, leaving the caller
+with no way to know what the new `categoryPk` is.
+
+Called from:
+
+| Site | Covers |
 |---|---|
-| `budgetAmountToPrimaryCurrency` is a 3-line pure function multiplying `budget.amount` by the wallet fx ratio | `app/lib/struct/currencyFunctions.dart:132` |
-| It is the shared entry point for budget targets across the budget card, budget page, add/edit pages, limits page, and history | 9 call sites in 5 files, enumerated in §C2 |
-| `Budgets` has `amount`, `categoryFks`, `categoryFksExclude`, `income`, `addedTransactionsOnly`, `periodLength`, `reoccurrence`, `walletFk(s)`, `budgetTransactionFilters`, `isAbsoluteSpendingLimit` | `app/lib/database/tables.dart:500-552` |
-| `Categories.mainCategoryPk` null ⇒ main category; `Categories.income` is the default type | `app/lib/database/tables.dart:420-450` |
-| Nested category goals store a **percentage of the parent budget's amount** when the parent's `isAbsoluteSpendingLimit == false`, and a money value when true; the mode is a property of the parent, applied to all its nested limits at once | `tables.dart:5603-5605`, `tables.dart:5660-5661`, `editBudgetLimitsPage.dart:29` |
-| `deleteCategoryBudgetLimitsInCategory` is the existing precedent for cleaning up dependents when a category dies | `tables.dart:5049`, `tables.dart:5127` |
-| `homePageAllSpendingSummary.dart` already computes actual income and actual expense with two `watchTotalWithCountOfWallet(isIncome: true/false, followCustomPeriodCycle: true, cycleSettingsExtension: "AllSpendingSummary", onlyIncomeAndExpense: true, …)` calls — reusable verbatim for `y` | `homePageAllSpendingSummary.dart:51, 80` |
-| `watchTotalSpentInTimeRangeFromCategories` is the actual-spend aggregator | `tables.dart:5806` |
+| `initializeDefaultDatabase()` (`app/lib/database/initializeDefaultDatabase.dart`) | every launch: default categories on first run, backfill, synced arrivals |
+| `addCategory()` (`app/lib/pages/addCategoryPage.dart`) | a category created by hand, immediately |
 
-Reusing the existing summary query for `y` is a genuinely good call — that part is free.
+The created budget mirrors the category: same name and colour, `amount: 0`, one calendar month
+(`periodLength: 1`, `reoccurrence: monthly`), `income` copied from the category, `pinned: false` so
+the home carousel is not flooded, and `order` copied from `Categories.order` so the budgets list
+mirrors the category list rather than appending (original review §C8). It is written with
+`updateSharedEntry: false` so it can never reach the dead Firestore branch inside
+`createOrUpdateBudget` (§C10).
+
+**Deletion:** `deleteCategory` (`app/lib/database/tables.dart`) now writes a
+`DeleteLogType.Budget` delete log and removes the budget keyed by that `categoryPk`, mirroring the
+existing `deleteCategoryBudgetLimitsInCategory` cleanup. Deleted, not archived — `deleteCategory`
+already deletes every transaction in the category, so an archived envelope would only preserve an
+empty history.
+
+**Subcategories get no envelope.** They roll up into their main category's card. The existing nested
+Category Spending Goal mechanism stays available inside an envelope for finer tracking.
 
 ---
 
-## 3. Corrections
+## 5. Percent-of-income entry
 
-Ten issues, roughly in descending order of how much damage they'd do if implemented as written.
+A **"Set as % of planned income"** button on the add/edit budget page
+(`app/lib/pages/addBudgetPage.dart`), directly above "Set Category Spending Goals". It opens a
+percentage input (`SelectAmountValue` with `suffix: "%"`, the same control the category-limits sheet
+uses), and on confirm computes `percent / 100 × plannedIncome` and writes the result into the amount
+field via `_BudgetDetailsState.applyAmount`.
 
-### C1 — All file paths are upstream's, not this fork's
+**The percentage is not stored anywhere.** What lands in `Budgets.amount` is a plain number,
+indistinguishable from one typed by hand. Consequences, all of them intentional:
 
-The request cites `budget/lib/…`. Upstream's Flutter package directory is `budget/`; **this fork's is
-`app/`**. Every path in the original §11 needs rebasing to `app/lib/…`. All named files do exist there.
+- No new column, no sync risk, no double-conversion hazard in `budgetAmountToPrimaryCurrency`.
+- Targets do **not** drift when planned income later changes. Re-run the button to re-derive.
+- `pastBudgetsPage` history is unaffected — the original design's §C9 problem (last March silently
+  rewriting itself when you change your salary target) cannot occur.
 
-### C2 — "Close to a one-stop change" is wrong: all 9 call sites need edits, and 2 need restructuring
+Two guards:
 
-This is the load-bearing claim of the original §6, and it doesn't hold.
+- Hidden on savings/income budgets — "% of planned income" of an income budget is not meaningful.
+- Planned income of 0 opens an explanatory popup instead of writing 0, so nobody ends up with a
+  silently zeroed target. This replaces the original design's much larger §C6 problem, where the
+  backfill left every user with permanently zero-target percentage budgets.
 
-The proposed signature is:
+Shown in both add and edit mode, unlike the spending-goals button beneath it (which needs a saved
+budget). Edit-only would force create → save → reopen → set percentage.
 
-```dart
-double budgetAmountToPrimaryCurrency(AllWallets allWallets, Budget budget,
-    {double? plannedIncomeForPeriod}) { … budget.amount / 100 * (plannedIncomeForPeriod ?? 0) … }
-```
+---
 
-With `?? 0`, **any call site that doesn't pass the new argument renders a percent-of-income budget's
-target as `0`** — i.e. permanently and maximally over budget — rather than "keeping working
-unmodified." So every call site must be touched:
+## 6. Share-of-plan label
 
-| File | Lines |
+`BudgetSharePercentLabel` in `app/lib/widgets/budgetContainer.dart`, right-aligned in the card header
+next to the budget name. Renders `23.5% of plan` — `this budget's target ÷ total planned expenses ×
+100`.
+
+It returns `SizedBox.shrink()` for income budgets, for custom budgets, and when the denominator is 0,
+so there is no `NaN%` and no bare percentage on a card where it would be meaningless. The suffix is
+there because an unqualified percentage on a budget card reads as *percent spent*, which is what the
+rest of the card is about.
+
+---
+
+## 7. Budgets list tabs
+
+`app/lib/pages/budgetsListPage.dart` — a `SlidingSelectorIncomeExpense` with
+`options: ["main-categories", "custom-budgets"]`, filtering the list by §3's predicate. Existing
+budgets sort themselves into the two tabs with no migration and no user action.
+
+Laid out like the selector on the Scheduled page (`app/lib/pages/upcomingOverdueTransactionsPage.dart`):
+full width inside a `Row` with 13px gutters, `useHorizontalPaddingConstrained: false`,
+`customPadding: zero`. **Note the vertical padding is load-bearing:** slivers clip on the scroll axis,
+and `boxShadowGeneral` reaches 28px (blur 20 + spread 8), so a `SliverToBoxAdapter` with tight
+vertical padding slices the selector's shadow into a visible hard edge. The Scheduled page avoids this
+by accident — its taller search button gives the row slack.
+
+---
+
+## 8. What the earlier design proposed, and why it is gone
+
+For anyone reading the git history or the original request. All of this is **superseded**:
+
+| Original proposal | Outcome |
 |---|---|
-| `app/lib/widgets/budgetContainer.dart` | 50, 424 |
-| `app/lib/pages/budgetPage.dart` | 230, 1141, 1321 |
-| `app/lib/pages/pastBudgetsPage.dart` | 271, 965 |
-| `app/lib/pages/addBudgetPage.dart` | 581 |
-| `app/lib/pages/editBudgetLimitsPage.dart` | 43 |
-
-Worse than the count: `budgetContainer.dart:50` and `pastBudgetsPage.dart:271` compute the target
-**synchronously at the top of `build()`** from a `Provider.of<AllWallets>`, not inside a
-`StreamBuilder`. Threading in a value that requires a DB read means wrapping those widgets in another
-`StreamBuilder` — restructuring the most-rendered widget in the app.
-
-**Recommended fix that actually recovers the one-stop property:** don't pass planned income as an
-argument. Expose it the same way `AllWallets` is already exposed — a `Provider`-backed (or global
-cached) value recomputed on any write to an income-category budget. Then
-`budgetAmountToPrimaryCurrency` stays synchronous and pure-ish, its signature never changes, and all 9
-call sites genuinely need no edits. This is the difference between a ~40-line change and a ~400-line one.
-
-### C3 — Live sync will throw on `Budget.fromJson` from a device still on the old schema
-
-**This fork is not upstream here.** Upstream syncs by shipping whole SQLite files. This fork *also*
-ships row-level JSON deltas: `app/lib/struct/liveSyncClient.dart:118-123` sends `row.toJson()` for
-budgets, and line 217 applies them with `Budget.fromJson(payload)`.
-
-Drift generates non-nullable field reads for non-nullable columns — e.g.
-`income: serializer.fromJson<bool>(json['income'])` at `app/lib/database/tables.g.dart:4091`. A
-`budgetAmountType` declared as a non-nullable int enum with a default generates
-`serializer.fromJson<int>(json['budgetAmountType'])`. A payload sent by a device still on schema 46
-has no such key → `null` → type error → **the sync apply loop throws**, taking the whole batch with it.
-
-The original §10 hoped this would "degrade gracefully (e.g. treat unrecognized `budgetAmountType` as
-`fixedAmount` on an older synced client)". Half of that is free, half isn't:
-
-- New → old: **safe.** Drift's generated `fromJson` ignores keys it doesn't know about.
-- Old → new: **breaks**, as above.
-
-**Fix:** declare it nullable and treat `null` as `fixedAmount`:
-
-```dart
-IntColumn get budgetAmountType => intEnum<BudgetAmountType>().nullable()();
-```
-
-`linkedCategoryPk` is already specified as nullable, so it's fine as-is. Note this also means the
-original §10's "multi-user sync semantics … isn't a design target here" **cannot** be carried over —
-multi-device sync is the entire point of this fork, so it's in scope by definition.
-
-### C4 — The migration is more than a `schemaVersionGlobal` bump
-
-Current version is **46** (`app/lib/database/tables.dart:29`). This repo uses Drift's *versioned
-schema* tooling, so adding columns means all of:
-
-1. Bump `schemaVersionGlobal` to 47.
-2. Regenerate `app/drift_schemas/drift_schema_v47.json` and the `Schema47` class in
-   `app/lib/database/schema_versions.dart` (existing chain ends at `Schema46`,
-   `schema_versions.dart:4471`).
-3. Add a `from46To47:` step to the `stepByStep` chain (the `from45To46:` precedent is at
-   `tables.dart:1196`).
-4. Follow the house style: wrap **each** `m.addColumn` in its own `try/catch` with a printed error.
-   Upstream does this deliberately — a past migration bug left some devices with columns already
-   present, and an unguarded `addColumn` would hard-fail their upgrade.
-
-### C5 — Categories can't be archived, so that edge case doesn't exist
-
-The original §9.6 lists "handle archived categories". `Budgets` has an `archived` column
-(`tables.dart:517`); **`Categories` does not** (`tables.dart:420-450`). Categories are deleted, not
-archived.
-
-The real question in its place: when a category is deleted, is its auto-budget **deleted** or
-**archived**? Note `deleteCategory` (`tables.dart:5044`) already deletes every transaction in the
-category, so deleting the budget outright orphans nothing — but archiving preserves history in
-`pastBudgetsPage`. Pick one explicitly.
-
-### C6 — The divide-by-zero worry is misplaced; the real hazard is planned income = 0
-
-`amount / 100 * plannedIncome` never divides by zero. The actual failure mode is the opposite: when
-planned income is `0` — which is the **default state after the §4.5 backfill, for every existing
-user** — every percent-of-income budget resolves to a target of `0`, so any spending at all renders as
-over-budget with a full/overflowing progress ring across the entire budgets list.
-
-Needs an explicit "no planned income set yet" state on those cards instead of a 0-target budget, plus
-an onboarding nudge to set income targets first. This should be treated as a blocking design item, not
-polish.
-
-### C7 — `HomePageWidgetDisplay` is the wrong extension point
-
-The original §7 proposes "a new `HomePageWidgetDisplay` entry". That enum (`tables.dart:86`) has
-exactly five members — `WalletSwitcher`, `WalletList`, `NetWorth`, `AllSpendingSummary`, `PieChart` —
-and drives the **wallet-details** page, not the home page.
-
-Home-page sections are string keys in `appStateSettings["homePageOrder"]` and
-`["homePageOrderFullScreen"]` (`app/lib/struct/defaultPreferences.dart:75, 90`), rendered from a
-section map in `app/lib/pages/homePage/homePage.dart`, each gated by a `show<Section>` boolean read
-through `isHomeScreenSectionEnabled`.
-
-Good news attached: `fixHomePageOrder` (`app/lib/struct/settings.dart:145-146`) reconciles a user's
-saved order against the defaults, so adding a new key is picked up by existing users automatically —
-no settings migration needed.
-
-### C8 — Auto-budgets flood the budgets list, and `order` needs a strategy
-
-The original §7's "no new card widget needed — auto-budgets are ordinary `Budget` rows, so
-`HomePageBudgets` → `BudgetContainer` renders them automatically" is technically true and product-wise
-the biggest unaddressed consequence in the request.
-
-A fresh install has **13 default categories** (12 expense + 1 income,
-`app/lib/struct/defaultCategories.dart`), so day one becomes 13 budget cards in the home-page carousel
-and on the Budgets page, growing with every category the user adds. The budgets surface stops being
-"my budgets" and becomes "my category list."
-
-Also mechanical: `Budgets.order` is non-nullable with no default (`tables.dart:527`) and budgets are
-user-reorderable, so auto-created rows need an explicit ordering rule — most likely mirroring
-`Categories.order` rather than appending to the end.
-
-**Recommendation:** keep auto-budgets out of the existing budgets list and carousel by default, on
-their own screen or behind a filter, with manual budgets left alone. This is a real product decision
-and belongs in §4, not in implementation.
-
-### C9 — Percent-of-income history is retroactive, and §5 has nowhere to store the locked value
-
-`pastBudgetsPage` synthesizes prior periods from the *current* budget row
-(`pastBudgetsPage.dart:271, 965`). A percent-of-income target stores only the percentage, so every past
-period's target is recomputed from **today's** planned income — change your salary target and last
-March silently rewrites itself.
-
-The original §4.2 says planned income is "locked at the start of the cycle," but the §5 data model
-provides no field to store the locked value. Either add a per-period snapshot (a small
-`BudgetPeriodSnapshots` table keyed by `budgetPk` + period start), or accept and explicitly document
-that history for percent budgets always reflects current planned income.
-
-### C10 — Smaller items
-
-- **Duplicate auto-budgets from concurrent devices.** §5 says "enforce one-per-category at the app
-  layer," but there's no unique index, and last-write-wins merges by `dateTimeModified` per
-  `budgetPk`. Two devices that each auto-create a budget for the same category produce **two rows with
-  the same `linkedCategoryPk` and different `budgetPk`s**, and sync will happily keep both — planned
-  totals silently double. **Fix:** derive the auto-budget's `budgetPk` deterministically from the
-  `categoryPk` (reuse it directly, or a uuid v5 of it) so both devices converge on the same row. Given
-  this fork's multi-device focus, this is the most likely production bug in the whole design.
-- **Two percentage bases in one card.** `isAbsoluteSpendingLimit` lives on the parent budget, so an
-  auto-budget that is itself "% of income" *and* contains nested category goals in percentage mode has
-  two different percentage bases stacked in one card. Needs an explicit rule — simplest is to force
-  `isAbsoluteSpendingLimit = true` on percent-of-income auto-budgets.
-- **§4.5 wording:** "income-category auto-budgets default to fixed amount at 0%" → at **0** (an
-  amount, not a percentage).
-- **Firebase branch in the write path.** `createOrUpdateBudget` still contains a Firestore call
-  (`tables.dart:4318`), dead in this fork but guarded only by `sharedKey != null` and
-  `appStateSettings["sharedBudgets"]`. Auto-budget creation should route through a path that can't
-  reach it.
+| `budgetAmountType` + `linkedCategoryPk` columns, schema 47 | Dropped. Owner constraint; §2. |
+| Drift versioned-schema migration, `Schema47`, `from46To47` | Not needed. |
+| Nullable `budgetAmountType` to survive old→new sync payloads (§C3) | Moot — payload shape unchanged. |
+| `BudgetPeriodSnapshots` table to freeze percentage history (§C9) | Moot — percentages are never stored. |
+| Planned-income cache threaded into `budgetAmountToPrimaryCurrency` (§C2) | Not needed; the function is untouched. Its 9 call sites still need no edits, for a different reason. |
+| Zero-planned-income empty state on every percent budget card (§C6) | Reduced to a one-time popup at entry; §5. |
+| A "Planned vs. Actual" home-page section (`x` and `y`) | **Not implemented.** Still wanted — see §9. |
 
 ---
 
-## 4. Open decisions — owner input needed before implementation
+## 9. Not implemented
 
-The request pre-answered most of these with reasonable recommendations; they're restated here as
-decisions rather than assumptions, plus the one C8 surfaced.
+- **Planned vs. Actual home-page summary.** `x` = Σ planned income − Σ planned expenses, `y` = actual
+  income − actual expenses for the month. Both halves are cheap from here: `x` is already computable
+  from `PlannedBudgetTotals`, and `y` can reuse the two existing
+  `watchTotalWithCountOfWallet(isIncome: true/false, followCustomPeriodCycle: true, …)` calls in
+  `app/lib/pages/homePage/homePageAllSpendingSummary.dart`. Register it as a `homePageOrder` string key
+  plus a section entry and a `show…` setting — **not** as a `HomePageWidgetDisplay` member, which
+  drives the wallet-details page, not the home page. `fixHomePageOrder`
+  (`app/lib/struct/settings.dart`) reconciles saved order against defaults, so existing users pick up
+  a new key automatically.
 
-1. **Planned income = Σ(fixed targets of income-category budgets)** — proposed. Maps 1:1 onto the
-   spreadsheet's two columns, stable rather than drifting with each paycheck, reuses the same
-   lifecycle machinery. Income-category budgets are fixed-amount only.
-2. **Percentage denominator locked per cycle** — proposed, so % targets don't recalculate on every new
-   income transaction. See C9: this needs somewhere to store the locked value, or an accepted caveat.
-3. **One shared calendar-month cycle for all auto-budgets** — proposed, so `x` and `y` sum cleanly as
-   "this month." Manual budgets keep their arbitrary cycles.
-4. **Wallet/currency scope: all wallets, converted to primary** — proposed, matching the existing All
-   Spending Summary default.
-5. **Backfill at migration: one auto-budget per pre-existing main category**, expense ones defaulting
-   to % of income at 0%, income ones to a fixed amount of 0. See C6 — this default lands every existing
-   user in the "planned income = 0" state, so it needs the empty-state handling.
-6. **Subcategories get no auto-budget** — proposed; they roll up into their main category's card. The
-   existing nested Category Spending Goal mechanism stays available inside an auto-budget for finer
-   tracking.
-7. **NEW (from C8): do auto-budgets appear in the existing budgets list and home carousel, or on their
-   own surface?** Not answered by the original request, and it changes the shape of the UI work
-   substantially.
+## 10. Known gaps
 
----
+Deliberate, and each is a small change if the owner wants it closed:
 
-## 5. Corrected data model
-
-Two columns on `Budgets` (`app/lib/database/tables.dart:500`):
-
-- **`budgetAmountType`** — `intEnum<BudgetAmountType>().nullable()` — `fixedAmount` (0) /
-  `percentOfIncome` (1). **Nullable, per C3**; `null` is read as `fixedAmount`, which is what makes old
-  clients' sync payloads safe. Only meaningful when `linkedCategoryPk` points at an *expense* category;
-  ignored for income-category budgets and for manual budgets.
-- **`linkedCategoryPk`** — `text().nullable()`, FK → `Categories.categoryPk`. When set, this row *is*
-  the system-managed card for that category. Manual budgets leave it null and are untouched by
-  everything in this document. **`budgetPk` for these rows is derived deterministically from
-  `categoryPk`** (per C10) so concurrent devices converge instead of duplicating.
-
-When `budgetAmountType == percentOfIncome`, `amount` holds the percentage (0–100) — the same storage
-convention `CategoryBudgetLimit.amount` already uses in percentage mode, applied one level up. For
-income-category auto-budgets `amount` is always a currency amount.
-
-No changes to `Categories` or `CategoryBudgetLimits`. An auto-budget is an ordinary `Budgets` row, so
-nested Category Spending Goals keep working inside it.
-
-Migration: the full four-step drift procedure in C4, plus the §4.5 backfill.
+- **Renaming a category does not rename its envelope budget.** Creation copies the name once; there is
+  no ongoing sync. Auto-updating it would silently overwrite a budget the owner had renamed on
+  purpose, and without stored state there is no way to tell the two cases apart.
+- **A hand-deleted category budget comes back on the next launch.** Correct for an envelope system
+  where every category has one, but it means "delete" is not a way to hide an envelope. The original
+  design's §8.7 "guard direct deletion of an auto-budget" was never built.
+- **Planned income mixes budget periods.** It sums income budget targets regardless of each budget's
+  cycle, so a weekly income budget and a monthly expense budget produce a misleading figure. Fine for
+  the all-monthly setup this was built for. The percent sheet shows the resolved planned-income figure
+  before you enter a percentage, so a wrong number is visible rather than silent.
+- **Share label counts only non-archived budgets** and does not appear on `PastBudgetContainer`.
 
 ---
 
-## 6. Corrected logic changes
-
-**New helper** `plannedIncomeForPeriod(DateTime start, DateTime end)` — sums `amount` over `Budget`
-rows whose `linkedCategoryPk` resolves to a main income category (`Categories.income == true &&
-mainCategoryPk == null`) in range, converted to primary currency.
-
-**Integration point** — `budgetAmountToPrimaryCurrency` branches on the new field:
-
-```dart
-double budgetAmountToPrimaryCurrency(AllWallets allWallets, Budget budget) {
-  if (budget.budgetAmountType == BudgetAmountType.percentOfIncome) {
-    // Already primary currency by definition — do NOT also apply the wallet fx ratio.
-    return budget.amount / 100 * plannedIncomeCache.value;
-  }
-  return budget.amount * amountRatioToPrimaryCurrencyGivenPk(allWallets, budget.walletFk);
-}
-```
-
-Per C2, planned income arrives through a `Provider`/cached global (recomputed on any income-budget
-write), **not** as a new parameter — that's what keeps the signature stable and all 9 call sites
-untouched. The double-conversion warning in the original request is correct and important: the percent
-branch must skip `amountRatioToPrimaryCurrencyGivenPk` entirely.
-
-**Category lifecycle hooks** — extend `createOrUpdateCategory` (`tables.dart:4092`) to auto-create the
-linked budget for new main categories, and `deleteCategory` (`tables.dart:5044`) to tear it down,
-mirroring the existing `deleteCategoryBudgetLimitsInCategory` cleanup. Per C5, decide delete vs.
-archive.
-
----
-
-## 7. Corrected UI changes
-
-- **Amount entry for an expense auto-budget** — a segmented "% of income / Fixed amount" control,
-  reusing the toggle pattern already in `app/lib/widgets/categoryLimits.dart` (`TappableTextEntry` +
-  `convertToPercent`/`convertToMoney`), pointed at the new top-level field. Income auto-budgets show
-  fixed amount only.
-- **Zero-planned-income state** (C6) — percent budgets must render a "set your income targets first"
-  state, never a 0-target progress ring.
-- **Budgets list placement** — pending decision 4.7 (C8).
-- **New "Planned vs. Actual" home-page section** — added as a `homePageOrder` string key + section
-  entry + `show…` setting (C7), **not** a `HomePageWidgetDisplay` member. Two boxes modeled on
-  `homePageAllSpendingSummary.dart`: "Planned" = `x`, "Actual" = `y`, the latter reusing that file's
-  two existing `watchTotalWithCountOfWallet` calls subtracted instead of displayed side by side.
-  Colour-code by sign; tapping routes to the budgets list or `TransactionsSearchPage`, consistent with
-  existing home-page behaviour.
-
----
-
-## 8. Suggested implementation order
-
-Unchanged in spirit from the original request, with the corrections folded in:
-
-1. **Schema** — both columns (`budgetAmountType` nullable per C3), full drift versioned-schema
-   migration per C4, no behaviour change yet.
-2. **Auto-budget lifecycle** — deterministic `budgetPk` (C10), create/delete hooks, one-time backfill.
-3. **Percent-of-income engine** — `plannedIncomeForPeriod`, the planned-income cache/provider (C2),
-   the `budgetAmountToPrimaryCurrency` branch. Verify existing budget screens render auto-budgets with
-   no edits — if they need edits, the C2 approach wasn't followed.
-4. **Zero-planned-income empty state** (C6) — before the toggle UI, not after; the backfill puts every
-   user in this state on day one.
-5. **Type-toggle UI** on the amount entry.
-6. **Planned vs. Actual home-page section.**
-7. **Edge cases and polish** — guard direct deletion of an auto-budget, category-deletion path,
-   history semantics per C9.
-
-Each step should be its own small PR. Step 1 alone is a safe, independently shippable no-op.
-
----
-
-## 9. Out of scope
-
-- Goals/Objectives, Loans, transfers, Balance Correction handling — unchanged.
-- Auto-budgets at the subcategory level (decision 4.6).
-- **Not out of scope, contrary to the original request:** sync semantics for the two new fields. See
-  C3 and C10 — multi-device sync is this fork's reason to exist.
-
----
-
-## 10. Files touched (rebased onto this fork)
+## 11. Files touched
 
 | File | Role |
 |---|---|
-| `app/lib/database/tables.dart` | `Budgets`/`Categories` schema, `schemaVersionGlobal`, `stepByStep` migration, `createOrUpdateCategory`, `deleteCategory`, `watchTotalSpentInTimeRangeFromCategories`, `watchTotalWithCountOfWallet`, `HomePageWidgetDisplay` |
-| `app/lib/database/schema_versions.dart`, `app/drift_schemas/` | Generated versioned schema — must be regenerated (C4) |
-| `app/lib/struct/currencyFunctions.dart` | `budgetAmountToPrimaryCurrency` — central integration point |
-| `app/lib/struct/liveSyncClient.dart` | Row-level JSON sync — the C3 compatibility risk lives here |
-| `app/lib/struct/defaultPreferences.dart`, `app/lib/pages/homePage/homePage.dart` | Home-page section registration (C7) |
-| `app/lib/widgets/budgetContainer.dart` | Budget card — 2 call sites, both synchronous in `build()` (C2) |
-| `app/lib/widgets/categoryLimits.dart` | Precedent for the %-vs-fixed toggle UI |
-| `app/lib/pages/budgetPage.dart`, `pastBudgetsPage.dart`, `addBudgetPage.dart`, `editBudgetLimitsPage.dart` | Remaining `budgetAmountToPrimaryCurrency` call sites (C2), history semantics (C9) |
-| `app/lib/pages/homePage/homePageAllSpendingSummary.dart` | Actual income/expense query, reused for `y` |
-| `app/lib/pages/addCategoryPage.dart` | Category creation entry point for the lifecycle hook |
+| `app/lib/struct/mainCategoryBudgets.dart` | **New.** Derivation, totals, shared cache, auto-creation. |
+| `app/lib/database/initializeDefaultDatabase.dart` | Reconcile hook on every launch |
+| `app/lib/database/tables.dart` | `deleteCategory` cleanup only — **no schema change** |
+| `app/lib/pages/addCategoryPage.dart` | Reconcile hook after creating a category |
+| `app/lib/pages/addBudgetPage.dart` | "% of planned income" button, popup, `applyAmount` |
+| `app/lib/widgets/budgetContainer.dart` | `BudgetSharePercentLabel` |
+| `app/lib/pages/budgetsListPage.dart` | Main Categories / Custom tabs |
+| `app/assets/translations/generated/en.json` | 7 new English keys |
+
+---
+
+## 12. Acceptance criteria
+
+Owner-run, per "Testing & verification workflow" in `CLAUDE.md`.
+
+- [ ] Fresh install lands on the Budgets page with one envelope per default main category, ordered
+      like the category list, and none of them pinned to the home carousel.
+- [ ] An existing database gets envelopes backfilled on first launch, with existing manual budgets
+      untouched and appearing under **Custom**.
+- [ ] Creating a main category creates its envelope immediately; deleting the category removes it.
+- [ ] Creating a *sub*category creates no envelope.
+- [ ] Set income targets, then "Set as % of planned income" on an expense budget: the amount field
+      shows the resolved number, and saving stores that number.
+- [ ] With no income budgets, the button explains itself rather than writing 0.
+- [ ] Share labels across the Main Categories tab sum to ~100%.
+- [ ] The tab selector's shadow is not clipped, at both narrow and double-column widths.
+- [ ] **Sync:** create the same category on two devices while both are offline, then sync — exactly
+      one envelope survives, and planned totals do not double.
+- [ ] **Local-first:** all of the above works with the server unreachable.
+- [ ] An original-Cashew backup still imports (schema is unchanged, but confirm).

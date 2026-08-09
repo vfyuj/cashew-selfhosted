@@ -2,10 +2,12 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
-import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/budgetContainer.dart';
 import 'package:cashew_selfhosted/widgets/navigationSidebar.dart';
+import 'package:cashew_selfhosted/widgets/sliverStickyLabelDivider.dart';
+import 'package:cashew_selfhosted/widgets/slidingSelectorIncomeExpense.dart';
 import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
@@ -25,6 +27,9 @@ class BudgetsListPage extends StatefulWidget {
 
 class BudgetsListPageState extends State<BudgetsListPage> {
   GlobalKey<PageFrameworkState> pageState = GlobalKey();
+
+  // 0 = budgets locked to a single main category, 1 = every other budget.
+  int selectedTabIndex = 0;
 
   void refreshState() {
     setState(() {});
@@ -79,94 +84,169 @@ class BudgetsListPageState extends State<BudgetsListPage> {
           ),
       ],
       slivers: [
-        StreamBuilder<List<Budget>>(
-          stream: database.watchAllBudgets(hideArchived: true),
-          builder: (context, snapshot) {
-            if (snapshot.hasData && (snapshot.data ?? []).length <= 0) {
-              return SliverPadding(
-                padding: EdgeInsetsDirectional.symmetric(
-                    vertical: 7, horizontal: 13),
-                sliver: SliverToBoxAdapter(
-                  child: AddButton(
-                    onTap: () {},
-                    openPage: AddBudgetPage(
-                      routesToPopAfterDelete:
-                          RoutesToPopAfterDelete.PreventDelete,
-                    ),
-                    height: 180,
+        SliverToBoxAdapter(
+          child: Padding(
+            // Slivers clip on the scroll axis, and this selector is the very
+            // first sliver in the page - so its top padding alone has to clear
+            // however far boxShadowGeneral's blur+spread actually reaches, with
+            // real margin to spare, or the top of the shadow gets sliced flat.
+            padding: EdgeInsetsDirectional.only(
+              top: 34,
+              bottom: 20,
+              start: getHorizontalPaddingConstrained(context),
+              end: getHorizontalPaddingConstrained(context),
+            ),
+            child: Row(
+              children: [
+                SizedBox(width: 13),
+                Flexible(
+                  child: SlidingSelectorIncomeExpense(
+                    useHorizontalPaddingConstrained: false,
+                    customPadding: EdgeInsetsDirectional.zero,
+                    options: const ["main-categories", "custom-budgets"],
+                    initialIndex: selectedTabIndex,
+                    onSelected: (int index) {
+                      setState(() {
+                        // This selector reports its tabs one based.
+                        selectedTabIndex = index - 1;
+                      });
+                    },
                   ),
                 ),
-              );
-            }
-            if (snapshot.hasData) {
-              return SliverPadding(
-                padding: EdgeInsetsDirectional.symmetric(
-                    vertical: 7, horizontal: 13),
-                sliver: enableDoubleColumn(context)
-                    ? SliverGrid(
-                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 600.0,
-                          mainAxisExtent: 190,
-                          mainAxisSpacing: 15.0,
-                          crossAxisSpacing: 15.0,
-                          childAspectRatio: 5,
-                        ),
-                        delegate: SliverChildBuilderDelegate(
-                          (BuildContext context, int index) {
-                            if (index == snapshot.data?.length) {
-                              return AddButton(
-                                onTap: () {},
-                                openPage: AddBudgetPage(
-                                  routesToPopAfterDelete:
-                                      RoutesToPopAfterDelete.PreventDelete,
-                                ),
-                              );
-                            } else {
-                              return BudgetContainer(
-                                budget: snapshot.data![index],
-                              );
-                            }
-                          },
-                          childCount: (snapshot.data?.length ?? 0) + 1,
-                        ),
-                      )
-                    : SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (BuildContext context, int index) {
-                            if (index == snapshot.data?.length) {
-                              return AddButton(
-                                onTap: () {},
-                                openPage: AddBudgetPage(
-                                  routesToPopAfterDelete:
-                                      RoutesToPopAfterDelete.PreventDelete,
-                                ),
-                                height: 180,
-                              );
-                            } else {
-                              return Padding(
-                                padding: const EdgeInsetsDirectional.only(
-                                    bottom: 16.0),
-                                child: BudgetContainer(
-                                  budget: snapshot.data![index],
-                                  squishInactiveBudgetContainerHeight: true,
-                                ),
-                              );
-                            }
-                          },
-                          childCount: (snapshot.data?.length ?? 0) +
-                              1, //snapshot.data?.length
-                        ),
-                      ),
-              );
-            } else {
-              return SliverToBoxAdapter();
-            }
-          },
+                SizedBox(width: 13),
+              ],
+            ),
+          ),
         ),
+        if (selectedTabIndex == 0) ...[
+          _mainCategorySection(context, wantIncome: false, titleKey: "expense"),
+          _mainCategorySection(context, wantIncome: true, titleKey: "income"),
+        ] else
+          _customBudgetsSliver(context),
         SliverToBoxAdapter(
           child: SizedBox(height: 50),
         ),
       ],
+    );
+  }
+
+  // One of the two stacked sections on the Main Categories tab - expense
+  // envelopes above, income envelopes below. Renders nothing when the section
+  // has no envelopes, rather than showing an empty header.
+  Widget _mainCategorySection(
+    BuildContext context, {
+    required bool wantIncome,
+    required String titleKey,
+  }) {
+    return StreamBuilder<PlannedBudgetTotals>(
+      stream: watchPlannedBudgetTotals(),
+      initialData: latestPlannedBudgetTotals,
+      builder: (context, snapshot) {
+        final PlannedBudgetTotals? totals = snapshot.data;
+        if (totals == null) return SliverToBoxAdapter();
+        final List<Budget> budgets = totals.budgets
+            .where((Budget budget) =>
+                budget.income == wantIncome && totals.isMainCategoryBudget(budget))
+            .toList();
+        if (budgets.isEmpty) return SliverToBoxAdapter();
+        return SliverStickyLabelDivider(
+          info: titleKey.tr(),
+          sliver: SliverPadding(
+            padding: EdgeInsetsDirectional.symmetric(
+                vertical: 7, horizontal: 13),
+            sliver: _budgetsGrid(context, budgets, showAddButton: false),
+          ),
+        );
+      },
+    );
+  }
+
+  // The Custom tab: every budget that isn't a single-category envelope,
+  // flat - not split into expense/income, since a custom budget can span both.
+  Widget _customBudgetsSliver(BuildContext context) {
+    return StreamBuilder<PlannedBudgetTotals>(
+      stream: watchPlannedBudgetTotals(),
+      initialData: latestPlannedBudgetTotals,
+      builder: (context, snapshot) {
+        final PlannedBudgetTotals? totals = snapshot.data;
+        if (totals == null) return SliverToBoxAdapter();
+        final List<Budget> budgets = totals.budgets
+            .where((Budget budget) => totals.isMainCategoryBudget(budget) == false)
+            .toList();
+        if (budgets.isEmpty) {
+          return SliverPadding(
+            padding: EdgeInsetsDirectional.symmetric(
+                vertical: 7, horizontal: 13),
+            sliver: SliverToBoxAdapter(
+              child: AddButton(
+                onTap: () {},
+                openPage: AddBudgetPage(
+                  routesToPopAfterDelete: RoutesToPopAfterDelete.PreventDelete,
+                ),
+                height: 180,
+              ),
+            ),
+          );
+        }
+        return SliverPadding(
+          padding:
+              EdgeInsetsDirectional.symmetric(vertical: 7, horizontal: 13),
+          sliver: _budgetsGrid(context, budgets, showAddButton: true),
+        );
+      },
+    );
+  }
+
+  Widget _budgetsGrid(
+    BuildContext context,
+    List<Budget> budgets, {
+    required bool showAddButton,
+  }) {
+    final int itemCount = budgets.length + (showAddButton ? 1 : 0);
+    Widget addButton({double? height}) {
+      return AddButton(
+        onTap: () {},
+        openPage: AddBudgetPage(
+          routesToPopAfterDelete: RoutesToPopAfterDelete.PreventDelete,
+        ),
+        height: height,
+      );
+    }
+
+    if (enableDoubleColumn(context)) {
+      return SliverGrid(
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 600.0,
+          mainAxisExtent: 190,
+          mainAxisSpacing: 15.0,
+          crossAxisSpacing: 15.0,
+          childAspectRatio: 5,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (BuildContext context, int index) {
+            if (showAddButton && index == budgets.length) return addButton();
+            return BudgetContainer(budget: budgets[index]);
+          },
+          childCount: itemCount,
+        ),
+      );
+    }
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (BuildContext context, int index) {
+          if (showAddButton && index == budgets.length) {
+            return addButton(height: 180);
+          }
+          return Padding(
+            padding: const EdgeInsetsDirectional.only(bottom: 16.0),
+            child: BudgetContainer(
+              budget: budgets[index],
+              squishInactiveBudgetContainerHeight: true,
+            ),
+          );
+        },
+        childCount: itemCount,
+      ),
     );
   }
 }

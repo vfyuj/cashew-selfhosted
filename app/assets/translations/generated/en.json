@@ -1256,5 +1256,15 @@
   "temporary-password-description": "Give this to {account} so they can sign in.",
   "temporary-password-shown-once": "This is shown only once. You can't see it again, but you can issue a new one at any time.",
   "copy": "Copy",
-  "session-expired-sign-in-again": "Your session has expired. Sign out and sign in again to continue."
+  "session-expired-sign-in-again": "Your session has expired. Sign out and sign in again to continue.",
+  "main-categories": "Main Categories",
+  "custom-budgets": "Custom",
+  "set-as-percent-of-planned-income": "Set as % of planned income",
+  "planned-income": "Planned income",
+  "no-planned-income": "No planned income yet",
+  "no-planned-income-description": "Planned income is the total of every savings budget you have. Add a savings budget for your income before setting a percentage.",
+  "of-plan": "of plan",
+  "planned": "Planned",
+  "actual": "Actual",
+  "planned-vs-actual": "Planned vs. Actual"
 }
