@@ -135,6 +135,17 @@ class _EditHomePageState extends State<EditHomePage> {
               );
             },
           ),
+          "plannedVsActual": EditHomePageItem(
+            icon: appStateSettings["outlinedIcons"]
+                ? Icons.percent_outlined
+                : Icons.percent_rounded,
+            name: "planned-vs-actual".tr(),
+            isEnabled:
+                isHomeScreenSectionEnabled(context, "showPlannedVsActual"),
+            onSwitched: (value) {
+              switchHomeScreenSection(context, "showPlannedVsActual", value);
+            },
+          ),
           "objectives": EditHomePageItem(
             icon: appStateSettings["outlinedIcons"]
                 ? Icons.savings_outlined

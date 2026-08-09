@@ -14,6 +14,7 @@ import 'package:cashew_selfhosted/pages/homePage/homePageUsername.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageBudgets.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageUpcomingTransactions.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageAllSpendingSummary.dart';
+import 'package:cashew_selfhosted/pages/homePage/homePagePlannedVsActual.dart';
 import 'package:cashew_selfhosted/pages/editHomePage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageCreditDebts.dart';
@@ -185,6 +186,10 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
       "budgets": isHomeScreenSectionEnabled(context, "showPinnedBudgets")
           ? HomePageBudgets()
           : null,
+      "plannedVsActual":
+          isHomeScreenSectionEnabled(context, "showPlannedVsActual")
+              ? HomePagePlannedVsActual()
+              : null,
       "overdueUpcoming":
           isHomeScreenSectionEnabled(context, "showOverdueUpcoming")
               ? HomePageUpcomingTransactions()

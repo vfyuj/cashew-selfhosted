@@ -9,6 +9,7 @@ import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/pages/sharedBudgetSettings.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/struct/shareBudget.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
@@ -227,6 +228,58 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
     setState(() {
       selectedAmount = amount;
     });
+  }
+
+  // "% of planned income" is a one shot convenience, not a stored setting. The
+  // percentage is resolved against planned income here and the resulting plain
+  // amount is written into the amount field above, indistinguishable from a
+  // number typed by hand. Nothing about the percentage is persisted.
+  Future<void> setAmountFromPercentOfPlannedIncome() async {
+    final AllWallets allWallets =
+        Provider.of<AllWallets>(context, listen: false);
+    final PlannedBudgetTotals totals = await getPlannedBudgetTotals();
+    if (!mounted) return;
+    final double plannedIncome = totals.totalPlannedIncome(allWallets);
+    if (plannedIncome <= 0) {
+      openPopup(
+        context,
+        title: "no-planned-income".tr(),
+        description: "no-planned-income-description".tr(),
+        icon: appStateSettings["outlinedIcons"]
+            ? Icons.info_outlined
+            : Icons.info_rounded,
+        onSubmit: () {
+          popRoute(context);
+        },
+        onSubmitLabel: "ok".tr(),
+      );
+      return;
+    }
+
+    double selectedPercent = 0;
+    await openBottomSheet(
+      context,
+      PopupFramework(
+        title: "set-as-percent-of-planned-income".tr(),
+        subtitle: "planned-income".tr() +
+            ": " +
+            convertToMoney(allWallets, plannedIncome),
+        child: SelectAmountValue(
+          amountPassed: "",
+          allowZero: true,
+          suffix: "%",
+          setSelectedAmount: (double amount, _) {
+            selectedPercent = amount.abs() > 100 ? 100 : amount.abs();
+          },
+          next: () async {
+            popRoute(context);
+          },
+          nextLabel: "set-amount".tr(),
+        ),
+      ),
+    );
+    _budgetDetailsStateKey.currentState
+        ?.applyAmount(selectedPercent / 100 * plannedIncome);
   }
 
   Future addBudget() async {
@@ -841,6 +894,29 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
           //           ),
           //         ),
           // ),
+          SliverToBoxAdapter(
+            child: selectedIncome
+                ? SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 24,
+                      end: 24,
+                      bottom: 15,
+                    ),
+                    child: SettingsContainer(
+                      isOutlined: true,
+                      onTap: () async {
+                        await setAmountFromPercentOfPlannedIncome();
+                      },
+                      title: "set-as-percent-of-planned-income".tr(),
+                      icon: appStateSettings["outlinedIcons"]
+                          ? Icons.percent_outlined
+                          : Icons.percent_rounded,
+                      iconScale: 1,
+                      isWideOutlined: true,
+                    ),
+                  ),
+          ),
           SliverToBoxAdapter(
             child: widget.budget == null
                 ? SizedBox.shrink()
@@ -1492,6 +1568,19 @@ class _BudgetDetailsState extends State<BudgetDetails> {
       selectedRecurrenceDisplay = namesRecurrence[selectedRecurrence];
     }
     super.initState();
+  }
+
+  // Writes an amount in as if it had been typed. Used by the
+  // "% of planned income" button, which resolves the percentage to a plain
+  // number before it ever reaches the budget.
+  void applyAmount(double amount) {
+    final double amountAbsolute = amount.abs();
+    widget.setSelectedAmount(
+        amountAbsolute, removeTrailingZeroes(amountAbsolute.toString()));
+    setState(() {
+      selectedAmount = amountAbsolute;
+    });
+    widget.determineBottomButton();
   }
 
   Future<void> selectAmount(BuildContext context) async {
