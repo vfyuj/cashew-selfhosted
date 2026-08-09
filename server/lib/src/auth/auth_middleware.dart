@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shelf/shelf.dart';
 
 import 'auth_service.dart';
@@ -22,6 +24,31 @@ Middleware requireAuth(AuthService authService) {
       } on InvalidSessionException {
         return Response(401, body: 'Session expired or invalid');
       }
+    };
+  };
+}
+
+/// Gates administrator-only routes. Must be composed *after* [requireAuth] --
+/// it reads the user that middleware put in the request context, and the role
+/// is re-read from the session on every request rather than trusted from the
+/// client, so a demotion takes effect immediately.
+Middleware requireAdmin() {
+  return (Handler innerHandler) {
+    return (Request request) async {
+      final user = request.context[authenticatedUserContextKey] as AuthUser?;
+      if (user == null) {
+        // requireAuth was not applied ahead of this middleware. Fail closed
+        // rather than letting an unauthenticated request through.
+        return Response(401, body: 'Missing or invalid Authorization header');
+      }
+      if (!user.isAdmin) {
+        return Response(
+          403,
+          body: jsonEncode({'error': 'administrator access required'}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return innerHandler(request);
     };
   };
 }

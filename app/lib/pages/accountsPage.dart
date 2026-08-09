@@ -4,6 +4,9 @@ import 'package:cashew_selfhosted/main.dart';
 import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/widgets/account/accountProfileSection.dart';
+import 'package:cashew_selfhosted/widgets/account/adminUsersSection.dart';
+import 'package:cashew_selfhosted/widgets/account/serverCredentialsForm.dart';
 import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/textInput.dart';
 import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
@@ -29,7 +32,14 @@ import 'package:cashew_selfhosted/widgets/extraInfoBoxes.dart';
 import 'package:cashew_selfhosted/widgets/outlinedButtonStacked.dart';
 
 class AccountsPage extends StatefulWidget {
-  const AccountsPage({Key? key}) : super(key: key);
+  const AccountsPage({Key? key, this.isPushedRoute = false}) : super(key: key);
+
+  /// True when opened as its own pushed route rather than as page 8 of the
+  /// navigation framework. A pushed route must close itself once the user is
+  /// signed in -- callers like [signInAndSync] await the pop, and a page that
+  /// merely swapped to its signed-in view would leave them waiting forever.
+  /// That is the bug that used to strand onboarding with a dead sidebar.
+  final bool isPushedRoute;
 
   @override
   State<AccountsPage> createState() => AccountsPageState();
@@ -37,75 +47,37 @@ class AccountsPage extends StatefulWidget {
 
 class AccountsPageState extends State<AccountsPage> {
   bool currentlyExporting = false;
-  bool signingIn = false;
-  String? signInError;
-  // On web the app is always served from the same origin as its own API
-  // (see DEPLOYMENT.md -- one container serves both), so there's exactly
-  // one correct server URL and asking the user to type it in is just a
-  // chance to get it wrong. Native builds are a single generic binary that
-  // could point at anyone's server, so those still need the manual field
-  // (same as e.g. a Nextcloud mobile app).
-  final TextEditingController serverUrlController = TextEditingController(
-      text: kIsWeb ? Uri.base.origin : appStateSettings["serverUrl"]);
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
 
   void refreshState() {
     setState(() {});
   }
 
-  Future<void> submitSignIn() async {
-    setState(() {
-      signingIn = true;
-      signInError = null;
-    });
-    final success = await selfHostedLogin(
-      serverUrl: serverUrlController.text,
-      email: emailController.text,
-      password: passwordController.text,
-    );
-    if (success) {
-      await syncAfterLogin(context);
-      refreshUIAfterLoginChange();
+  Future<void> _signOut() async {
+    final result = await selfHostedLogout();
+    if (result == true && mounted) {
+      // currentState is null whenever PageNavigationFramework isn't mounted --
+      // during onboarding, and during the first-run wizard. It used to be
+      // force-unwrapped here, which threw instead of signing out.
+      final navigationState = pageNavigationFrameworkKey.currentState;
+      if (getIsFullScreen(context) == false || navigationState == null) {
+        maybePopRoute(context);
+        settingsPageStateKey.currentState?.refreshState();
+      } else {
+        navigationState.changePage(0, switchNavbar: true);
+      }
     }
-    if (mounted) {
-      setState(() {
-        signingIn = false;
-        signInError = success ? null : "invalid-login".tr();
-      });
-    }
+    refreshUIAfterLoginChange();
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget profileWidget = Container(
-      width: 100,
-      height: 100,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: dynamicPastel(context, Theme.of(context).colorScheme.primary,
-            amount: 0.2),
-      ),
-      child: Center(
-        child: TextFont(
-            text: (selfHostedSession?.email.isNotEmpty == true
-                ? selfHostedSession!.email[0].toUpperCase()
-                : ""),
-            fontSize: 60,
-            textAlign: TextAlign.center,
-            fontWeight: FontWeight.bold,
-            textColor: dynamicPastel(
-                context, Theme.of(context).colorScheme.primary,
-                amount: 0.85, inverse: false)),
-      ),
-    );
     return PageFramework(
       horizontalPaddingConstrained: true,
       dragDownToDismiss: true,
       expandedHeight: 56,
       title: getPlatform() == PlatformOS.isIOS
-          ? "backup".tr()
-          : "data-backup".tr(),
+          ? "my-account".tr()
+          : "my-account".tr(),
       appBarBackgroundColor: getPlatform() == PlatformOS.isIOS
           ? null
           : Theme.of(context).colorScheme.secondaryContainer,
@@ -132,46 +104,14 @@ class AccountsPageState extends State<AccountsPage> {
                           textAlign: TextAlign.center,
                         ),
                         SizedBox(height: 20),
-                        if (!kIsWeb) ...[
-                          TextInput(
-                            labelText: "server-url".tr(),
-                            controller: serverUrlController,
-                            keyboardType: TextInputType.url,
-                            autocorrect: false,
-                            padding: EdgeInsetsDirectional.zero,
-                          ),
-                          SizedBox(height: 10),
-                        ],
-                        TextInput(
-                          labelText: "email".tr(),
-                          controller: emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          autocorrect: false,
-                          padding: EdgeInsetsDirectional.zero,
-                        ),
-                        SizedBox(height: 10),
-                        TextInput(
-                          labelText: "password".tr(),
-                          controller: passwordController,
-                          obscureText: true,
-                          autocorrect: false,
-                          padding: EdgeInsetsDirectional.zero,
-                          onSubmitted: (_) => submitSignIn(),
-                        ),
-                        if (signInError != null)
-                          Padding(
-                            padding: const EdgeInsetsDirectional.only(top: 10),
-                            child: TextFont(
-                              text: signInError!,
-                              textColor: Theme.of(context).colorScheme.error,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        SizedBox(height: 20),
-                        Button(
-                          label: "sign-in-to-server".tr(),
-                          disabled: signingIn,
-                          onTap: submitSignIn,
+                        // The same form the first-run wizard uses, so someone
+                        // who skipped the wizard gets an identical experience
+                        // here -- including "set up this server" if the
+                        // instance still has no accounts.
+                        ServerCredentialsForm(
+                          mode: ServerAuthMode.signIn,
+                          popOnSuccess: widget.isPushedRoute,
+                          onSuccess: refreshState,
                         ),
                       ],
                     ),
@@ -179,46 +119,11 @@ class AccountsPageState extends State<AccountsPage> {
                 : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(height: 35),
-                      ClipOval(child: profileWidget),
+                      AccountProfileSection(onSignOut: _signOut),
+                      const AdminUsersSection(),
                       SizedBox(height: 10),
-                      TextFont(
-                        text: "self-hosted-backup".tr(),
-                        textAlign: TextAlign.center,
-                        fontSize: 25,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      SizedBox(height: 2),
-                      TextFont(
-                        text: (appStateSettings["currentUserEmail"] ?? "")
-                            .toString(),
-                        textAlign: TextAlign.center,
-                        fontSize: 15,
-                      ),
-                      SizedBox(height: 15),
-                      IntrinsicWidth(
-                        child: Button(
-                          label: "logout".tr(),
-                          onTap: () async {
-                            final result = await selfHostedLogout();
-                            if (result == true) {
-                              if (getIsFullScreen(context) == false) {
-                                maybePopRoute(context);
-                                settingsPageStateKey.currentState
-                                    ?.refreshState();
-                              } else {
-                                pageNavigationFrameworkKey.currentState!
-                                    .changePage(0, switchNavbar: true);
-                              }
-                            }
-                            refreshUIAfterLoginChange();
-                          },
-                          padding: EdgeInsetsDirectional.symmetric(
-                              horizontal: 17, vertical: 12),
-                          fontSize: 15,
-                        ),
-                      ),
-                      SizedBox(height: 25),
+                      SettingsHeader(title: "backups".tr()),
+                      SizedBox(height: 10),
                       Padding(
                         padding: const EdgeInsetsDirectional.symmetric(
                             horizontal: 18.0),

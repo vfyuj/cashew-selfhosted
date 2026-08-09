@@ -1,10 +1,10 @@
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/database/generatePreviewData.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
-import 'package:cashew_selfhosted/pages/accountsPage.dart';
 import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/languageMap.dart';
+import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/currencyPicker.dart';
@@ -14,7 +14,6 @@ import 'package:cashew_selfhosted/widgets/moreIcons.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
 import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
-import 'package:cashew_selfhosted/widgets/settingsContainers.dart';
 import 'package:cashew_selfhosted/widgets/textWidgets.dart';
 import 'package:cashew_selfhosted/widgets/viewAllTransactionsButton.dart';
 import 'package:drift/drift.dart' hide Column;
@@ -436,76 +435,45 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
               maxLines: 5,
             ),
           ),
-          SizedBox(height: 25),
-          getPlatform() == PlatformOS.isIOS
-              ? IntrinsicWidth(
-                  child: Padding(
-                    padding:
-                        const EdgeInsetsDirectional.symmetric(horizontal: 8.0),
-                    child: Button(
-                      label: "lets-go".tr(),
-                      onTap: () {
-                        nextNavigation();
-                      },
-                      expandedLayout: false,
-                    ),
-                  ),
-                )
-              : SizedBox.shrink(),
-          getPlatform() == PlatformOS.isIOS
-              ? SizedBox.shrink()
-              : SettingsContainerOutlined(
-                  onTap: () async {
-                    // Self-hosted sign-in needs an email/password/server-url
-                    // form (unlike the old one-tap Google flow), so send the
-                    // user to AccountsPage rather than trying to sign in
-                    // inline here. Per specs/01-local-first-invariant.md this
-                    // is optional -- onboarding continues either way.
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => AccountsPage()),
-                    );
-                    nextNavigation();
-                  },
-                  title: "self-hosted-backup".tr(),
-                  icon: appStateSettings["outlinedIcons"]
-                      ? Icons.cloud_outlined
-                      : Icons.cloud_rounded,
-                  isExpanded: false,
-                ),
-          getPlatform() == PlatformOS.isIOS
-              ? SizedBox.shrink()
-              : SizedBox(height: 8),
-          getPlatform() == PlatformOS.isIOS
-              ? SizedBox.shrink()
-              : Padding(
-                  padding:
-                      const EdgeInsetsDirectional.symmetric(horizontal: 25),
-                  child: TextFont(
-                    text: "onboarding-info-3".tr(),
+          SizedBox(height: 15),
+          // Sign-in already happened (or was declined) in the first-run server
+          // wizard, which runs before onboarding -- see
+          // lib/pages/serverSetupWizardPage.dart. This page just confirms where
+          // things stand. It used to push AccountsPage and await the pop, which
+          // never came on a successful sign-in, leaving hasOnboarded false and
+          // the sidebar permanently dimmed and unclickable.
+          Padding(
+            padding: const EdgeInsetsDirectional.symmetric(horizontal: 25),
+            child: selfHostedSession == null
+                ? TextFont(
+                    text: "onboarding-info-3-local-only".tr(),
+                    textAlign: TextAlign.center,
+                    fontSize: 16,
+                    maxLines: 5,
+                  )
+                : TextFont(
+                    text: "onboarding-info-3-signed-in".tr(namedArgs: {
+                      "account": cachedServerProfile?.displayName ??
+                          selfHostedSession!.email,
+                    }),
                     textAlign: TextAlign.center,
                     fontSize: 16,
                     maxLines: 5,
                   ),
-                ),
-          getPlatform() == PlatformOS.isIOS
-              ? SizedBox.shrink()
-              : SizedBox(height: 35),
-          getPlatform() == PlatformOS.isIOS
-              ? SizedBox.shrink()
-              : LowKeyButton(
-                  onTap: () {
-                    nextNavigation();
-                  },
-                  text: "continue-without-sign-in".tr(),
-                ),
-          // IntrinsicWidth(
-          //   child: Button(
-          //     label: "Let's go!",
-          //     onTap: () {
-          //       nextNavigation();
-          //     },
-          //   ),
-          // ),
+          ),
+          SizedBox(height: 35),
+          IntrinsicWidth(
+            child: Padding(
+              padding: const EdgeInsetsDirectional.symmetric(horizontal: 8.0),
+              child: Button(
+                label: "lets-go".tr(),
+                onTap: () {
+                  nextNavigation();
+                },
+                expandedLayout: false,
+              ),
+            ),
+          ),
         ],
       ),
     ];

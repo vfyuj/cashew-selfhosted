@@ -303,7 +303,7 @@ class NavigationSidebarState extends State<NavigationSidebar> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               SizedBox(height: 40),
-                              GoogleAccountLoginButton(
+                              AccountLoginButton(
                                 navigationSidebarButton: true,
                                 isButtonSelected: selectedIndex == 8,
                               ),

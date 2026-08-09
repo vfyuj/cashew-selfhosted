@@ -97,6 +97,180 @@ Future<void> _persistSession() async {
   }
 }
 
+/// The signed-in user's account details, as the server knows them.
+class ServerProfile {
+  final int id;
+  final String email;
+  final String name;
+  final bool isAdmin;
+
+  ServerProfile({
+    required this.id,
+    required this.email,
+    required this.name,
+    required this.isAdmin,
+  });
+
+  /// Falls back rather than throwing on a missing field, so an older server
+  /// that doesn't send `user` yet can't break sign-in.
+  factory ServerProfile.fromJson(Map<String, dynamic> json) => ServerProfile(
+        id: json['id'] as int? ?? 0,
+        email: json['email'] as String? ?? "",
+        name: json['name'] as String? ?? "",
+        isAdmin: json['isAdmin'] == true,
+      );
+
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'email': email, 'name': name, 'isAdmin': isAdmin};
+
+  /// What to show as this person's display name, never blank.
+  String get displayName => name.trim().isNotEmpty ? name.trim() : email;
+}
+
+/// Another account on this instance, as listed by an administrator.
+class ServerUser {
+  final int id;
+  final String email;
+  final String name;
+  final bool isAdmin;
+
+  ServerUser({
+    required this.id,
+    required this.email,
+    required this.name,
+    required this.isAdmin,
+  });
+
+  factory ServerUser.fromJson(Map<String, dynamic> json) => ServerUser(
+        id: json['id'] as int? ?? 0,
+        email: json['email'] as String? ?? "",
+        name: json['name'] as String? ?? "",
+        isAdmin: json['isAdmin'] == true,
+      );
+
+  String get displayName => name.trim().isNotEmpty ? name.trim() : email;
+}
+
+/// A newly-provisioned account plus the one-time password to hand over. The
+/// server only ever returns this password once -- it is not recoverable, only
+/// re-issuable.
+class CreatedUser {
+  final ServerUser user;
+  final String temporaryPassword;
+  CreatedUser(this.user, this.temporaryPassword);
+}
+
+/// Why a server call didn't succeed, so callers can show a specific message
+/// instead of a generic failure. Nothing in this file throws for these --
+/// see the local-first note on [selfHostedLogin].
+enum ServerCallResult {
+  ok,
+
+  /// Wrong email/password, wrong current password, or no session at all.
+  invalidCredentials,
+
+  /// Signed in, but not an administrator.
+  forbidden,
+
+  /// Email already taken, server already set up, or would remove the last
+  /// administrator.
+  conflict,
+
+  /// The request itself was rejected -- in practice, a password below the
+  /// server's minimum length.
+  validationError,
+
+  /// Couldn't reach the server at all. Never an error worth blocking on.
+  unreachable,
+
+  serverError,
+}
+
+ServerCallResult _resultFromStatus(int statusCode) {
+  if (statusCode >= 200 && statusCode < 300) return ServerCallResult.ok;
+  switch (statusCode) {
+    case 400:
+      return ServerCallResult.validationError;
+    // 401 means the session is gone; 422 means the credential in the body was
+    // wrong. The server keeps these distinct on purpose -- see the password
+    // handler in server/lib/src/auth/auth_routes.dart.
+    case 401:
+    case 422:
+      return ServerCallResult.invalidCredentials;
+    case 403:
+      return ServerCallResult.forbidden;
+    case 409:
+      return ServerCallResult.conflict;
+    default:
+      return ServerCallResult.serverError;
+  }
+}
+
+/// The signed-in user's profile, cached locally.
+///
+/// The UI reads `isAdmin` and the display name from here, never from a live
+/// call -- that's what lets the account page render correctly with no network,
+/// as required by specs/01-local-first-invariant.md.
+ServerProfile? cachedServerProfile;
+
+/// Deliberately a separate key from [_sessionPrefsKey] rather than extra fields
+/// on [SelfHostedSession]: [_persistSession] rewrites that JSON on every token
+/// refresh and must not be able to clobber profile data, and
+/// [SelfHostedSession.fromJson]'s fields are all non-nullable, so widening it
+/// would fail to deserialize sessions saved by an older build.
+const _profilePrefsKey = "selfHostedProfile";
+
+/// Local-only read, mirroring [loadPersistedSelfHostedSession] -- no network,
+/// safe to call unconditionally at startup.
+Future<void> loadPersistedServerProfile() async {
+  final raw = sharedPreferences.getString(_profilePrefsKey);
+  if (raw == null) return;
+  try {
+    cachedServerProfile = ServerProfile.fromJson(jsonDecode(raw));
+  } catch (e) {
+    print("Error loading persisted server profile: $e");
+    cachedServerProfile = null;
+  }
+}
+
+Future<void> _persistServerProfile() async {
+  if (cachedServerProfile == null) {
+    await sharedPreferences.remove(_profilePrefsKey);
+  } else {
+    await sharedPreferences.setString(
+        _profilePrefsKey, jsonEncode(cachedServerProfile!.toJson()));
+  }
+}
+
+Future<void> _adoptProfile(Map<String, dynamic>? userJson) async {
+  if (userJson == null) return;
+  cachedServerProfile = ServerProfile.fromJson(userJson);
+  await _persistServerProfile();
+  await reconcileLocalUsername(newServerName: cachedServerProfile!.name);
+}
+
+/// Seeds the local display name from the server account name.
+///
+/// These are deliberately NOT the same value. `appStateSettings["username"]` is
+/// the home-page greeting: purely local, editable offline, and it has to keep
+/// working for someone who never signs in at all -- making it depend on auth
+/// would violate specs/01-local-first-invariant.md. So this only ever copies
+/// server -> local, and only when doing so can't discard a choice the user made:
+/// either the local name is empty, or it still exactly matches what the server
+/// previously said (the common "never diverged" case).
+Future<void> reconcileLocalUsername({
+  String? previousServerName,
+  required String newServerName,
+}) async {
+  if (newServerName.trim().isEmpty) return;
+  final local = (appStateSettings["username"] ?? "").toString();
+  final safeToOverwrite =
+      local.trim().isEmpty || (previousServerName != null && local == previousServerName);
+  if (!safeToOverwrite) return;
+  await updateSettings("username", newServerName,
+      pagesNeedingRefresh: [0], updateGlobalState: false);
+}
+
 String _normalizeServerUrl(String serverUrl) {
   String url = serverUrl.trim();
   if (url.endsWith('/')) url = url.substring(0, url.length - 1);
@@ -131,11 +305,98 @@ class SyncRebootstrapRequiredException implements Exception {
 
 class InvalidLoginException implements Exception {}
 
+/// Turns a successful login/setup response into the signed-in local state.
+/// Shared by [selfHostedLogin] and [selfHostedSetup] so the session, the
+/// settings writes and the profile cache can never drift apart.
+Future<void> _adoptSessionResponse(
+    String url, String email, Map<String, dynamic> body) async {
+  selfHostedSession = SelfHostedSession(
+    serverUrl: url,
+    email: email,
+    sessionToken: body['sessionToken'] as String,
+    expiresAt: DateTime.parse(body['expiresAt'] as String),
+  );
+  await _persistSession();
+  await updateSettings("serverUrl", url, updateGlobalState: false);
+  await updateSettings("currentUserEmail", email, updateGlobalState: false);
+  await updateSettings("hasSignedIn", true, updateGlobalState: false);
+  await _adoptProfile(body['user'] as Map<String, dynamic>?);
+}
+
+/// Asks whether an instance still needs its first account.
+///
+/// Returns null for "couldn't find out" -- unreachable, wrong address, or
+/// anything unexpected. Callers must treat null as "keep the local-only path
+/// available" and never as an error worth blocking on. The timeout is
+/// deliberately shorter than [selfHostedLogin]'s because this runs on the
+/// app's launch path (specs/01-local-first-invariant.md).
+Future<bool?> selfHostedSetupState(
+  String serverUrl, {
+  Duration timeout = const Duration(seconds: 8),
+}) async {
+  final url = _normalizeServerUrl(serverUrl);
+  if (url.isEmpty) return null;
+  try {
+    final response =
+        await http.get(Uri.parse('$url/auth/setup-state')).timeout(timeout);
+    if (response.statusCode != 200) return null;
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final needsSetup = body['needsSetup'];
+    return needsSetup is bool ? needsSetup : null;
+  } catch (e) {
+    print("Could not reach self-hosted server at $url: $e");
+    return null;
+  }
+}
+
+/// Creates the instance's first account, which becomes its administrator, and
+/// signs in as it. Only succeeds while the instance has no users -- afterwards
+/// the server answers 409 and the caller should fall back to signing in.
+Future<ServerCallResult> selfHostedSetup({
+  required String serverUrl,
+  required String email,
+  required String name,
+  required String password,
+}) async {
+  final url = _normalizeServerUrl(serverUrl);
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$url/auth/setup'),
+          headers: {'content-type': 'application/json'},
+          body: jsonEncode({'email': email, 'name': name, 'password': password}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) return _resultFromStatus(response.statusCode);
+    await _adoptSessionResponse(
+        url, email, jsonDecode(response.body) as Map<String, dynamic>);
+    return ServerCallResult.ok;
+  } catch (e) {
+    print("Error setting up self-hosted server: $e");
+    return ServerCallResult.unreachable;
+  }
+}
+
 /// Logs in against the configured self-hosted server and persists the
 /// resulting session. Never throws for expected failure modes (bad
 /// credentials, unreachable server) -- returns false instead, matching
 /// the local-first invariant's "never block the UI on a network failure".
 Future<bool> selfHostedLogin({
+  required String serverUrl,
+  required String email,
+  required String password,
+}) async {
+  return await selfHostedLoginDetailed(
+        serverUrl: serverUrl,
+        email: email,
+        password: password,
+      ) ==
+      ServerCallResult.ok;
+}
+
+/// As [selfHostedLogin], but distinguishes "wrong password" from "couldn't
+/// reach the server" so the sign-in form can say which happened.
+Future<ServerCallResult> selfHostedLoginDetailed({
   required String serverUrl,
   required String email,
   required String password,
@@ -149,22 +410,13 @@ Future<bool> selfHostedLogin({
           body: jsonEncode({'email': email, 'password': password}),
         )
         .timeout(const Duration(seconds: 15));
-    if (response.statusCode != 200) return false;
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    selfHostedSession = SelfHostedSession(
-      serverUrl: url,
-      email: email,
-      sessionToken: body['sessionToken'] as String,
-      expiresAt: DateTime.parse(body['expiresAt'] as String),
-    );
-    await _persistSession();
-    await updateSettings("serverUrl", url, updateGlobalState: false);
-    await updateSettings("currentUserEmail", email, updateGlobalState: false);
-    await updateSettings("hasSignedIn", true, updateGlobalState: false);
-    return true;
+    if (response.statusCode != 200) return _resultFromStatus(response.statusCode);
+    await _adoptSessionResponse(
+        url, email, jsonDecode(response.body) as Map<String, dynamic>);
+    return ServerCallResult.ok;
   } catch (e) {
     print("Error logging in to self-hosted server: $e");
-    return false;
+    return ServerCallResult.unreachable;
   }
 }
 
@@ -211,6 +463,8 @@ Future<bool> selfHostedLogout() async {
   }
   selfHostedSession = null;
   await _persistSession();
+  cachedServerProfile = null;
+  await _persistServerProfile();
   await updateSettings("currentUserEmail", "", updateGlobalState: false);
   await updateSettings("hasSignedIn", false, updateGlobalState: false);
   return true;
@@ -387,6 +641,210 @@ class SelfHostedClient implements BackupTransport {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         return (body['minRetainedSeq'] as int?) ?? 0;
       });
+  // --- Account and instance administration -------------------------------
+  //
+  // These go through the same _withRefreshRetry wrapper as the file calls, so
+  // an expired token is silently renewed once rather than surfacing as a
+  // spurious "you've been signed out".
+
+  Map<String, String> get _jsonHeaders =>
+      {..._authHeader, 'content-type': 'application/json'};
+
+  /// Throws [ServerCallResult] itself for non-success statuses, so the thin
+  /// top-level wrappers below can catch and return it without re-deriving.
+  void _throwUnlessOk(http.Response response) {
+    _throwIfUnauthenticated(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _resultFromStatus(response.statusCode);
+    }
+  }
+
+  Future<ServerProfile> getMe() => _withRefreshRetry(() async {
+        final response = await http
+            .get(Uri.parse('${session.serverUrl}/auth/me'), headers: _authHeader)
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+        return ServerProfile.fromJson(jsonDecode(response.body));
+      });
+
+  Future<ServerProfile> patchMe({String? name, String? email}) =>
+      _withRefreshRetry(() async {
+        final response = await http
+            .patch(
+              Uri.parse('${session.serverUrl}/auth/me'),
+              headers: _jsonHeaders,
+              body: jsonEncode({
+                if (name != null) 'name': name,
+                if (email != null) 'email': email,
+              }),
+            )
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+        return ServerProfile.fromJson(jsonDecode(response.body));
+      });
+
+  /// Returns the rotated session token: changing a password signs every device
+  /// out, including this one, so the server hands back a fresh token to keep
+  /// the device that made the change signed in.
+  Future<({String sessionToken, DateTime expiresAt})> postMyPassword({
+    required String currentPassword,
+    required String newPassword,
+  }) =>
+      _withRefreshRetry(() async {
+        final response = await http
+            .post(
+              Uri.parse('${session.serverUrl}/auth/me/password'),
+              headers: _jsonHeaders,
+              body: jsonEncode({
+                'currentPassword': currentPassword,
+                'newPassword': newPassword,
+              }),
+            )
+            .timeout(const Duration(seconds: 20));
+        // A wrong current password arrives as 422, not 401, so it falls through
+        // to _throwUnlessOk and is never mistaken for an expired session (which
+        // would trigger a pointless token refresh and retry).
+        _throwUnlessOk(response);
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return (
+          sessionToken: body['sessionToken'] as String,
+          expiresAt: DateTime.parse(body['expiresAt'] as String),
+        );
+      });
+
+  Future<List<ServerUser>> listUsers() => _withRefreshRetry(() async {
+        final response = await http
+            .get(Uri.parse('${session.serverUrl}/admin/users'), headers: _authHeader)
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return (body['users'] as List<dynamic>)
+            .map((e) => ServerUser.fromJson(e as Map<String, dynamic>))
+            .toList();
+      });
+
+  Future<CreatedUser> createUser({required String email, required String name}) =>
+      _withRefreshRetry(() async {
+        final response = await http
+            .post(
+              Uri.parse('${session.serverUrl}/admin/users'),
+              headers: _jsonHeaders,
+              body: jsonEncode({'email': email, 'name': name}),
+            )
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return CreatedUser(
+          ServerUser.fromJson(body['user'] as Map<String, dynamic>),
+          body['temporaryPassword'] as String,
+        );
+      });
+
+  Future<String> resetUserPassword(int userId) => _withRefreshRetry(() async {
+        final response = await http
+            .post(Uri.parse('${session.serverUrl}/admin/users/$userId/password'),
+                headers: _authHeader)
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        return body['temporaryPassword'] as String;
+      });
+
+  Future<void> deleteUser(int userId) => _withRefreshRetry(() async {
+        final response = await http
+            .delete(Uri.parse('${session.serverUrl}/admin/users/$userId'),
+                headers: _authHeader)
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+      });
+}
+
+/// Builds a client for the current session, or null when signed out. Every
+/// wrapper below no-ops rather than throwing in the signed-out case -- being
+/// signed out is a normal state in this app, not an error.
+SelfHostedClient? _currentClient() {
+  final session = selfHostedSession;
+  return session == null ? null : SelfHostedClient(session);
+}
+
+/// Runs an authenticated call, mapping every expected failure onto a
+/// [ServerCallResult] rather than letting it escape. Nothing in the account UI
+/// should ever have to wrap a call in its own try/catch.
+Future<(ServerCallResult, T?)> _guarded<T>(Future<T> Function(SelfHostedClient) call) async {
+  final client = _currentClient();
+  if (client == null) return (ServerCallResult.invalidCredentials, null);
+  try {
+    return (ServerCallResult.ok, await call(client));
+  } on ServerCallResult catch (result) {
+    return (result, null);
+  } on SelfHostedUnauthenticatedException {
+    return (ServerCallResult.invalidCredentials, null);
+  } catch (e) {
+    print("Self-hosted server call failed: $e");
+    return (ServerCallResult.unreachable, null);
+  }
+}
+
+/// Refreshes the cached profile. On failure the existing cache is deliberately
+/// left in place -- a network blip must not make the admin section vanish or
+/// the display name blank out.
+Future<ServerProfile?> selfHostedFetchProfile() async {
+  final (result, profile) = await _guarded((client) => client.getMe());
+  if (result != ServerCallResult.ok || profile == null) return null;
+  cachedServerProfile = profile;
+  await _persistServerProfile();
+  await reconcileLocalUsername(newServerName: profile.name);
+  return profile;
+}
+
+Future<ServerCallResult> selfHostedUpdateProfile({String? name, String? email}) async {
+  final previousName = cachedServerProfile?.name;
+  final (result, profile) =
+      await _guarded((client) => client.patchMe(name: name, email: email));
+  if (result != ServerCallResult.ok || profile == null) return result;
+  cachedServerProfile = profile;
+  await _persistServerProfile();
+  await updateSettings("currentUserEmail", profile.email, updateGlobalState: false);
+  await reconcileLocalUsername(
+      previousServerName: previousName, newServerName: profile.name);
+  return ServerCallResult.ok;
+}
+
+Future<ServerCallResult> selfHostedChangePassword({
+  required String currentPassword,
+  required String newPassword,
+}) async {
+  final (result, rotated) = await _guarded((client) => client.postMyPassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      ));
+  if (result != ServerCallResult.ok || rotated == null) return result;
+  // The server revoked every session including ours; adopt the replacement it
+  // issued, or this device would sign itself out by changing its own password.
+  selfHostedSession
+    ?..sessionToken = rotated.sessionToken
+    ..expiresAt = rotated.expiresAt;
+  await _persistSession();
+  return ServerCallResult.ok;
+}
+
+Future<List<ServerUser>?> selfHostedListUsers() async {
+  final (result, users) = await _guarded((client) => client.listUsers());
+  return result == ServerCallResult.ok ? users : null;
+}
+
+Future<(ServerCallResult, CreatedUser?)> selfHostedCreateUser({
+  required String email,
+  required String name,
+}) =>
+    _guarded((client) => client.createUser(email: email, name: name));
+
+Future<(ServerCallResult, String?)> selfHostedResetUserPassword(int userId) =>
+    _guarded((client) => client.resetUserPassword(userId));
+
+Future<ServerCallResult> selfHostedDeleteUser(int userId) async {
+  final (result, _) = await _guarded((client) => client.deleteUser(userId));
+  return result;
 }
 
 /// Adapts [SelfHostedClient]'s `/backup` namespace to [BackupTransport], so

@@ -114,9 +114,16 @@ class InitialPageRouteNavigator extends StatelessWidget {
               );
             }
           },
-          child: appStateSettings["hasOnboarded"] != true
-              ? OnBoardingPage(key: ValueKey("Onboarding"))
-              : PageNavigationFrameworkSafeArea(
+          // Render nothing while the first-run server wizard is up. It covers
+          // this area anyway, but OnBoardingPage must not mount underneath it:
+          // its initState grabs focus and swallows every key event, which would
+          // fight the wizard's text fields on the first frame.
+          child: appStateSettings["hasCompletedServerSetup"] != true
+              ? const SizedBox.shrink(
+                  key: ValueKey("ServerSetupWizardPlaceholder"))
+              : appStateSettings["hasOnboarded"] != true
+                  ? OnBoardingPage(key: ValueKey("Onboarding"))
+                  : PageNavigationFrameworkSafeArea(
                   child: PageNavigationFramework(
                     key: pageNavigationFrameworkKey,
                     widthSideNavigationBar: getWidthNavigationSidebar(context),
@@ -292,7 +299,7 @@ GlobalKey<UpcomingOverdueTransactionsState>
 GlobalKey<CreditDebtTransactionsState> creditDebtTransactionsKey = GlobalKey();
 GlobalKey<ProductsState> purchasesStateKey = GlobalKey();
 GlobalKey<AccountsPageState> accountsPageStateKey = GlobalKey();
-GlobalKey<GoogleAccountLoginButtonState> settingsGoogleAccountLoginButtonKey =
+GlobalKey<AccountLoginButtonState> settingsAccountLoginButtonKey =
     GlobalKey();
 GlobalKey<NavigationSidebarState> sidebarStateKey = GlobalKey();
 GlobalKey<GlobalLoadingProgressState> loadingProgressKey = GlobalKey();

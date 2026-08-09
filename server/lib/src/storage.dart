@@ -66,4 +66,13 @@ class UserFileStore {
     file.deleteSync();
     return true;
   }
+
+  /// Removes the user's entire namespace directory. Used when an administrator
+  /// deletes an account -- otherwise their snapshots and backups would linger
+  /// on disk indefinitely, and a later user allocated the same numeric id would
+  /// inherit them. Path construction stays here so callers never build one.
+  void deleteAll() {
+    final dir = Directory(namespaceDir);
+    if (dir.existsSync()) dir.deleteSync(recursive: true);
+  }
 }

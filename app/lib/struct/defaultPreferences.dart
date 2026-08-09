@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageLineGraph.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/notificationsSettings.dart';
 import 'package:cashew_selfhosted/widgets/periodCyclePicker.dart';
@@ -122,6 +125,12 @@ Future<Map<String, dynamic>> getDefaultPreferences() async {
     "batterySaver": false,
     "username": "",
     "hasOnboarded": false,
+    // Gates the first-run server wizard, which is shown *before* onboarding
+    // (see lib/pages/serverSetupWizardPage.dart). Skipping it is always
+    // allowed and sets this to true -- per specs/01-local-first-invariant.md
+    // the app must be fully usable with no server and no account.
+    // Existing installs are back-filled by attemptToMigrateServerSetupWizard().
+    "hasCompletedServerSetup": false,
     "restrictAmountOfInitiallyLoadedTransactions": false,
     "autoAddAssociatedTitles": true,
     "AutoTransactions-canReadEmails": false,
@@ -337,10 +346,42 @@ Future<Map<String, dynamic>> getDefaultPreferences() async {
 
     // This key is used as a migration
     // "migratedSetLongTermLoansAmountTo0": false,
+    //
+    // This key is used as a migration
+    // "migratedServerSetupWizard": false,
   };
 }
 
 enum AppAnimations { all, minimal, disabled }
+
+/// Back-fills [hasCompletedServerSetup] for installs that predate the first-run
+/// server wizard.
+///
+/// This is not optional. getUserSettings() merges every missing default key
+/// into the stored settings on launch, so without this migration a new key
+/// defaulting to false would show the wizard to every existing user on update
+/// -- people who onboarded, and possibly signed in, long ago.
+///
+/// Unlike the other attemptToMigrate* functions, this persists immediately
+/// rather than relying on a later updateSettings() call: if the app were killed
+/// in between, the wizard would reappear on the next launch.
+Future attemptToMigrateServerSetupWizard() async {
+  try {
+    if (appStateSettings["migratedServerSetupWizard"] == true) return;
+    final bool predatesWizard = appStateSettings["hasOnboarded"] == true ||
+        appStateSettings["hasSignedIn"] == true ||
+        selfHostedSession != null;
+    appStateSettings["migratedServerSetupWizard"] = true;
+    if (predatesWizard) {
+      print("Migrating: existing install, skipping the first-run server wizard");
+      appStateSettings["hasCompletedServerSetup"] = true;
+    }
+    await sharedPreferences.setString(
+        'userSettings', json.encode(appStateSettings));
+  } catch (e) {
+    print("Error migrating server setup wizard flag " + e.toString());
+  }
+}
 
 Future attemptToMigrateSetLongTermLoansAmountTo0() async {
   try {

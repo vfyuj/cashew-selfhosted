@@ -97,6 +97,10 @@ Future<bool> initializeSettings() async {
     appStateSettings["accentColor"] = await getAccentColorSystemString();
   }
 
+  // Must run before the first frame: the wizard gate reads
+  // hasCompletedServerSetup, and an existing install would otherwise be shown
+  // the first-run wizard after updating.
+  await attemptToMigrateServerSetupWizard();
   await attemptToMigrateSetLongTermLoansAmountTo0();
   attemptToMigrateCustomNumberFormattingSettings();
 

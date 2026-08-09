@@ -2,7 +2,10 @@ import 'package:cashew_selfhosted/widgets/globalSnackbar.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
 
 openSnackbar(SnackbarMessage message, {bool postIfQueue = true}) {
-  snackbarKey.currentState!.post(message, postIfQueue: postIfQueue);
+  // Null whenever GlobalSnackbar isn't mounted -- during onboarding and the
+  // first-run server wizard. A message that can't be shown should be dropped,
+  // not crash the caller that posted it.
+  snackbarKey.currentState?.post(message, postIfQueue: postIfQueue);
   // ScaffoldMessenger.of(context).showSnackBar(
   //   SnackBar(
   //       behavior: SnackBarBehavior.floating,
