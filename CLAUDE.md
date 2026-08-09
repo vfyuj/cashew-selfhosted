@@ -9,6 +9,20 @@ A permanently-diverging fork of [jameskokoska/Cashew](https://github.com/jamesko
 3. Check which stage doc applies to the current work (`specs/02-*`, `specs/03-*`, ...) and its acceptance criteria before considering work done.
 4. Prefer small, surgical diffs over sweeping rewrites, especially anywhere near sync. A previous Stage 2 attempt (event-push/WebSocket instant sync) landed ~4,300 lines of change, broke unrelated UI (the "Add Account" button), and reintroduced a data-loss race on backup restore — it was reverted (never merged; see `specs/04-stage-2-instant-sync.md` for the postmortem and the current plan). Large diffs in this codebase are a warning sign, not a sign of thoroughness.
 
+## Versioning
+
+Full contract in `specs/07-versioning.md`. The short version:
+
+- `app/pubspec.yaml` holds the only version number: `1.0.0-beta.<n>+<n>`. The fork restarted at `1.0.0-beta.1` and does not continue upstream's 5.x line.
+- **Every commit bumps it**, via `.githooks/pre-commit`. Enable once per clone — do this before your first commit in a fresh clone, or builds stop being distinguishable:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+- The running version shows in the sidebar (on the About row) and in `GET /health`. That's how the owner confirms a redeploy landed, so don't break it casually.
+- The changelog in `app/lib/widgets/showChangelog.dart` is the fork's own; upstream's was removed and still lives in `upstream/`. **Only add a section when a change is worth interrupting someone for** — most betas get none, and a version with no section shows no popup. Use raw English strings, never `.tr()` keys (see BL-003).
+
 ## Testing & verification workflow
 
 The owner has time to test and wants to do it themselves — do not spend agent time/tokens simulating multi-device scenarios, airplane mode, or long manual QA passes. Instead:
@@ -34,7 +48,7 @@ The **app's** Drift table/column structure must stay identical to upstream Cashe
 diff <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" app/lib/database/tables.dart) <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
 ```
 
-Empty output = still compatible. Note the pattern is deliberately narrowed to `extends Table` and column declarations: a looser `^class ` also catches the type converters, which legitimately differ from upstream (Stage 2 gave them `with JsonTypeConverter2<...>` for the sync feed's JSON payloads — that changes serialization, not the stored SQLite representation) and produces a false alarm.
+Empty output = still compatible. Note `upstream/` is not checked in, so it only exists in the main checkout — from a `.claude/worktrees/` worktree, point the second path at the main checkout's copy. Note the pattern is deliberately narrowed to `extends Table` and column declarations: a looser `^class ` also catches the type converters, which legitimately differ from upstream (Stage 2 gave them `with JsonTypeConverter2<...>` for the sync feed's JSON payloads — that changes serialization, not the stored SQLite representation) and produces a false alarm.
 
 The **server's** database (`users`, `sessions`, `sync_records`, `sync_state`) is entirely unrelated and free to change — it has its own migration runner and has never held a transaction. Don't confuse the two. Breaking the app-side invariant is a Stage 4 decision, scoped in `specs/06-shared-household-data.md`; don't do it incidentally.
 

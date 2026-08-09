@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:server/src/api.dart';
 import 'package:server/src/auth/auth_service.dart';
 import 'package:server/src/database.dart';
+import 'package:server/src/web_handler.dart';
 import 'package:shelf/shelf.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
@@ -86,6 +87,52 @@ void main() {
   late TestApi api;
   setUp(() => api = TestApi.create());
   tearDown(() => api.dispose());
+
+  group('health', () {
+    test('reports liveness without authentication', () async {
+      final response = await api.send('GET', '/health');
+      expect(response.statusCode, 200);
+      expect((await api.json(response))['status'], 'ok');
+    });
+
+    test('omits the version when no web build is being served', () async {
+      // API-only local dev: WEB_DIR is unset, so there is no version.json to
+      // read and /health must still answer.
+      expect((await api.json(await api.send('GET', '/health')))['version'],
+          isNull);
+    });
+
+    test('reports the version of the web build it is serving', () async {
+      final handler = buildApiRouter(api.authService, api.db, api.dataDir.path,
+              appVersion: '1.0.0-beta.12')
+          .call;
+      final response = await handler(Request('GET', Uri.parse('http://localhost/health')));
+      final body = jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+
+      expect(body['status'], 'ok');
+      expect(body['version'], '1.0.0-beta.12',
+          reason: 'this is the deploy smoke test in DEPLOYMENT.md');
+    });
+
+    test('readWebBuildVersion reads what flutter build web emits', () async {
+      final webDir = Directory.systemTemp.createTempSync('cashew-web-test');
+      addTearDown(() => webDir.deleteSync(recursive: true));
+
+      expect(readWebBuildVersion(webDir.path), isNull,
+          reason: 'no version.json yet');
+
+      File('${webDir.path}/version.json').writeAsStringSync(jsonEncode({
+        'app_name': 'cashew_selfhosted',
+        'version': '1.0.0-beta.12',
+        'build_number': '12',
+      }));
+      expect(readWebBuildVersion(webDir.path), '1.0.0-beta.12');
+
+      File('${webDir.path}/version.json').writeAsStringSync('not json');
+      expect(readWebBuildVersion(webDir.path), isNull,
+          reason: 'a malformed build must not stop the server from starting');
+    });
+  });
 
   group('first-run setup', () {
     test('a fresh instance reports that it needs setup', () async {
