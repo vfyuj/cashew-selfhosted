@@ -42,6 +42,8 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 3. `04-stage-2-instant-sync.md` — incremental sync on top of Stage 1's snapshot-diff, triggered by the same user actions as today (not real-time push — see that file for why).
 4. Stage 3 (public-fork readiness) and Stage 4 (multi-user/ACL) specs are intentionally **not yet written** — they depend on decisions we'll make while executing Stages 1-2, and writing them now risks locking in guesses. Write them when the preceding stage is actually done.
 
+`backlog/` holds product feature requests that are **not** part of this roadmap (budgeting features, UI work). Reviewed but unscheduled — see `backlog/README.md`. Nothing there is approved for implementation, and nothing there should start while it touches tables a live stage is changing.
+
 ## Explicit non-goals (do not build these unless a spec above says to)
 
 - Multi-tenant hosting (many unrelated households on one deployment).
