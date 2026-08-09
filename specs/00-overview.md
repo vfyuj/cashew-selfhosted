@@ -40,7 +40,9 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 1. `02-stage-0-foundations.md` — dev environment, fork identity, empty server skeleton deployed.
 2. `03-stage-1-kill-google.md` — self-hosted auth + repointed snapshot sync/backup. First real release.
 3. `04-stage-2-instant-sync.md` — incremental sync on top of Stage 1's snapshot-diff, triggered by the same user actions as today (not real-time push — see that file for why).
-4. Stage 3 (public-fork readiness) and Stage 4 (multi-user/ACL) specs are intentionally **not yet written** — they depend on decisions we'll make while executing Stages 1-2, and writing them now risks locking in guesses. Write them when the preceding stage is actually done.
+4. `05-accounts-and-admin.md` — first-run setup wizard, account management, instance administration. Revises Stage 1's auth section.
+5. `06-shared-household-data.md` — Stage 4. **Design only, nothing implemented.** Shared dataset, per-user views, private transactions.
+6. Stage 3 (public-fork readiness) is intentionally **not yet written** — it depends on decisions we'll make while executing the earlier stages, and writing it now risks locking in guesses.
 
 `backlog/` holds product feature requests that are **not** part of this roadmap (budgeting features, UI work). Reviewed but unscheduled — see `backlog/README.md`. Nothing there is approved for implementation, and nothing there should start while it touches tables a live stage is changing.
 
@@ -50,4 +52,4 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 - Shared/merged household data before Stage 4.
 - Any Google/Firebase dependency, including as a "fallback."
 - Native iOS build pipeline (unless a future spec revises this).
-- Public self-service registration (see auth design in `03-stage-1-kill-google.md` — accounts are provisioned, not self-registered).
+- Open public registration. Note this is *not* the same as "no registration at all": since `05-accounts-and-admin.md`, a fresh instance lets the first visitor create the administrator account (the Nextcloud/Immich bootstrap model), and that administrator provisions everyone else from inside the app. Setup closes permanently once one account exists. What stays out of scope is an endpoint that lets anyone create an account on an already-running instance.

@@ -35,19 +35,22 @@ Each person gets their own private multi-device sync — this mirrors today's on
 
 ## Auth
 
-No public self-registration. This is a household server with a known, small set of users — an open signup endpoint is an unnecessary attack surface for something meant to be publicly forkable and self-hosted by non-experts. Accounts are provisioned by the server operator via a CLI command.
+> **Superseded in part by `05-accounts-and-admin.md`.** CLI-only provisioning was replaced by a first-run setup wizard plus in-app administration. The session model, hashing choice and endpoint shapes below are unchanged and still authoritative; the provisioning story is not. `bin/create_user.dart` survives as the operator's rescue path for a forgotten administrator password.
 
-- `bin/create_user.dart <email>` — creates a user record, prints a one-time temporary password (or setup link). Run once per person by whoever operates the server.
+No open public registration. This is a household server with a known, small set of users — an endpoint letting anyone create an account on a running instance is unnecessary attack surface for something meant to be publicly forkable and self-hosted by non-experts.
+
 - Sessions use **opaque random tokens stored server-side** (session table: token hash, userId, createdAt, expiresAt), not JWTs — simpler to revoke and audit at this scale, no signing-key management.
 - Password hashing: a vetted algorithm via a maintained package (argon2id or bcrypt) — never hand-rolled.
 
 ### Endpoints
-- `POST /auth/login` `{email, password}` → `{sessionToken, expiresAt}`
+- `POST /auth/login` `{email, password}` → `{sessionToken, expiresAt, user}`
 - `POST /auth/refresh` `{sessionToken}` → `{sessionToken, expiresAt}` (sliding expiry)
 - `POST /auth/logout` `{sessionToken}` → `200`
 
+See `05-accounts-and-admin.md` for the setup, profile and administration endpoints added on top of these.
+
 ### App-side behavior
-- Sign-in screen replaces the Google button with email/password, plus a **server URL field** (not hardcoded — required for the public-fork goal, and for the owner's own multi-environment testing).
+- Sign-in uses email/password plus a **server URL field** on native builds (not hardcoded — required for the public-fork goal, and for the owner's own multi-environment testing). On web the app is served from its own API's origin, so the field is hidden behind an "advanced" disclosure.
 - Per `01-local-first-invariant.md`: failed/expired session never blocks the UI. Silent background re-auth using the refresh token, same non-blocking pattern as today's `signInGoogle(silentSignIn: true, waitForCompletion: false)`.
 
 ## Sync transport (still snapshot-diff — only the transport changes)
@@ -88,9 +91,9 @@ Do not remove or disable the Google-based path until step 5 is verified working 
 ## Non-goals for this stage
 
 - No incremental sync yet — every pull still downloads a full peer snapshot when that peer has any new row (Stage 2).
-- No shared/multi-user data (Stage 4).
-- No admin UI — CLI only.
-- No password reset flow (small known user set; operator re-provisions via CLI if needed. Revisit if Stage 3 makes this public-facing.)
+- No shared/multi-user data (Stage 4 — see `06-shared-household-data.md`).
+- ~~No admin UI — CLI only.~~ Delivered in `05-accounts-and-admin.md`.
+- ~~No password reset flow.~~ Delivered in `05-accounts-and-admin.md`: users change their own password, administrators issue temporary ones. There is still no self-service *forgotten*-password flow (no email sending) — an administrator resets it, or the operator uses the CLI.
 
 ## Acceptance criteria
 

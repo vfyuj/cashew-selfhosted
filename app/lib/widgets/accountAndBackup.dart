@@ -192,7 +192,7 @@ Future<bool> signInGoogle(
 void refreshUIAfterLoginChange() {
   sidebarStateKey.currentState?.refreshState();
   accountsPageStateKey.currentState?.refreshState();
-  settingsGoogleAccountLoginButtonKey.currentState?.refreshState();
+  settingsAccountLoginButtonKey.currentState?.refreshState();
 }
 
 Future<bool> testIfHasGmailAccess() async {
@@ -232,7 +232,9 @@ Future<bool> signInAndSync(BuildContext context,
     {required dynamic Function() next}) async {
   if (selfHostedSession == null) {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => AccountsPage()),
+      // isPushedRoute so a successful sign-in closes this route and lets the
+      // await below resolve. Without it the caller waits forever.
+      MaterialPageRoute(builder: (context) => AccountsPage(isPushedRoute: true)),
     );
     next();
     return selfHostedSession != null;
@@ -596,8 +598,8 @@ Future<void> loadBackup(BuildContext context, BackupTransport client,
   }
 }
 
-class GoogleAccountLoginButton extends StatefulWidget {
-  const GoogleAccountLoginButton({
+class AccountLoginButton extends StatefulWidget {
+  const AccountLoginButton({
     super.key,
     this.navigationSidebarButton = false,
     this.isButtonSelected = false,
@@ -610,19 +612,22 @@ class GoogleAccountLoginButton extends StatefulWidget {
   final String? forceButtonName;
 
   @override
-  State<GoogleAccountLoginButton> createState() =>
-      GoogleAccountLoginButtonState();
+  State<AccountLoginButton> createState() =>
+      AccountLoginButtonState();
 }
 
-class GoogleAccountLoginButtonState extends State<GoogleAccountLoginButton> {
+class AccountLoginButtonState extends State<AccountLoginButton> {
   void refreshState() {
     setState(() {});
   }
 
   void openPage({VoidCallback? onNext}) {
     if (widget.navigationSidebarButton) {
-      pageNavigationFrameworkKey.currentState!
-          .changePage(8, switchNavbar: true);
+      // currentState is null when PageNavigationFramework isn't mounted --
+      // during onboarding and the first-run wizard. Force-unwrapping it here
+      // used to throw instead of doing nothing.
+      pageNavigationFrameworkKey.currentState
+          ?.changePage(8, switchNavbar: true);
       appStateKey.currentState?.refreshAppState();
     } else {
       if (onNext != null) onNext();
@@ -686,7 +691,9 @@ class GoogleAccountLoginButtonState extends State<GoogleAccountLoginButton> {
           )
         : SettingsContainerOpenPage(
             openPage: AccountsPage(),
-            title: widget.forceButtonName ?? selfHostedSession!.email,
+            title: widget.forceButtonName ??
+                cachedServerProfile?.displayName ??
+                selfHostedSession!.email,
             icon: widget.forceButtonName == null
                 ? appStateSettings["outlinedIcons"]
                     ? Icons.person_outlined

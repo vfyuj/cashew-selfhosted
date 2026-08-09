@@ -1,6 +1,7 @@
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/accountsPage.dart';
 import 'package:cashew_selfhosted/pages/autoTransactionsPageEmail.dart';
+import 'package:cashew_selfhosted/pages/serverSetupWizardPage.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/iconObjects.dart';
 import 'package:cashew_selfhosted/struct/keyboardIntents.dart';
@@ -51,8 +52,11 @@ void main() async {
     );
     await EasyLocalization.ensureInitialized();
     sharedPreferences = await SharedPreferences.getInstance();
-    // Local-only read, never blocks on network -- see specs/01-local-first-invariant.md
+    // Local-only reads, never block on network -- see specs/01-local-first-invariant.md.
+    // The cached profile is what lets the account page show the display name
+    // and the admin section offline, with no request at launch.
     await loadPersistedSelfHostedSession();
+    await loadPersistedServerProfile();
     database = await constructDb('db');
     notificationPayload = await initializeNotifications();
     entireAppLoaded = false;
@@ -138,6 +142,10 @@ class App extends StatelessWidget {
               ],
             ),
             EnableSignInWithGoogleFlyIn(),
+            // Above the Row, so it covers the sidebar too -- but still a
+            // sibling of it, so navigatorKey and snackbarKey stay mounted
+            // underneath and the app's navigation helpers keep working.
+            ServerSetupWizardGate(key: serverSetupWizardGateKey),
             GlobalLoadingIndeterminate(key: loadingIndeterminateKey),
             GlobalLoadingProgress(key: loadingProgressKey),
           ],

@@ -26,6 +26,20 @@ The owner has time to test and wants to do it themselves — do not spend agent 
 - `app/` — the Flutter fork (created in Stage 0, package `cashew_selfhosted` / applicationId `com.selfhosted.cashew`; fork name is finalized as "Cashew Selfhosted", so these are no longer placeholders).
 - `server/` — the Dart backend (created in Stage 0; auth/sync/backup endpoints added in Stage 1).
 
+## Hard invariant: upstream database compatibility
+
+The **app's** Drift table/column structure must stay identical to upstream Cashew's (currently `schemaVersionGlobal = 46`, 10 tables). This is what makes an original-Cashew backup importable, and the owner cares about it. Verify with:
+
+```bash
+diff <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" app/lib/database/tables.dart) <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
+```
+
+Empty output = still compatible. Note the pattern is deliberately narrowed to `extends Table` and column declarations: a looser `^class ` also catches the type converters, which legitimately differ from upstream (Stage 2 gave them `with JsonTypeConverter2<...>` for the sync feed's JSON payloads — that changes serialization, not the stored SQLite representation) and produces a false alarm.
+
+The **server's** database (`users`, `sessions`, `sync_records`, `sync_state`) is entirely unrelated and free to change — it has its own migration runner and has never held a transaction. Don't confuse the two. Breaking the app-side invariant is a Stage 4 decision, scoped in `specs/06-shared-household-data.md`; don't do it incidentally.
+
 ## Status
+
+Accounts work landed 2026-08-09 on branch `accounts-setup-wizard-and-admin` (not yet merged): first-run setup wizard where the first user becomes instance administrator, in-app account management (name/email/password), admin user provisioning, and password-manager autofill. Full detail and acceptance criteria in `specs/05-accounts-and-admin.md`. Stage 4 (shared household data, per-user views, private transactions) is now designed but **not implemented** — `specs/06-shared-household-data.md`.
 
 Stage 0 and Stage 1 have initial implementations (last updated 2026-08-08) — the "Status" sections at the top of `specs/02-stage-0-foundations.md` and `specs/03-stage-1-kill-google.md` now use `- [ ]`/`- [x]` checkboxes; check those first before assuming something is or isn't done, and check items off as you complete them instead of re-describing status in prose each session. Short version: `/app` and `/server` exist and build clean (`flutter build apk`/`flutter build web`, `docker compose up`); server auth/sync/backup endpoints work end-to-end (tested via curl); app-side sign-in/sync/backup UI is repointed to the new server, including an optional client-side WebDAV/Nextcloud backup target (not yet verified against a real WebDAV server). `docker-compose.yml` runs a single container — the Dart server compiles the Flutter web build from source and serves both the API and the UI from one port, so there's nothing to path-split behind the reverse proxy; see `DEPLOYMENT.md`. Fork identity (name "Cashew Selfhosted", icon) is finalized. A real bug where restoring a backup or importing a `.sqlite` file didn't propagate to other synced devices has been fixed (rows are now stamped as modified on restore, same as any other write). Not yet done: real home-server deployment (needs the operator's physical server/NPM — see `/DEPLOYMENT.md`), the acceptance-criteria verification pass (now the owner's job to run against a locally-started instance — see "Testing & verification workflow" above, not an agent task), and Stage 2 (incremental sync) — see `specs/04-stage-2-instant-sync.md` for the current plan; an earlier attempt at this was reverted, see "Before changing anything" above.

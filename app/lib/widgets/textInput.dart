@@ -101,6 +101,22 @@ class TextInput extends StatelessWidget {
   final int? maxLength;
   final bool handleOnTapOutside;
 
+  /// What kind of value this field holds, e.g. `[AutofillHints.password]`.
+  ///
+  /// Without this, password managers cannot see the field at all -- on web it
+  /// is also what makes the engine emit a real `<form>` around the hidden
+  /// inputs, which is the thing browsers key their save/fill prompts off.
+  /// Wrap related fields in an `AutofillGroup` for that to take effect.
+  ///
+  /// Never give two fields in the same group the same hint: the web engine
+  /// derives the DOM `id` and `name` from it, so duplicates collide. A
+  /// "confirm password" field should pass null.
+  final Iterable<String>? autofillHints;
+
+  /// An interactive widget for the trailing slot, e.g. a password visibility
+  /// toggle. Distinct from [suffix], which is plain text.
+  final Widget? suffixWidget;
+
   const TextInput({
     Key? key,
     required this.labelText,
@@ -138,6 +154,8 @@ class TextInput extends StatelessWidget {
     this.autocorrect = true,
     this.maxLength,
     this.handleOnTapOutside = true,
+    this.autofillHints,
+    this.suffixWidget,
   }) : super(key: key);
 
   @override
@@ -169,6 +187,7 @@ class TextInput extends StatelessWidget {
               scrollController: scrollController,
               maxLength: maxLength,
               inputFormatters: inputFormatters,
+              autofillHints: autofillHints,
               textInputAction: textInputAction,
               textCapitalization:
                   textCapitalization ?? TextCapitalization.sentences,
@@ -228,24 +247,29 @@ class TextInput extends StatelessWidget {
                 filled: bubbly == false ? true : false,
                 fillColor: Colors.transparent,
                 isDense: true,
-                suffixIconConstraints: BoxConstraints(maxHeight: 20),
-                suffixIcon: bubbly == false || icon == null
-                    ? null
-                    : Padding(
-                        padding: const EdgeInsetsDirectional.only(
-                            end: 13.0, start: 5),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: <Widget>[
-                            Icon(
-                              icon,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.secondary,
+                // The decorative-icon slot is capped at 20px, but an
+                // interactive [suffixWidget] needs a real touch target.
+                suffixIconConstraints: suffixWidget != null
+                    ? const BoxConstraints(minWidth: 44, minHeight: 44)
+                    : BoxConstraints(maxHeight: 20),
+                suffixIcon: suffixWidget ??
+                    (bubbly == false || icon == null
+                        ? null
+                        : Padding(
+                            padding: const EdgeInsetsDirectional.only(
+                                end: 13.0, start: 5),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: <Widget>[
+                                Icon(
+                                  icon,
+                                  size: 20,
+                                  color: Theme.of(context).colorScheme.secondary,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
+                          )),
                 icon: bubbly == false
                     ? icon != null
                         ? Icon(

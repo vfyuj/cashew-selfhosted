@@ -23,6 +23,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Declared explicitly: this fork's self-hosted auth/sync/backup client
+  # (lib/struct/selfHostedClient.dart) and WebDAV client import it directly, so
+  # it must not be left to arrive transitively via another package.
+  http: ^1.1.0
   simple_animations: ^5.0.2
   sa3_liquid: ^1.0.1
   intl: ^0.18.1
@@ -117,6 +121,8 @@ flutter_icons:
     theme_color: "#5f85c2"
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
   drift_dev: ^2.14.0
   build_runner: ^2.4.7
 

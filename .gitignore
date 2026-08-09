@@ -6,3 +6,6 @@
 
 # Personal Claude Code permission grants, not shared config.
 .claude/settings.local.json
+
+# Local test databases created by the runbook in TESTING.md.
+/.testdata*/

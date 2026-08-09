@@ -22,15 +22,35 @@ curl localhost:8080/health   # -> {"status":"ok"}
 curl -I localhost:8080/      # -> HTTP/1.1 200 OK (the app UI)
 ```
 
-## 2. Create your account(s)
+## 2. Create the administrator account — do this promptly
 
-No public self-registration (see specs/03-stage-1-kill-google.md) — provision each person via the CLI baked into the image:
+The first person to open a fresh instance creates its administrator account, the same way Nextcloud and Immich work (see `specs/05-accounts-and-admin.md`). Setup then closes permanently, and that administrator adds everyone else from inside the app — there's no CLI step in the normal path any more.
 
+**This means there is a window, between the container starting and you registering, in which anyone who can reach the server could claim the administrator account.** That's an accepted trade-off, but it makes the order of operations matter: bring the container up and register **before** you point public DNS at it, or immediately after.
+
+Check the state at any time:
+
+```bash
+curl localhost:8080/auth/setup-state
 ```
+
+`{"needsSetup":true}` means nobody has registered yet. If it says `false` and you didn't create that account, someone else did — wipe the data volume (`docker compose down -v`) and start again.
+
+To register, open the app (locally at `http://localhost:8080/`, or via your domain once step 4 is done) and follow the **Set up this server** screen.
+
+### Adding the rest of the household
+
+Once signed in as the administrator: **Account → Manage users → Add user**. It generates a temporary password, shown once — copy it and pass it on. They sign in with it and can change it under **Account → Change password**.
+
+### Rescue path
+
+If the only administrator loses their password and no other administrator can reset it, the CLI is still in the image:
+
+```bash
 docker compose exec app /app/bin/create_user your@email.tld
 ```
 
-This prints a one-time temporary password. There's no password-reset flow — re-run the same command to issue a new temporary password if you lose it. Repeat once per person (e.g. yourself, then your spouse).
+It creates the account if the email is new, or issues a fresh temporary password if it already exists, and prints it either way. `--admin` grants administrator; the very first account created always gets it automatically.
 
 ## 3. Pick a subdomain
 
@@ -74,11 +94,14 @@ Expected: `{"status":"ok"}` with a valid HTTPS certificate (no browser warning).
 
 ## 6. Sign in from the app
 
-Open `https://cashew.yourdomain.tld/` (this is now the app itself — on iPhone, add it to the home screen here for the PWA experience described in `specs/00-overview.md`). In the sign-in screen (Backup page → sign in):
-- There's no server URL field on web — the app already knows it's talking to its own origin.
-- **Email** / **Password**: from step 2. There's no in-app password-change flow yet (see specs/03-stage-1-kill-google.md) — you keep using the temporary password `create_user` printed, or re-run it to issue a new one.
+Open `https://cashew.yourdomain.tld/` (this is now the app itself — on iPhone, add it to the home screen here for the PWA experience described in `specs/00-overview.md`). A fresh install shows the setup/sign-in wizard before anything else:
+- On web there's no server URL field — the app already knows it's talking to its own origin. If you ever need to override that, it's behind "change server address".
+- On the native mobile app (a generic build not tied to any one server), enter `https://cashew.yourdomain.tld` on the first screen.
+- Everyone can change their own name, email and password under **Account**.
 
-On the native mobile app (a generic build that isn't tied to any one server), you'll still enter `https://cashew.yourdomain.tld` manually in that same server URL field the first time.
+**Force SSL matters for password managers.** No browser will offer to save or fill a password over plain `http://`. If you skipped the SSL step, sign-in still works but your password manager will stay silent. Note also that browser *extensions* (1Password, Bitwarden) are unreliable with Flutter web regardless — the browser's own built-in manager, and Android's native autofill, work properly. See `specs/05-accounts-and-admin.md` for the details.
+
+**Nobody is ever forced to sign in.** The wizard always offers "use without an account", and the app is fully usable offline forever if you take it — you can connect a server later from the account page.
 
 ## 7. Record what you used
 
