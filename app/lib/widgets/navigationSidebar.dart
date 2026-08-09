@@ -706,7 +706,8 @@ class NavigationSidebarButton extends StatelessWidget {
                         SizedBox(width: 15),
                         Expanded(
                           child: TextFont(
-                            text: capitalizeLabel ? label.capitalizeFirst : label,
+                            text:
+                                capitalizeLabel ? label.capitalizeFirst : label,
                             fontSize: 16,
                           ),
                         ),

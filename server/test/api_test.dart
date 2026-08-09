@@ -103,13 +103,12 @@ void main() {
     });
 
     test('reports the version of the web build it is serving', () async {
-      final handler =
-          buildApiRouter(api.authService, api.db, api.dataDir.path,
-                  appVersion: '1.0.0-beta.12')
-              .call;
-      final body = jsonDecode(await (await handler(
-              Request('GET', Uri.parse('http://localhost/health'))))
-          .readAsString()) as Map<String, dynamic>;
+      final handler = buildApiRouter(api.authService, api.db, api.dataDir.path,
+              appVersion: '1.0.0-beta.12')
+          .call;
+      final response = await handler(Request('GET', Uri.parse('http://localhost/health')));
+      final body = jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+
       expect(body['status'], 'ok');
       expect(body['version'], '1.0.0-beta.12',
           reason: 'this is the deploy smoke test in DEPLOYMENT.md');
