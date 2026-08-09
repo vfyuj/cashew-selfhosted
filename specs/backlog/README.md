@@ -22,3 +22,4 @@ not scheduled** — nothing in this folder is approved for implementation until 
 | ID | Title | Status | Blocked on |
 |---|---|---|---|
 | [BL-001](BL-001-category-locked-budgets.md) | Category-locked budgets, income-relative targets, planned-vs-actual summary | Reviewed, needs owner decisions | Stage 2 landing; 6 open decisions in §4 |
+| [BL-002](BL-002-onboarding-create-main-account.md) | Onboarding screen 2: "Create a budget" → "Create main account", add What-is-an-Account explainer | Reviewed, needs owner decision | 1 open decision in §4 |
