@@ -11,6 +11,19 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+/// Lets [ServerSetupWizardPage] force this gate to re-evaluate
+/// `hasCompletedServerSetup` immediately, rather than relying solely on the
+/// app-wide `appStateKey.currentState?.refreshAppState()` cascade.
+///
+/// This gate sits directly under `MaterialApp.home` (see the class comment
+/// below) rather than inside an explicit `Navigator` like
+/// `InitialPageRouteNavigator`. In testing, a rebuild triggered from there did
+/// not reliably reach this position live -- the flag was correctly persisted
+/// (a reload always picked it up) but the wizard stayed on screen until then.
+/// A direct, targeted `setState` via this key sidesteps that entirely, the
+/// same pattern already used for `sidebarStateKey` and `accountsPageStateKey`.
+GlobalKey<_ServerSetupWizardGateState> serverSetupWizardGateKey = GlobalKey();
+
 /// Decides whether the first-run server wizard is showing.
 ///
 /// Mounted in main.dart's outermost Stack rather than inside
@@ -19,8 +32,15 @@ import 'package:flutter/material.dart';
 /// inert sidebar visible alongside it. This sits above the whole Row instead
 /// and covers the window, while leaving navigatorKey and snackbarKey mounted
 /// underneath so the app's navigation and snackbar helpers keep working.
-class ServerSetupWizardGate extends StatelessWidget {
+class ServerSetupWizardGate extends StatefulWidget {
   const ServerSetupWizardGate({super.key});
+
+  @override
+  State<ServerSetupWizardGate> createState() => _ServerSetupWizardGateState();
+}
+
+class _ServerSetupWizardGateState extends State<ServerSetupWizardGate> {
+  void refresh() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +130,9 @@ class _ServerSetupWizardPageState extends State<ServerSetupWizardPage> {
   Future<void> _finish() async {
     await updateSettings("hasCompletedServerSetup", true,
         updateGlobalState: true);
+    // Belt-and-suspenders: force the gate to re-check the flag right now,
+    // rather than trusting the app-wide refresh cascade alone to reach it.
+    serverSetupWizardGateKey.currentState?.refresh();
   }
 
   Widget _heading(String title, String description) {

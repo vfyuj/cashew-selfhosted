@@ -1255,5 +1255,6 @@
   "temporary-password": "Temporary password",
   "temporary-password-description": "Give this to {account} so they can sign in.",
   "temporary-password-shown-once": "This is shown only once. You can't see it again, but you can issue a new one at any time.",
-  "copy": "Copy"
+  "copy": "Copy",
+  "session-expired-sign-in-again": "Your session has expired. Sign out and sign in again to continue."
 }

@@ -273,6 +273,14 @@ Future<void> runLiveSyncCycle() async {
     if (session == null) return;
     final client = SelfHostedClient(session);
 
+    // Unawaited: a name/email/role change made on another device is only
+    // ever reflected here via cachedServerProfile, and nothing else refetches
+    // it periodically. Piggybacking on this cycle (which already runs every
+    // 45s, on local changes, and on websocket wake-ups) is what makes those
+    // changes eventually show up on this device without the user having to
+    // do anything -- not instantly, but never "not at all."
+    selfHostedFetchProfile();
+
     // Captured before push/pull so the cursor bump below can never advance
     // past "the moment this cycle started" -- see the race analysis in
     // specs/04-stage-2-instant-sync.md. Any local edit made *during* this

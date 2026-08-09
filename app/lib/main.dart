@@ -145,7 +145,7 @@ class App extends StatelessWidget {
             // Above the Row, so it covers the sidebar too -- but still a
             // sibling of it, so navigatorKey and snackbarKey stay mounted
             // underneath and the app's navigation helpers keep working.
-            const ServerSetupWizardGate(),
+            ServerSetupWizardGate(key: serverSetupWizardGateKey),
             GlobalLoadingIndeterminate(key: loadingIndeterminateKey),
             GlobalLoadingProgress(key: loadingProgressKey),
           ],

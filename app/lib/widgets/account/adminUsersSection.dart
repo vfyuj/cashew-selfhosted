@@ -62,7 +62,14 @@ class _AdminUsersSectionState extends State<AdminUsersSection> {
       }
       setState(() {
         loading = false;
-        errorText = "could-not-load-users".tr();
+        // A null profile here means /auth/me failed too, not just /admin/users
+        // -- the session itself is gone (e.g. revoked by a password change on
+        // another device), not merely "not admin." Say so, since "couldn't
+        // load users" alone reads as a permissions problem the user can't act
+        // on, when what actually helps is signing in again.
+        errorText = profile == null
+            ? "session-expired-sign-in-again".tr()
+            : "could-not-load-users".tr();
       });
       return;
     }
@@ -360,8 +367,12 @@ class _AddUserFormState extends State<_AddUserForm> {
       return;
     }
 
-    popRoute(context);
+    // Show the password dialog *before* popping this sheet, using this
+    // form's own still-valid context -- popping first and then reusing that
+    // same (now-defunct) context to open the next dialog is what left the
+    // password dialog's own Done button unable to find its Navigator.
     await showTemporaryPassword(context, created.user.email, created.temporaryPassword);
+    if (mounted) popRoute(context);
     await widget.onCreated();
   }
 

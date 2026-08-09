@@ -199,6 +199,11 @@ class ServerCredentialsFormState extends State<ServerCredentialsForm> {
     refreshUIAfterLoginChange();
 
     if (!mounted) return;
+    // The success path used to leave `submitting` true forever, relying
+    // entirely on the caller unmounting this form (via onSuccess/popOnSuccess)
+    // to make the disabled button moot. If that unmount is ever delayed or
+    // doesn't happen, the button should still recover rather than stay dead.
+    setState(() => submitting = false);
     widget.onSuccess?.call();
     if (widget.popOnSuccess && mounted) popRoute(context, true);
   }
