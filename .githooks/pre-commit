@@ -31,9 +31,16 @@ if [ ! -f "$PUBSPEC" ]; then
   exit 0
 fi
 
-# The commit already changes the version line -- either a deliberate manual
-# bump (e.g. cutting 1.0.0) or an --amend of a commit this hook already
-# bumped. Either way it isn't ours to second-guess.
+# The commit already changes the version line: a deliberate manual bump, such
+# as cutting 1.0.0. Not ours to second-guess.
+#
+# This does NOT cover `git commit --amend` with nothing else staged -- there
+# the index matches HEAD, so there is no version change to see, and the
+# amended commit gets a further bump. Git gives a pre-commit hook no reliable
+# way to tell an amend from an ordinary commit, and every discriminator that
+# looks like one also matches a normal commit that follows a bumped one.
+# Left alone deliberately: an amend really is a different build, and this
+# counter only has to be unique and increasing, not contiguous.
 if git diff --cached -U0 -- "$PUBSPEC" | grep -q '^+version:'; then
   exit 0
 fi

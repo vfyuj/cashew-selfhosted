@@ -52,11 +52,13 @@ It increments the counter and stages `app/pubspec.yaml` into the commit being ma
 | Situation | Why |
 |---|---|
 | Merge, rebase, cherry-pick, revert in progress | These replay existing commits; bumping would conflict, or inflate the counter once per replayed commit |
-| The commit already changes the `version:` line | A manual bump (e.g. cutting a release) or an `--amend` of a commit that was already bumped |
+| The commit already changes the `version:` line | A deliberate manual bump, e.g. cutting `1.0.0` |
 | `app/pubspec.yaml` has unstaged changes | `git add` would sweep unrelated edits into the commit. Prints a message and skips |
 | Version line missing or non-numeric | Prints a message and skips rather than guessing |
 
 `git commit --no-verify` bypasses it entirely, by design.
+
+**`git commit --amend` bumps again.** With nothing else staged, the index matches HEAD, so there is no version change for the hook to notice, and git offers a pre-commit hook no reliable way to tell an amend from an ordinary commit — every discriminator that looks like one also matches a normal commit following a bumped one. This is accepted rather than worked around: an amended commit really is a different build, and the counter only has to be unique and increasing, not contiguous. Amend freely; the number just moves faster than the commit count.
 
 **Not a validation gate.** The hook never rejects a commit. A stale version number is a much smaller problem than a repo you cannot commit to, and a hook that can block commits is a hook people disable.
 
@@ -108,5 +110,6 @@ After 1.0.0 the hook keeps advancing the build number on every commit (still eno
 - [x] `parseVersionInt` orders betas, releases and the abandoned 5.x lineage correctly (`app/test/version_ordering_test.dart`).
 - [x] `/health` reports the version of the web build actually being served, and still answers when there is no web build (`server/test/api_test.dart`).
 - [x] A normal commit bumps the counter and includes `app/pubspec.yaml` in that same commit.
-- [x] `--amend`, merges and rebases do not bump.
+- [x] Merges, rebases and cherry-picks do not bump; a commit that already changes the version line is left alone; a dirty `pubspec.yaml` skips with a message rather than widening the commit.
+- [x] `--amend` bumps again — known and accepted, see above.
 - [ ] Owner check: redeploy, confirm the sidebar number went up, and confirm the changelog pops once and does not come back.
