@@ -9,6 +9,7 @@ import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
 import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
+import 'package:cashew_selfhosted/widgets/showChangelog.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
 import 'package:cashew_selfhosted/widgets/timeDigits.dart';
 import 'package:cashew_selfhosted/widgets/util/showDatePicker.dart';
@@ -311,9 +312,17 @@ class NavigationSidebarState extends State<NavigationSidebar> {
                                 navBarIconDataKey: "settings",
                                 currentPageIndex: selectedIndex,
                               ),
+                              // The About row doubles as the version readout:
+                              // it is the one place you can check, without
+                              // opening anything, whether the build you are
+                              // looking at is the one you just deployed.
+                              // Tapping it still opens the About page.
+                              // See specs/07-versioning.md.
                               NavigationSidebarButtonWithNavBarIconData(
                                 navBarIconDataKey: "about",
                                 currentPageIndex: selectedIndex,
+                                labelOverride: getVersionStringShort(),
+                                capitalizeLabel: false,
                               ),
                               SyncButton(),
                               SizedBox(height: 10),
@@ -570,18 +579,33 @@ class NavigationSidebarButtonWithNavBarIconData extends StatelessWidget {
     required this.navBarIconDataKey,
     required this.currentPageIndex,
     this.useLongLabel = false,
+    this.labelOverride,
+    this.capitalizeLabel = true,
     super.key,
   });
   final String navBarIconDataKey;
   final int currentPageIndex;
   final bool useLongLabel;
+
+  /// Replaces the label from [navBarIconsData] on this row only, leaving every
+  /// other place that renders the same key (the bottom navigation bar, for
+  /// one) untouched. Used for the About row, which shows the running version
+  /// instead of the word "About".
+  final String? labelOverride;
+
+  /// Set false for labels that must not have their first letter uppercased,
+  /// such as a version string.
+  final bool capitalizeLabel;
+
   @override
   Widget build(BuildContext context) {
     return NavigationSidebarButton(
       icon: navBarIconsData[navBarIconDataKey]!.iconData,
-      label: useLongLabel == true
-          ? navBarIconsData[navBarIconDataKey]!.labelLong.tr()
-          : navBarIconsData[navBarIconDataKey]!.label.tr(),
+      label: labelOverride ??
+          (useLongLabel == true
+              ? navBarIconsData[navBarIconDataKey]!.labelLong.tr()
+              : navBarIconsData[navBarIconDataKey]!.label.tr()),
+      capitalizeLabel: capitalizeLabel,
       isSelected:
           navBarIconsData[navBarIconDataKey]!.navigationIndexedStackIndex ==
               currentPageIndex,
@@ -605,11 +629,17 @@ class NavigationSidebarButton extends StatelessWidget {
     required this.onTap,
     this.trailing = const SizedBox.shrink(),
     this.popRoutes = true,
+    this.capitalizeLabel = true,
   });
 
   final IconData icon;
   final double iconScale;
   final String label;
+
+  /// Nav labels are sentence-cased for display. Set false when the label is
+  /// not a word, e.g. the version string, which must stay "v1.0.0-beta.12"
+  /// rather than becoming "V1.0.0-beta.12".
+  final bool capitalizeLabel;
   final bool isSelected;
   final Widget trailing;
   final Function() onTap;
@@ -676,7 +706,7 @@ class NavigationSidebarButton extends StatelessWidget {
                         SizedBox(width: 15),
                         Expanded(
                           child: TextFont(
-                            text: label.capitalizeFirst,
+                            text: capitalizeLabel ? label.capitalizeFirst : label,
                             fontSize: 16,
                           ),
                         ),

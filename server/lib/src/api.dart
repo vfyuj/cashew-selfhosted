@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -15,11 +17,20 @@ import 'package:server/src/sync/sync_stream_routes.dart';
 /// Kept in `lib/` rather than inline in `bin/server.dart` so tests can exercise
 /// the real routing and middleware composition against an in-memory database,
 /// without binding a port.
-Router buildApiRouter(AuthService authService, Database db, String dataDir) {
+Router buildApiRouter(AuthService authService, Database db, String dataDir,
+    {String? appVersion}) {
   final router = Router();
 
+  // Reports the version of the web build being served alongside liveness, so
+  // `curl .../health` confirms which build a deploy actually landed without
+  // opening a browser -- see DEPLOYMENT.md and specs/07-versioning.md.
+  // Unauthenticated and precomputed: this is a smoke test, on the hot path of
+  // every uptime check.
+  final healthBody = appVersion == null
+      ? '{"status":"ok"}'
+      : jsonEncode({'status': 'ok', 'version': appVersion});
   router.get('/health', (Request request) {
-    return Response.ok('{"status":"ok"}', headers: {'content-type': 'application/json'});
+    return Response.ok(healthBody, headers: {'content-type': 'application/json'});
   });
 
   final authMiddleware = requireAuth(authService);

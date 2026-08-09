@@ -1,0 +1,105 @@
+#!/bin/sh
+# Increments the beta counter in app/pubspec.yaml on every commit, so that
+# every build that gets deployed is visibly distinct. The point is practical:
+# after `git pull && docker compose up --build -d` you can look at the version
+# in the sidebar and know whether the browser is showing the new build or a
+# cached old one. See specs/07-versioning.md.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Skip for one commit:    git commit --no-verify
+#
+# Deliberately no `set -e`. Most of what follows is guard tests whose false
+# branch has to fall through, and under `set -e` a test that returns non-zero
+# aborts the hook -- which git reads as "reject this commit".
+
+PUBSPEC="app/pubspec.yaml"
+
+git_dir=$(git rev-parse --git-dir)
+
+# Replaying or rewriting existing commits. A merge is resolving a bump that
+# already happened on one side; a rebase or cherry-pick would bump once per
+# replayed commit and inflate the counter for work that isn't new.
+if [ -e "$git_dir/MERGE_HEAD" ] ||
+   [ -e "$git_dir/CHERRY_PICK_HEAD" ] ||
+   [ -e "$git_dir/REVERT_HEAD" ] ||
+   [ -d "$git_dir/rebase-merge" ] ||
+   [ -d "$git_dir/rebase-apply" ]; then
+  exit 0
+fi
+
+if [ ! -f "$PUBSPEC" ]; then
+  exit 0
+fi
+
+# The commit already changes the version line -- either a deliberate manual
+# bump (e.g. cutting 1.0.0) or an --amend of a commit this hook already
+# bumped. Either way it isn't ours to second-guess.
+if git diff --cached -U0 -- "$PUBSPEC" | grep -q '^+version:'; then
+  exit 0
+fi
+
+# Unstaged edits to pubspec.yaml would get swept into this commit by the
+# `git add` below. A silently widened commit is worse than a stale version
+# number, so say what happened and leave it alone.
+if ! git diff --quiet -- "$PUBSPEC"; then
+  echo "pre-commit: $PUBSPEC has unstaged changes, skipping the version bump." >&2
+  exit 0
+fi
+
+current=$(sed -n 's/^version: *//p' "$PUBSPEC" | head -n 1)
+if [ -z "$current" ]; then
+  echo "pre-commit: no 'version:' line in $PUBSPEC, skipping the version bump." >&2
+  exit 0
+fi
+
+# 1.0.0-beta.7+7 -> name "1.0.0-beta.7", build "7"
+case "$current" in
+  *+*) name=${current%+*}; build=${current##*+} ;;
+  *)   name=$current;      build=0 ;;
+esac
+
+case "$build" in
+  '' | *[!0-9]*)
+    echo "pre-commit: build number '$build' is not a number, skipping the version bump." >&2
+    exit 0
+    ;;
+esac
+
+next_build=$((build + 1))
+
+case "$name" in
+  *-beta.*)
+    base=${name%-beta.*}
+    beta=${name##*-beta.}
+    case "$beta" in
+      '' | *[!0-9]*)
+        echo "pre-commit: beta counter '$beta' is not a number, skipping the version bump." >&2
+        exit 0
+        ;;
+    esac
+    next_name="$base-beta.$((beta + 1))"
+    ;;
+  *)
+    # Past the beta phase there is no counter left to move, so only the build
+    # number advances -- which is still enough to tell two builds apart.
+    # Choosing the next release number is a deliberate act, not a hook's job.
+    next_name=$name
+    ;;
+esac
+
+new="$next_name+$next_build"
+
+# Write through a temp file in the same directory, then `cat` it back over the
+# original so the file keeps its mode and inode. `sed -i` is not portable
+# between GNU and BSD sed, and this hook has to work on macOS and in CI alike.
+tmp="$PUBSPEC.bump.$$"
+if ! sed "s|^version: .*|version: $new|" "$PUBSPEC" > "$tmp"; then
+  rm -f "$tmp"
+  echo "pre-commit: failed to rewrite $PUBSPEC, skipping the version bump." >&2
+  exit 0
+fi
+cat "$tmp" > "$PUBSPEC"
+rm -f "$tmp"
+
+git add "$PUBSPEC"
+echo "pre-commit: version $current -> $new"

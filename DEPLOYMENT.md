@@ -18,9 +18,11 @@ The build compiles the Flutter web app from source inside Docker (needs to downl
 
 Confirm locally on that machine:
 ```
-curl localhost:8080/health   # -> {"status":"ok"}
+curl localhost:8080/health   # -> {"status":"ok","version":"1.0.0-beta.12"}
 curl -I localhost:8080/      # -> HTTP/1.1 200 OK (the app UI)
 ```
+
+**Confirming a redeploy actually landed.** The version in `/health` is read out of the web build being served, so it is the same number the app shows in its sidebar (bottom row, where "About" used to be). After a `git pull` + rebuild, that number should have gone up; if it hasn't, the rebuild didn't take, and if `curl` shows a higher number than your browser does, the browser is holding a cached build — hard-refresh it. See `specs/07-versioning.md`.
 
 ## 2. Create the administrator account — do this promptly
 
@@ -90,7 +92,7 @@ From a phone on cellular data (not home wifi):
 curl https://cashew.yourdomain.tld/health
 ```
 
-Expected: `{"status":"ok"}` with a valid HTTPS certificate (no browser warning). Then open `https://cashew.yourdomain.tld/` in an actual browser tab — you should see the app UI.
+Expected: `{"status":"ok","version":"..."}` with a valid HTTPS certificate (no browser warning). Then open `https://cashew.yourdomain.tld/` in an actual browser tab — you should see the app UI, with that same version in the sidebar.
 
 ## 6. Sign in from the app
 

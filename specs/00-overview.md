@@ -44,6 +44,8 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 5. `06-shared-household-data.md` — Stage 4. **Design only, nothing implemented.** Shared dataset, per-user views, private transactions.
 6. Stage 3 (public-fork readiness) is intentionally **not yet written** — it depends on decisions we'll make while executing the earlier stages, and writing it now risks locking in guesses.
 
+`07-versioning.md` sits outside the stage sequence: it's the fork's release-numbering contract (`1.0.0-beta.<n>`, auto-bumped per commit, shown in the sidebar), which every stage from here on ships under.
+
 `backlog/` holds product feature requests that are **not** part of this roadmap (budgeting features, UI work). Reviewed but unscheduled — see `backlog/README.md`. Nothing there is approved for implementation, and nothing there should start while it touches tables a live stage is changing.
 
 ## Explicit non-goals (do not build these unless a spec above says to)

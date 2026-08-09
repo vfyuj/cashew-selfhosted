@@ -19,7 +19,9 @@ Future<void> main(List<String> args) async {
   final db = openDatabase(dataDir);
   final authService = AuthService(db);
 
-  final apiHandler = buildApiRouter(authService, db, dataDir).call;
+  final apiHandler = buildApiRouter(authService, db, dataDir,
+          appVersion: webDir == null ? null : readWebBuildVersion(webDir))
+      .call;
   final rootHandler = webDir == null
       ? apiHandler
       : Cascade().add(apiHandler).add(buildWebHandler(webDir)).handler;

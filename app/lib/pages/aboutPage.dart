@@ -89,6 +89,20 @@ class AboutPageState extends State<AboutPage> {
                 maxLines: 5,
               ),
             ),
+            // The fork restarted version numbering at 1.0.0-beta.1, so the
+            // number above no longer says which upstream release this is
+            // built on. Record it here instead.
+            Padding(
+              padding: const EdgeInsetsDirectional.symmetric(
+                  vertical: 0, horizontal: 10),
+              child: TextFont(
+                text: "Based on Cashew " + upstreamBaseVersion,
+                fontSize: 13,
+                textColor: getColor(context, "textLight"),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+              ),
+            ),
           ],
         )
       ],
@@ -716,7 +730,9 @@ void showChangelogForce(BuildContext context) {
   showChangelog(
     context,
     forceShow: true,
-    majorChangesOnly: true,
+    // Was majorChangesOnly, which now yields an empty popup: this fork's
+    // getMajorChanges() is empty, so the full changelog is all there is.
+    majorChangesOnly: false,
     extraWidget: Padding(
       padding: const EdgeInsetsDirectional.only(
         bottom: 10,
