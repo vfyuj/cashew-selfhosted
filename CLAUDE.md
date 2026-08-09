@@ -48,7 +48,7 @@ The **app's** Drift table/column structure must stay identical to upstream Cashe
 diff <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" app/lib/database/tables.dart) <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
 ```
 
-Empty output = still compatible. Note the pattern is deliberately narrowed to `extends Table` and column declarations: a looser `^class ` also catches the type converters, which legitimately differ from upstream (Stage 2 gave them `with JsonTypeConverter2<...>` for the sync feed's JSON payloads — that changes serialization, not the stored SQLite representation) and produces a false alarm.
+Empty output = still compatible. Note `upstream/` is not checked in, so it only exists in the main checkout — from a `.claude/worktrees/` worktree, point the second path at the main checkout's copy. Note the pattern is deliberately narrowed to `extends Table` and column declarations: a looser `^class ` also catches the type converters, which legitimately differ from upstream (Stage 2 gave them `with JsonTypeConverter2<...>` for the sync feed's JSON payloads — that changes serialization, not the stored SQLite representation) and produces a false alarm.
 
 The **server's** database (`users`, `sessions`, `sync_records`, `sync_state`) is entirely unrelated and free to change — it has its own migration runner and has never held a transaction. Don't confuse the two. Breaking the app-side invariant is a Stage 4 decision, scoped in `specs/06-shared-household-data.md`; don't do it incidentally.
 
