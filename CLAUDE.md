@@ -39,7 +39,7 @@ The owner has time to test and wants to do it themselves — do not spend agent 
 - `specs/` — source of truth for what to build. Written for AI agents: precise contracts, explicit non-goals, testable acceptance criteria. Update specs when a decision changes; don't let code and specs drift.
 - `app/` — the Flutter fork (created in Stage 0, package `cashew_selfhosted` / applicationId `com.selfhosted.cashew`; fork name is finalized as "Cashew Selfhosted", so these are no longer placeholders).
 - `server/` — the Dart backend (created in Stage 0; auth/sync/backup endpoints added in Stage 1).
-- `.github/workflows/` — CI (`ci.yml`: `flutter`/`dart analyze` + tests for both `app/` and `server/`, plus a Dockerfile build check) and `build-apk.yml` (builds a debug-signed, sideloadable APK on every push/PR as a downloadable artifact — no keystore secrets configured yet, see the comment in `app/android/app/build.gradle`).
+- `.github/workflows/` — CI (`ci.yml`: `flutter`/`dart analyze` + tests for both `app/` and `server/`, plus a Dockerfile build check) and `build-apk.yml` (builds a debug-mode, sideloadable APK on every push/PR as a downloadable artifact). Debug, not release: `flutter build apk --release` currently fails on a real SDK-35/aapt2 incompatibility, unrelated to this fork's own code — see the Task 1 note in `specs/02-stage-0-foundations.md`.
 
 ## Hard invariant: upstream database compatibility
 
