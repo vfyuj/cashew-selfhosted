@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:isolate';
 import 'dart:math';
@@ -81,6 +83,51 @@ const _sqliteConstraint = 19;
 bool _isUniqueViolation(SqliteException e) =>
     e.resultCode == _sqliteConstraint || e.extendedResultCode == 2067;
 
+/// Runs at most [_limit] tasks at once, queueing the rest.
+///
+/// Guards the bcrypt isolates. Moving hashing off the event loop fixed one
+/// problem (a login freezing every other request) and would have opened
+/// another if left unbounded: each concurrent hash is a whole isolate, so
+/// enough simultaneous attempts would trade a stalled event loop for memory
+/// exhaustion -- worse on a Pi, and worse still under the 512 MB container cap
+/// in docker-compose.yml. Queued callers cost a closure each, not an isolate.
+///
+/// The rate limiter in rate_limiter.dart bounds the *arrival* rate; this
+/// bounds what is in flight regardless of how they arrive.
+class _ConcurrencyGate {
+  final int _limit;
+  int _active = 0;
+  final Queue<Completer<void>> _waiting = Queue<Completer<void>>();
+
+  _ConcurrencyGate(this._limit);
+
+  Future<T> run<T>(Future<T> Function() task) async {
+    if (_active >= _limit) {
+      final waiter = Completer<void>();
+      _waiting.add(waiter);
+      await waiter.future; // a finishing task hands its slot over directly
+    } else {
+      _active++;
+    }
+    try {
+      return await task();
+    } finally {
+      // Pass the slot straight to the next in line rather than releasing and
+      // letting them re-take it; that keeps the active count exact and stops
+      // a burst from slipping past the limit between the two steps.
+      if (_waiting.isNotEmpty) {
+        _waiting.removeFirst().complete();
+      } else {
+        _active--;
+      }
+    }
+  }
+}
+
+/// Four at a time: enough to keep a multi-core Pi busy without letting a burst
+/// of sign-ins turn into a pile of live isolates.
+final _passwordHashingGate = _ConcurrencyGate(4);
+
 class AuthService {
   final Database db;
   AuthService(this.db);
@@ -102,12 +149,13 @@ class AuthService {
   /// unrelated handlers interleave into the open transaction. Hash first, then
   /// do the database work synchronously -- that is why [setupFirstUser] takes
   /// the hash as a parameter rather than calling this mid-transaction.
-  Future<String> hashPassword(String password) =>
-      Isolate.run(() => BCrypt.hashpw(password, BCrypt.gensalt()));
+  Future<String> hashPassword(String password) => _passwordHashingGate
+      .run(() => Isolate.run(() => BCrypt.hashpw(password, BCrypt.gensalt())));
 
   Future<bool> _verifyPassword(String password, String hash) async {
     try {
-      return await Isolate.run(() => BCrypt.checkpw(password, hash));
+      return await _passwordHashingGate
+          .run(() => Isolate.run(() => BCrypt.checkpw(password, hash)));
     } catch (_) {
       return false;
     }
