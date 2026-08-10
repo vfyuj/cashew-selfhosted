@@ -135,6 +135,28 @@ class _ServerSetupWizardPageState extends State<ServerSetupWizardPage> {
     serverSetupWizardGateKey.currentState?.refresh();
   }
 
+  /// Leaves the wizard after a successful sign-in or setup.
+  ///
+  /// `hasOnboarded` is a device-local setting, so without this every device
+  /// added to an existing account walked its owner through onboarding again --
+  /// asking them to create accounts, categories and a budget that were already
+  /// sitting on the server waiting to sync down. If the account already holds
+  /// data, this device has nothing to set up, so onboarding is marked done.
+  ///
+  /// The check is best-effort by design: if the server can't answer, onboarding
+  /// runs, which is skippable in one tap and creates nothing unless the user
+  /// fills something in.
+  Future<void> _finishAfterAuth() async {
+    // Reuse the probing UI while the check is in flight -- the credentials form
+    // has already re-enabled itself by the time it calls back, so without this
+    // the wizard would sit there looking idle for a network round-trip.
+    if (mounted) setState(() => step = _WizardStep.probing);
+    if (await selfHostedAccountHasExistingData()) {
+      await updateSettings("hasOnboarded", true, updateGlobalState: false);
+    }
+    await _finish();
+  }
+
   Widget _heading(String title, String description) {
     return Column(
       children: [
@@ -235,7 +257,7 @@ class _ServerSetupWizardPageState extends State<ServerSetupWizardPage> {
           // UI -- unusable on a screen with no navigation. The main app runs
           // the cloud functions on its first mount anyway.
           runSyncAfterLogin: false,
-          onSuccess: _finish,
+          onSuccess: _finishAfterAuth,
           onSetupUnavailable: () {
             if (mounted) setState(() => step = _WizardStep.signIn);
           },
