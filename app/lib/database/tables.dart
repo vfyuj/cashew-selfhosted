@@ -7227,6 +7227,16 @@ class FinanceDatabase extends _$FinanceDatabase {
     return query.map((row) => row.read(totalCount)).get();
   }
 
+  /// Used to tell a brand-new account from one already in use: an account with
+  /// no transactions has an opening balance to set, not a total to correct.
+  Future<int?> getTotalCountOfTransactionsInWallet(String walletPk) async {
+    final totalCount = transactions.transactionPk.count();
+    final query = selectOnly(transactions)
+      ..where(transactions.walletFk.equals(walletPk))
+      ..addColumns([totalCount]);
+    return await query.map((row) => row.read(totalCount)).getSingle();
+  }
+
   Future<int?> getTotalCountOfTransactionsInBudget(String budgetPk) async {
     final totalCount = transactions.transactionPk.count();
     final query = selectOnly(transactions)

@@ -23,6 +23,6 @@ not scheduled** — nothing in this folder is approved for implementation until 
 | ID | Title | Status | Blocked on |
 |---|---|---|---|
 | [BL-001](BL-001-category-locked-budgets.md) | Category budgets, percent-of-income entry, share-of-plan labels | Implemented 2026-08-09, needs owner acceptance pass | — |
-| [BL-002](BL-002-onboarding-create-main-account.md) | Onboarding screen 2: "Create a budget" → "Create main account", add What-is-an-Account explainer | Reviewed, needs owner decision | 1 open decision in §4 |
+| [BL-002](BL-002-onboarding-create-main-account.md) | Onboarding rework: accounts, income, categories, envelope explainer, skippable steps | **Implemented 2026-08-10** | — |
 | [BL-003](BL-003-upstream-legacy-translations-and-docs.md) | Reminder: decide what to do with upstream-origin translations pipeline and in-app doc/policy links | Reminder / inventory only | Per-item decisions in §3 |
 | [BL-004](BL-004-public-readme-for-selfhosted-deploy.md) | Public README.md for the GitHub repo describing self-hosted deployment | Reviewed, needs owner decisions | 2 open decisions in §5 |

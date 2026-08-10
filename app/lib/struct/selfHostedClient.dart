@@ -785,6 +785,46 @@ Future<(ServerCallResult, T?)> _guarded<T>(Future<T> Function(SelfHostedClient) 
   }
 }
 
+/// Whether this account already holds data on the server -- i.e. whoever just
+/// signed in is adding another device to an account that is already in use,
+/// rather than starting fresh.
+///
+/// Used to decide whether to run onboarding after a sign-in. Answering "no"
+/// is always the safe direction (onboarding is skippable and creates nothing
+/// on its own), so every failure mode -- unreachable, signed out, malformed
+/// response -- deliberately returns false rather than throwing.
+Future<bool> selfHostedAccountHasExistingData() async {
+  final client = _currentClient();
+  if (client == null) return false;
+  // Deliberately shorter than the client's own per-request timeouts: someone
+  // is watching a sign-in complete, and "we couldn't tell" costs them only a
+  // skippable onboarding pass.
+  const budget = Duration(seconds: 8);
+  try {
+    // One row is enough to answer the question; limit=1 keeps this off the
+    // critical path of a sign-in.
+    final feed =
+        await client.pullSyncChanges(since: 0, limit: 1).timeout(budget);
+    if (feed.changes.isNotEmpty) return true;
+  } on SyncRebootstrapRequiredException {
+    // The feed has been reset at some point, which only ever happens to an
+    // account that was already being used.
+    return true;
+  } catch (e) {
+    print("Could not check whether this account has existing data: $e");
+    return false;
+  }
+  try {
+    // Stage 1's whole-database snapshots. An account last used by a build that
+    // predates the row-level feed has these and nothing else.
+    final files = await client.listFiles().timeout(budget);
+    return files.isNotEmpty;
+  } catch (e) {
+    print("Could not list existing sync files: $e");
+    return false;
+  }
+}
+
 /// Refreshes the cached profile. On failure the existing cache is deliberately
 /// left in place -- a network blip must not make the admin section vanish or
 /// the display name blank out.

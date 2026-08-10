@@ -67,6 +67,21 @@ class _AddWalletPageState extends State<AddWalletPage> {
   int selectedDecimals = 2;
   FocusNode _titleFocusNode = FocusNode();
 
+  /// Whether the account being edited has no transactions yet. Null while the
+  /// count is still loading, and for a wallet being created (where
+  /// [isUnusedAccount] already answers true from `widget.wallet == null`).
+  bool? editingWalletIsUnused;
+
+  /// An account with nothing in it has an **opening balance** to set, not a
+  /// total to correct -- "Correct Total Balance" is the right tool only once
+  /// there are transactions to be out of step with.
+  ///
+  /// Onboarding is where this matters: the default "Bank" account is created
+  /// for the user, so it arrives at this page in edit mode with no way to say
+  /// what is actually in it, which is the first thing anyone wants to enter.
+  bool get isUnusedAccount =>
+      widget.wallet == null || editingWalletIsUnused == true;
+
   void setSelectedTitle(String title) {
     setState(() {
       selectedTitle = title;
@@ -95,12 +110,20 @@ class _AddWalletPageState extends State<AddWalletPage> {
         insert: widget.wallet == null, await createTransactionWallet());
 
     // set initial amount
-    if (widget.wallet == null && initialBalance != 0) {
-      if (rowId != null) {
-        final TransactionWallet walletJustAdded =
-            await database.getWalletFromRowId(rowId);
+    if (isUnusedAccount && initialBalance != 0) {
+      // An unused existing account has a balance of 0, so the difference and
+      // the new total are both the entered amount either way -- the only thing
+      // that differs is where the wallet row comes from.
+      final TransactionWallet? target = widget.wallet ??
+          (rowId == null ? null : await database.getWalletFromRowId(rowId));
+      if (target != null) {
         await correctWalletBalance(context, initialBalance, initialBalance,
-            walletJustAdded, DateTime.now(), "");
+            target, DateTime.now(), "");
+        // Consumed -- otherwise saving the page twice (which "Correct Total
+        // Balance" and "Transfer Balance" both do via addWallet(popContext:
+        // false)) would post the opening balance again.
+        initialBalance = 0;
+        editingWalletIsUnused = false;
       }
     }
 
@@ -171,6 +194,12 @@ class _AddWalletPageState extends State<AddWalletPage> {
     Future.delayed(Duration.zero, () async {
       if (widget.runWhenOpen != null) widget.runWhenOpen!();
       walletInitial = await createTransactionWallet();
+      if (widget.wallet != null) {
+        final int count = await database
+                .getTotalCountOfTransactionsInWallet(widget.wallet!.walletPk) ??
+            0;
+        if (mounted) setState(() => editingWalletIsUnused = count <= 0);
+      }
     });
   }
 
@@ -281,6 +310,14 @@ class _AddWalletPageState extends State<AddWalletPage> {
             setState(() {
               initialBalance = amount;
             });
+            // Every other field setter on this page does this, and the opening
+            // balance used to be the one field that could not be the *only*
+            // change: it only existed while creating an account, where naming
+            // the account already enabled the save button. On an existing
+            // empty account it can be the only thing you touch, and without
+            // this the button stays disabled -- populateCurrencies() starts it
+            // off as false on purpose.
+            determineBottomButton();
           },
           next: () async {
             popRoute(context);
@@ -500,7 +537,10 @@ class _AddWalletPageState extends State<AddWalletPage> {
                     ),
                   ),
           ),
-          if (widget.wallet != null)
+          // Hidden while the account has no transactions: there is no total to
+          // correct yet, and the "Starting at" entry below says the same thing
+          // in the words a new user is looking for.
+          if (widget.wallet != null && editingWalletIsUnused == false)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsetsDirectional.only(
@@ -605,7 +645,7 @@ class _AddWalletPageState extends State<AddWalletPage> {
                 }),
               ),
             ),
-          if (widget.wallet == null)
+          if (isUnusedAccount)
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsetsDirectional.only(
