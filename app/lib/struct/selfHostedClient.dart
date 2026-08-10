@@ -4,6 +4,21 @@ import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:http/http.dart' as http;
 
+/// One client for the whole app, rather than `package:http`'s top-level
+/// `http.get`/`http.post` helpers.
+///
+/// Those helpers open a client, send, and close it again for every single
+/// call -- so each one paid a fresh TCP connection and a full TLS handshake.
+/// Live sync makes a steady trickle of small requests forever, and the
+/// handshakes cost far more than the requests do: on the phone it is radio
+/// time and battery, on the server it is asymmetric crypto per poll. Holding
+/// one client lets keep-alive do its job and collapses that to a single
+/// connection.
+///
+/// Never closed: it lives as long as the process. On web this is a
+/// `BrowserClient` and the browser owns the connection pool anyway.
+final http.Client _httpClient = http.Client();
+
 /// Replaces Google Drive's appDataFolder + Firebase Auth for this fork's
 /// self-hosted server (see specs/03-stage-1-kill-google.md). A file here is
 /// identified by its filename alone (unlike Drive's opaque file ids) --
@@ -338,7 +353,7 @@ Future<bool?> selfHostedSetupState(
   if (url.isEmpty) return null;
   try {
     final response =
-        await http.get(Uri.parse('$url/auth/setup-state')).timeout(timeout);
+        await _httpClient.get(Uri.parse('$url/auth/setup-state')).timeout(timeout);
     if (response.statusCode != 200) return null;
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final needsSetup = body['needsSetup'];
@@ -360,7 +375,7 @@ Future<ServerCallResult> selfHostedSetup({
 }) async {
   final url = _normalizeServerUrl(serverUrl);
   try {
-    final response = await http
+    final response = await _httpClient
         .post(
           Uri.parse('$url/auth/setup'),
           headers: {'content-type': 'application/json'},
@@ -403,7 +418,7 @@ Future<ServerCallResult> selfHostedLoginDetailed({
 }) async {
   final url = _normalizeServerUrl(serverUrl);
   try {
-    final response = await http
+    final response = await _httpClient
         .post(
           Uri.parse('$url/auth/login'),
           headers: {'content-type': 'application/json'},
@@ -425,11 +440,39 @@ Future<ServerCallResult> selfHostedLoginDetailed({
 /// sync/backup calls will no-op until the next successful refresh or manual
 /// login, never blocking the app. Mirrors the old
 /// `signInGoogle(silentSignIn: true, waitForCompletion: false)` pattern.
+/// How much of a session's life is allowed to run out before the background
+/// sync cycle bothers renewing it. Sessions last 30 days
+/// (`sessionDuration` in server/lib/src/auth/auth_service.dart), so a device
+/// that syncs at least once a week never lets one lapse.
+const _sessionRenewWithin = Duration(days: 7);
+
+/// Renews the session only when it is actually close to expiring.
+///
+/// The sync cycle used to call [selfHostedRefresh] unconditionally on every
+/// tick, which meant rotating a 30-day token roughly every 45 seconds: a
+/// request, a `DELETE`+`INSERT` on the server's `sessions` table, and a
+/// SharedPreferences write on the device, ~1900 times a day, per device, to
+/// extend an expiry that was never near. On a Raspberry Pi that is a
+/// meaningful share of the SD card's write budget; on a phone it is wasted
+/// radio and flash.
+///
+/// Skipping the renewal is safe because nothing depends on it: [SelfHostedClient]
+/// already refreshes and retries on a 401 (`_withRefreshRetry`), so a token
+/// that goes stale sooner than expected still recovers on its own.
+Future<bool> selfHostedRefreshIfNeeded() async {
+  final session = selfHostedSession;
+  if (session == null) return false;
+  if (session.expiresAt.difference(DateTime.now()) > _sessionRenewWithin) {
+    return true; // plenty of life left
+  }
+  return await selfHostedRefresh();
+}
+
 Future<bool> selfHostedRefresh() async {
   final session = selfHostedSession;
   if (session == null) return false;
   try {
-    final response = await http
+    final response = await _httpClient
         .post(
           Uri.parse('${session.serverUrl}/auth/refresh'),
           headers: {'content-type': 'application/json'},
@@ -452,7 +495,7 @@ Future<bool> selfHostedLogout() async {
   final session = selfHostedSession;
   if (session != null) {
     try {
-      await http.post(
+      await _httpClient.post(
         Uri.parse('${session.serverUrl}/auth/logout'),
         headers: {'content-type': 'application/json'},
         body: jsonEncode({'sessionToken': session.sessionToken}),
@@ -465,6 +508,7 @@ Future<bool> selfHostedLogout() async {
   await _persistSession();
   cachedServerProfile = null;
   await _persistServerProfile();
+  resetProfileFetchThrottle();
   await updateSettings("currentUserEmail", "", updateGlobalState: false);
   await updateSettings("hasSignedIn", false, updateGlobalState: false);
   return true;
@@ -511,7 +555,7 @@ class SelfHostedClient implements BackupTransport {
   }
 
   Future<List<SyncFile>> listFiles() => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .get(Uri.parse('${session.serverUrl}/sync/files'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 20));
@@ -521,7 +565,7 @@ class SelfHostedClient implements BackupTransport {
       });
 
   Future<List<int>> getFile(String filename) => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .get(Uri.parse('${session.serverUrl}/sync/files/$filename'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 60));
@@ -531,7 +575,7 @@ class SelfHostedClient implements BackupTransport {
 
   Future<void> putFile(String filename, List<int> bytes) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .put(Uri.parse('${session.serverUrl}/sync/files/$filename'),
                 headers: _authHeader, body: bytes)
             .timeout(const Duration(seconds: 60));
@@ -539,7 +583,7 @@ class SelfHostedClient implements BackupTransport {
       });
 
   Future<void> deleteFile(String filename) => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .delete(Uri.parse('${session.serverUrl}/sync/files/$filename'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 20));
@@ -547,7 +591,7 @@ class SelfHostedClient implements BackupTransport {
       });
 
   Future<List<SyncFile>> listBackupFiles() => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .get(Uri.parse('${session.serverUrl}/backup/list'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 20));
@@ -558,7 +602,7 @@ class SelfHostedClient implements BackupTransport {
 
   Future<List<int>> getBackupFile(String filename) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .get(Uri.parse('${session.serverUrl}/backup/$filename'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 60));
@@ -568,7 +612,7 @@ class SelfHostedClient implements BackupTransport {
 
   Future<void> putBackupFile(String filename, List<int> bytes) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .put(Uri.parse('${session.serverUrl}/backup/$filename'),
                 headers: _authHeader, body: bytes)
             .timeout(const Duration(seconds: 60));
@@ -577,7 +621,7 @@ class SelfHostedClient implements BackupTransport {
 
   Future<void> deleteBackupFile(String filename) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .delete(Uri.parse('${session.serverUrl}/backup/$filename'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 20));
@@ -590,7 +634,7 @@ class SelfHostedClient implements BackupTransport {
     required List<Map<String, dynamic>> changes,
   }) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .post(Uri.parse('${session.serverUrl}/sync/push'),
                 headers: {..._authHeader, 'content-type': 'application/json'},
                 body: jsonEncode({'deviceId': deviceId, 'changes': changes}))
@@ -605,7 +649,7 @@ class SelfHostedClient implements BackupTransport {
 
   Future<SyncPullResult> pullSyncChanges({required int since, int limit = 500}) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .get(Uri.parse('${session.serverUrl}/sync/pull?since=$since&limit=$limit'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 30));
@@ -630,7 +674,7 @@ class SelfHostedClient implements BackupTransport {
   /// Returns the feed's new starting seq, which the caller stores as its pull
   /// cursor.
   Future<int> resetSyncDatabase() => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .post(Uri.parse('${session.serverUrl}/sync/reset'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 30));
@@ -660,7 +704,7 @@ class SelfHostedClient implements BackupTransport {
   }
 
   Future<ServerProfile> getMe() => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .get(Uri.parse('${session.serverUrl}/auth/me'), headers: _authHeader)
             .timeout(const Duration(seconds: 20));
         _throwUnlessOk(response);
@@ -669,7 +713,7 @@ class SelfHostedClient implements BackupTransport {
 
   Future<ServerProfile> patchMe({String? name, String? email}) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .patch(
               Uri.parse('${session.serverUrl}/auth/me'),
               headers: _jsonHeaders,
@@ -691,7 +735,7 @@ class SelfHostedClient implements BackupTransport {
     required String newPassword,
   }) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .post(
               Uri.parse('${session.serverUrl}/auth/me/password'),
               headers: _jsonHeaders,
@@ -713,7 +757,7 @@ class SelfHostedClient implements BackupTransport {
       });
 
   Future<List<ServerUser>> listUsers() => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .get(Uri.parse('${session.serverUrl}/admin/users'), headers: _authHeader)
             .timeout(const Duration(seconds: 20));
         _throwUnlessOk(response);
@@ -725,7 +769,7 @@ class SelfHostedClient implements BackupTransport {
 
   Future<CreatedUser> createUser({required String email, required String name}) =>
       _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .post(
               Uri.parse('${session.serverUrl}/admin/users'),
               headers: _jsonHeaders,
@@ -741,7 +785,7 @@ class SelfHostedClient implements BackupTransport {
       });
 
   Future<String> resetUserPassword(int userId) => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .post(Uri.parse('${session.serverUrl}/admin/users/$userId/password'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 20));
@@ -751,7 +795,7 @@ class SelfHostedClient implements BackupTransport {
       });
 
   Future<void> deleteUser(int userId) => _withRefreshRetry(() async {
-        final response = await http
+        final response = await _httpClient
             .delete(Uri.parse('${session.serverUrl}/admin/users/$userId'),
                 headers: _authHeader)
             .timeout(const Duration(seconds: 20));
@@ -831,10 +875,42 @@ Future<bool> selfHostedAccountHasExistingData() async {
 Future<ServerProfile?> selfHostedFetchProfile() async {
   final (result, profile) = await _guarded((client) => client.getMe());
   if (result != ServerCallResult.ok || profile == null) return null;
+  _lastProfileFetch = DateTime.now();
   cachedServerProfile = profile;
   await _persistServerProfile();
   await reconcileLocalUsername(newServerName: profile.name);
   return profile;
+}
+
+/// How stale the cached profile is allowed to get before the background sync
+/// cycle refetches it.
+const _profileRefetchInterval = Duration(minutes: 30);
+
+DateTime? _lastProfileFetch;
+
+/// Refetches the account profile, but at most every [_profileRefetchInterval].
+///
+/// The sync cycle piggybacks on this to notice a name/email/role change made
+/// on another device -- nothing else ever refetches it. That only needs to
+/// happen *eventually*, though, and doing it on every 45s tick meant a request
+/// plus a SharedPreferences write roughly 1900 times a day per device to
+/// re-learn a display name that almost never changes.
+///
+/// Anything that changes the profile deliberately (the account page, the admin
+/// screens) still calls [selfHostedFetchProfile] directly and is unaffected.
+Future<void> selfHostedFetchProfileIfStale() async {
+  final last = _lastProfileFetch;
+  if (last != null && DateTime.now().difference(last) < _profileRefetchInterval) {
+    return;
+  }
+  await selfHostedFetchProfile();
+}
+
+/// Forces the next [selfHostedFetchProfileIfStale] to actually go to the
+/// server. Called on sign-out so a different account signing in on this device
+/// can't be served the previous one's cached profile.
+void resetProfileFetchThrottle() {
+  _lastProfileFetch = null;
 }
 
 Future<ServerCallResult> selfHostedUpdateProfile({String? name, String? email}) async {

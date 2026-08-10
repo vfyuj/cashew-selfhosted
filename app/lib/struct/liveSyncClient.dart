@@ -267,19 +267,28 @@ Future<void> runLiveSyncCycle() async {
   if (_liveSyncCycleRunning) return;
   _liveSyncCycleRunning = true;
 
+  // null while no request has been attempted yet, so a cycle that bailed out
+  // before touching the network (no session, nothing to do) doesn't get
+  // counted as the server being unreachable and back the poll off for it.
+  bool? reachedServer;
+
   try {
-    await selfHostedRefresh(); // silent, non-blocking -- see specs/01-local-first-invariant.md
+    // Silent, non-blocking -- see specs/01-local-first-invariant.md. Only
+    // actually hits the network when the session is near expiry; renewing a
+    // 30-day token on every 45s tick was pure overhead at both ends.
+    await selfHostedRefreshIfNeeded();
     final session = selfHostedSession;
     if (session == null) return;
     final client = SelfHostedClient(session);
 
     // Unawaited: a name/email/role change made on another device is only
     // ever reflected here via cachedServerProfile, and nothing else refetches
-    // it periodically. Piggybacking on this cycle (which already runs every
-    // 45s, on local changes, and on websocket wake-ups) is what makes those
-    // changes eventually show up on this device without the user having to
-    // do anything -- not instantly, but never "not at all."
-    selfHostedFetchProfile();
+    // it periodically. Piggybacking on this cycle is what makes those changes
+    // eventually show up on this device without the user having to do
+    // anything -- not instantly, but never "not at all." Rate-limited to once
+    // every 30 minutes inside the callee; a display name does not change often
+    // enough to be worth a request per tick.
+    selfHostedFetchProfileIfStale();
 
     // Captured before push/pull so the cursor bump below can never advance
     // past "the moment this cycle started" -- see the race analysis in
@@ -301,9 +310,11 @@ Future<void> runLiveSyncCycle() async {
           deviceId: clientID,
           changes: localChanges.sublist(i, end),
         );
+        reachedServer = true;
         conflictCount += result.conflictCount;
       } catch (e) {
         print("Live sync push failed: $e");
+        reachedServer ??= false;
         pushOk = false;
         break;
       }
@@ -325,7 +336,11 @@ Future<void> runLiveSyncCycle() async {
       final SyncPullResult result;
       try {
         result = await client.pullSyncChanges(since: pullCursor);
+        reachedServer = true;
       } on SyncRebootstrapRequiredException catch (e) {
+        // A 409 is the server answering, so this counts as reached -- the
+        // connection is fine, it's the cursor that isn't.
+        reachedServer = true;
         // Someone ran Reset Sync. This device's cursors describe a feed that
         // no longer exists, so drop them: resume reading at the feed's new
         // start, and rewind the push cursor to 0 so the whole local database
@@ -337,6 +352,7 @@ Future<void> runLiveSyncCycle() async {
         return;
       } catch (e) {
         print("Live sync pull failed: $e");
+        reachedServer ??= false;
         break; // keep whatever was applied so far; pull cursor already reflects it
       }
       for (final change in result.changes) {
@@ -421,11 +437,18 @@ Future<void> runLiveSyncCycle() async {
     }
   } catch (e) {
     print("Live sync cycle error: $e");
+    reachedServer ??= false;
     if (e is SelfHostedUnauthenticatedException) {
+      // The server answered -- it just rejected the session. Backing the poll
+      // off would be wrong here; this needs the user, not patience.
+      reachedServer = true;
       errorSigningInDuringCloud = true;
     }
   } finally {
     _liveSyncCycleRunning = false;
+    if (reachedServer != null) {
+      _recordCycleOutcome(reachedServer: reachedServer);
+    }
   }
 }
 
@@ -472,29 +495,142 @@ void triggerLiveSyncDebounced() {
   });
 }
 
-Timer? _liveSyncPeriodicTimer;
+Timer? _liveSyncPollTimer;
 WebSocketChannel? _liveSyncSocket;
 Timer? _liveSyncReconnectTimer;
 int _liveSyncReconnectAttempt = 0;
+bool _liveSyncStarted = false;
 
-/// Starts the always-on background machinery: a periodic cycle (also acts as
-/// the socket's reconnect/keepalive poll) plus a best-effort websocket
-/// connection for near-instant wake-ups. Call once at app startup -- every
-/// piece self-guards on `selfHostedSession == null`, so it's harmless to
-/// start before the user has ever signed in.
+/// True only once the server has acknowledged the auth handshake with
+/// `{"type":"ready"}`. A non-null [_liveSyncSocket] means "we opened
+/// something", which is not the same thing -- the socket exists from the
+/// moment `connect` is called, including while a broken or unauthenticated
+/// connection is on its way to failing.
+bool _liveSyncSocketReady = false;
+
+/// Set while the app is backgrounded. Everything that would touch the network
+/// checks this, so a phone in a pocket isn't running sync.
+bool _liveSyncPaused = false;
+
+/// Consecutive cycles that failed to reach the server, used to back the poll
+/// off while offline. Reset by any success, by a resume, and by sign-in.
+int _liveSyncFailureStreak = 0;
+
+/// Poll cadence when the wake-up socket is down and the poll is the *only*
+/// way changes from other devices arrive.
+const _pollIntervalWithoutSocket = Duration(seconds: 45);
+
+/// Poll cadence when the socket is up. It is a backstop then, not the
+/// mechanism -- a push on another device wakes this one over the socket
+/// within a second, so polling every 45s on top of that bought nothing and
+/// cost three requests a minute forever.
+const _pollIntervalWithSocket = Duration(minutes: 5);
+
+/// Ceiling for the offline backoff. Long enough that a phone with no route to
+/// the server stops waking its radio for nothing; short enough that coming
+/// back into range is noticed without the user doing anything (and a resume,
+/// a local edit, or a socket reconnect all short-circuit it anyway).
+const _pollIntervalMax = Duration(minutes: 15);
+
+/// How long to wait before the next poll: the base cadence for the current
+/// socket state, doubled per consecutive failure, capped.
+Duration _nextPollInterval() {
+  final base = _liveSyncSocketReady ? _pollIntervalWithSocket : _pollIntervalWithoutSocket;
+  if (_liveSyncFailureStreak == 0) return base;
+  final backedOff = base * (1 << (_liveSyncFailureStreak.clamp(1, 5) - 1));
+  return backedOff > _pollIntervalMax ? _pollIntervalMax : backedOff;
+}
+
+/// Records whether a cycle managed to talk to the server, so the poll can back
+/// off while there's nothing to talk to. Called by [runLiveSyncCycle].
+void _recordCycleOutcome({required bool reachedServer}) {
+  final previous = _nextPollInterval();
+  if (reachedServer) {
+    _liveSyncFailureStreak = 0;
+  } else if (_liveSyncFailureStreak < 5) {
+    _liveSyncFailureStreak++;
+  }
+  // Only disturb the schedule when the interval actually changed, so a run of
+  // failures at the cap doesn't keep pushing the next attempt away.
+  if (_nextPollInterval() != previous) _scheduleNextPoll();
+}
+
+/// Starts the always-on background machinery: a self-rescheduling poll plus a
+/// best-effort websocket connection for near-instant wake-ups. Call once at
+/// app startup -- every piece self-guards on `selfHostedSession == null`, so
+/// it's harmless to start before the user has ever signed in.
 void startLiveSync() {
-  if (_liveSyncPeriodicTimer != null) return; // idempotent
+  if (_liveSyncStarted) return; // idempotent
+  _liveSyncStarted = true;
   _connectLiveSyncSocket();
-  _liveSyncPeriodicTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+  _scheduleNextPoll();
+  // Catch up once at startup rather than waiting out the first interval.
+  // watchAllForAutoSync used to supply this implicitly, via the initial value
+  // its `.watch()` streams emitted on subscription; it no longer emits one,
+  // and depending on that side effect was never obvious anyway.
+  runLiveSyncCycle();
+}
+
+/// One-shot rather than [Timer.periodic], because the interval is not fixed:
+/// it depends on whether the socket is carrying wake-ups and on how long the
+/// server has been unreachable.
+void _scheduleNextPoll() {
+  _liveSyncPollTimer?.cancel();
+  _liveSyncPollTimer = null;
+  if (_liveSyncPaused || !_liveSyncStarted) return;
+
+  _liveSyncPollTimer = Timer(_nextPollInterval(), () async {
+    if (_liveSyncPaused) return;
     if (selfHostedSession != null && _liveSyncSocket == null) {
       _connectLiveSyncSocket();
     }
-    runLiveSyncCycle();
+    await runLiveSyncCycle();
+    _scheduleNextPoll();
   });
+}
+
+/// Stops all background network activity. Called when the app is backgrounded
+/// (see main.dart): without this the poll kept firing out of sight, which on
+/// Android -- where the process routinely outlives the UI -- meant a phone in
+/// a pocket waking its radio every 45 seconds indefinitely.
+void pauseLiveSync() {
+  _liveSyncPaused = true;
+  _liveSyncPollTimer?.cancel();
+  _liveSyncPollTimer = null;
+  _liveSyncReconnectTimer?.cancel();
+  _liveSyncReconnectTimer = null;
+  _closeLiveSyncSocket();
+}
+
+/// Resumes after [pauseLiveSync] and catches up immediately. Idempotent, and
+/// safe to call without a matching pause -- desktop and web may never report
+/// a paused state at all.
+void resumeLiveSync() {
+  _liveSyncPaused = false;
+  // A resume is a fresh chance: the reason the last attempts failed was very
+  // possibly that the phone was somewhere else entirely.
+  _liveSyncFailureStreak = 0;
+  _liveSyncReconnectAttempt = 0;
+  if (_liveSyncStarted && _liveSyncSocket == null) _connectLiveSyncSocket();
+  _scheduleNextPoll();
+  runLiveSyncCycle();
+}
+
+void _closeLiveSyncSocket() {
+  final socket = _liveSyncSocket;
+  _liveSyncSocket = null;
+  _liveSyncSocketReady = false;
+  if (socket == null) return;
+  try {
+    socket.sink.close();
+  } catch (_) {
+    // Already dead; nothing to do.
+  }
 }
 
 void _connectLiveSyncSocket() {
   if (_liveSyncSocket != null) return;
+  if (_liveSyncPaused) return;
   final session = selfHostedSession;
   if (session == null) return;
 
@@ -509,7 +645,16 @@ void _connectLiveSyncSocket() {
         _liveSyncReconnectAttempt = 0;
         try {
           final data = jsonDecode(message as String) as Map<String, dynamic>;
-          if (data['type'] == 'changed') triggerLiveSyncDebounced();
+          if (data['type'] == 'ready') {
+            // Authenticated: wake-ups will arrive on their own from here, so
+            // the poll can drop back to being a backstop.
+            if (!_liveSyncSocketReady) {
+              _liveSyncSocketReady = true;
+              _scheduleNextPoll();
+            }
+          } else if (data['type'] == 'changed') {
+            triggerLiveSyncDebounced();
+          }
         } catch (_) {
           // Not JSON or not the shape we expect -- ignore, the socket carries
           // no data we depend on beyond the bare "changed" wake-up.
@@ -526,7 +671,15 @@ void _connectLiveSyncSocket() {
 }
 
 void _scheduleLiveSyncReconnect() {
+  final wasReady = _liveSyncSocketReady;
   _liveSyncSocket = null;
+  _liveSyncSocketReady = false;
+  // Losing the socket means the poll is the only path again, so it has to
+  // speed back up -- otherwise a dropped connection would silently leave this
+  // device on the 5-minute backstop cadence.
+  if (wasReady) _scheduleNextPoll();
+
+  if (_liveSyncPaused) return;
   if (selfHostedSession == null) return;
   final attempt = _liveSyncReconnectAttempt.clamp(0, 6);
   _liveSyncReconnectAttempt++;

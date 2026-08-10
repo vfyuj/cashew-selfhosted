@@ -16,6 +16,24 @@ docker compose up --build -d
 
 The build compiles the Flutter web app from source inside Docker (needs to download the Flutter SDK image the first time), so the first `--build` will take noticeably longer than a Dart-only build — that's expected, and it also means any redeploy rebuilds the web UI even if you only changed server code. Re-running `docker compose up --build -d` after a `git pull` is the entire redeploy process; there's no separate manual build-and-copy step.
 
+### If the home server is a Raspberry Pi: build somewhere else
+
+`flutter build web --release` wants roughly 3–4 GB of RAM. On a Pi 4 that either thrashes swap for a very long time or gets OOM-killed part-way through, and on a Pi with less than 4 GB it will not finish at all. This is a *build*-time problem only — the compiled server idles in well under 100 MB, which is why `docker-compose.yml` caps the container at 512 MB.
+
+So build the image on your laptop and push it, rather than building on the Pi:
+
+```bash
+docker buildx build --platform linux/arm64 -t ghcr.io/vfyuj/cashew-selfhosted:latest --push .
+```
+
+Then on the Pi, point `docker-compose.yml` at that image instead of building — swap `build: .` for `image: ghcr.io/vfyuj/cashew-selfhosted:latest` — and redeploy with:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Check `/health` afterwards exactly as above; the version number is still how you confirm the new build actually landed.
+
 Confirm locally on that machine:
 ```
 curl localhost:8080/health   # -> {"status":"ok","version":"1.0.0-beta.12"}
@@ -75,7 +93,10 @@ In the NPM web UI → **Proxy Hosts** → **Add Proxy Host**:
 - **Forward Port**: `8080`
 - **Cache Assets**: off (fine either way, but the app already sets its own no-cache headers on the files that need it — see `server/lib/src/web_handler.dart`)
 - **Block Common Exploits**: on
+- **Compression / gzip**: leave it off. The image ships pre-compressed `.gz` copies of the web build and the server serves those directly (~39 MB of assets down to ~12 MB, `main.dart.js` alone 7.6 MB → 2.0 MB), so there is nothing left for the proxy to usefully compress — and compressing on the fly would put that work back on the Pi's CPU on every request, which is exactly what pre-compressing avoids.
 - **Websockets Support**: **on** — required for live sync's `/sync-stream` endpoint (specs/04-stage-2-instant-sync.md). Sync still works with this off (falls back to a 45s poll), just without the near-instant push.
+
+NPM adds `X-Forwarded-For` on its own, and the server uses it to tell callers apart when rate-limiting sign-in attempts (10 per 5 minutes each, then a `429` for a few minutes — enough that a real person mistyping a password never notices, little enough that nobody can keep the Pi busy hashing passwords). Without that header every request looks like it came from the proxy, so one bad actor would lock the whole household out. If you ever expose port 8080 directly instead of through NPM, set `TRUST_PROXY_HEADER=false` in `docker-compose.yml` — the header is forgeable when nothing trustworthy is setting it.
 
 Under the **SSL** tab:
 - Request a new **Let's Encrypt** certificate for `cashew.yourdomain.tld`

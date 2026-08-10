@@ -17,7 +17,9 @@ import 'package:server/src/database.dart';
 /// Creates the account if the email is new, or issues a fresh temporary
 /// password if it already exists. Either way it prints a password you can sign
 /// in with immediately.
-void main(List<String> args) {
+// async because password hashing now runs on a worker isolate rather than
+// blocking the caller -- see AuthService.hashPassword.
+Future<void> main(List<String> args) async {
   final positional = <String>[];
   var name = '';
   var forceAdmin = false;
@@ -62,7 +64,7 @@ void main(List<String> args) {
     if (existing != null) {
       // Re-running on an existing account rotates its password rather than
       // failing -- this is the whole point of the rescue path.
-      authService.setPassword(existing.id, temporaryPassword);
+      await authService.setPassword(existing.id, temporaryPassword);
       if (forceAdmin && !existing.isAdmin) {
         authService.setAdmin(existing.id, true);
       }
@@ -72,7 +74,7 @@ void main(List<String> args) {
       // The very first account has to be an administrator, or no one could
       // ever administer the instance.
       final isFirstUser = authService.countUsers() == 0;
-      authService.createUser(
+      await authService.createUser(
         email,
         temporaryPassword,
         name: name,

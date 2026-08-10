@@ -7477,17 +7477,34 @@ class FinanceDatabase extends _$FinanceDatabase {
 
   // when a change is made we can listen to it, debounce and sync after debounce timer
   // this is handled in navigationFramework
-  Stream<dynamic> watchAllForAutoSync() {
-    StreamGroup streamGroup = StreamGroup<dynamic>();
-    streamGroup.add(select(transactions).watch());
-    streamGroup.add(select(categories).watch());
-    streamGroup.add(select(wallets).watch());
-    streamGroup.add(select(budgets).watch());
-    streamGroup.add(select(categoryBudgetLimits).watch());
-    streamGroup.add(select(associatedTitles).watch());
-    streamGroup.add(select(objectives).watch());
-    streamGroup.add(select(scannerTemplates).watch());
-    return streamGroup.stream;
+  /// Fires whenever anything sync-relevant changes locally. The payload is
+  /// deliberately ignored by the listener -- all it means is "something
+  /// changed, go run a sync cycle".
+  ///
+  /// Uses drift's raw table-update notifications rather than a group of
+  /// `select(table).watch()` streams. Those re-executed an *unfiltered*
+  /// `SELECT *` and deserialized every row of the table on every write, only
+  /// for the result to be thrown away and debounced into a single boolean.
+  /// With a few thousand transactions that meant re-materializing the whole
+  /// table on every edit -- including on each row a sync pull applied, so
+  /// receiving changes from another device was the worst case. [tableUpdates]
+  /// carries the same signal at no query cost.
+  ///
+  /// One behavioural difference: `.watch()` emitted an initial value on
+  /// subscription and this does not, so the app no longer gets a "change" the
+  /// instant it starts listening. [startLiveSync] runs a cycle at startup
+  /// explicitly instead, which is where that belonged anyway.
+  Stream<Set<TableUpdate>> watchAllForAutoSync() {
+    return tableUpdates(TableUpdateQuery.onAllTables([
+      transactions,
+      categories,
+      wallets,
+      budgets,
+      categoryBudgetLimits,
+      associatedTitles,
+      objectives,
+      scannerTemplates,
+    ]));
   }
 
   // A restored/imported backup replaces this device's whole database via a

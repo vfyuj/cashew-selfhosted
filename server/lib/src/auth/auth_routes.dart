@@ -5,6 +5,7 @@ import 'package:shelf_router/shelf_router.dart';
 
 import 'auth_middleware.dart';
 import 'auth_service.dart';
+import 'rate_limiter.dart';
 
 Response _json(Object body, {int status = 200}) => Response(
       status,
@@ -42,8 +43,15 @@ Response _sessionResponse(Session session, AuthUser user) => _json({
     });
 
 /// Unauthenticated auth surface: login, session lifecycle, and first-run setup.
-Router buildAuthRouter(AuthService authService) {
+///
+/// [passwordAttemptLimiter] guards the two endpoints that run bcrypt. Ten
+/// attempts per five minutes is far above what a household typing a password
+/// wrong needs, and far below what it takes to keep a Raspberry Pi's CPU busy.
+/// Injectable so tests can drive the limit without waiting out a real window.
+Router buildAuthRouter(AuthService authService, {RateLimiter? passwordAttemptLimiter}) {
   final router = Router();
+  final limiter = passwordAttemptLimiter ??
+      RateLimiter(limit: 10, window: const Duration(minutes: 5));
 
   /// Tells a client whether this instance still needs its first account, so it
   /// can show "set up this server" instead of a sign-in form. Deliberately
@@ -55,7 +63,7 @@ Router buildAuthRouter(AuthService authService) {
 
   /// Creates the instance's first account, which becomes its administrator.
   /// Open to anyone until that account exists, then closed permanently.
-  router.post('/setup', (Request request) async {
+  router.post('/setup', rateLimited(limiter, (Request request) async {
     final body = await _readJson(request);
     if (body == null) return _error(400, 'expected a JSON object body');
     final email = _trimmedString(body['email']);
@@ -65,7 +73,7 @@ Router buildAuthRouter(AuthService authService) {
       return _error(400, 'email and password are required');
     }
     try {
-      final (session, user) = authService.setupFirstUser(
+      final (session, user) = await authService.setupFirstUser(
         email: email,
         name: name,
         password: password,
@@ -78,9 +86,9 @@ Router buildAuthRouter(AuthService authService) {
     } on EmailInUseException {
       return _error(409, 'that email is already registered');
     }
-  });
+  }));
 
-  router.post('/login', (Request request) async {
+  router.post('/login', rateLimited(limiter, (Request request) async {
     final body = await _readJson(request);
     if (body == null) return _error(400, 'expected a JSON object body');
     final email = _trimmedString(body['email']);
@@ -89,12 +97,12 @@ Router buildAuthRouter(AuthService authService) {
       return _error(400, 'email and password are required');
     }
     try {
-      final (session, user) = authService.login(email, password);
+      final (session, user) = await authService.login(email, password);
       return _sessionResponse(session, user);
     } on InvalidCredentialsException {
       return _error(401, 'invalid email or password');
     }
-  });
+  }));
 
   router.post('/refresh', (Request request) async {
     final body = await _readJson(request);
@@ -168,7 +176,7 @@ Router buildAccountRouter(AuthService authService) {
       return _error(400, 'currentPassword and newPassword are required');
     }
     try {
-      final session = authService.changePassword(
+      final session = await authService.changePassword(
         currentUser(request).id,
         currentPassword,
         newPassword,
