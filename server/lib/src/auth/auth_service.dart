@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:bcrypt/bcrypt.dart';
@@ -84,11 +85,29 @@ class AuthService {
   final Database db;
   AuthService(this.db);
 
-  String hashPassword(String password) => BCrypt.hashpw(password, BCrypt.gensalt());
+  /// bcrypt, on a worker isolate.
+  ///
+  /// The cost is the point of bcrypt -- a few hundred milliseconds on a
+  /// Raspberry Pi -- but this server is one Dart process on one event loop,
+  /// and the whole sync fleet is queued behind whatever is running on it. Done
+  /// inline, a single login froze every other request for the duration, and a
+  /// handful of login attempts per second was enough to stall the instance
+  /// outright. `Isolate.run` moves that off the loop; spawning the isolate
+  /// costs a few milliseconds against bcrypt's few hundred.
+  ///
+  /// **Callers must not hold a SQLite transaction open across these awaits.**
+  /// Everything else here relies on sqlite3's synchronous API plus the single
+  /// event loop to be race-free (the same property `_nextSeq` in
+  /// sync_routes.dart depends on); an `await` inside `BEGIN`/`COMMIT` would let
+  /// unrelated handlers interleave into the open transaction. Hash first, then
+  /// do the database work synchronously -- that is why [setupFirstUser] takes
+  /// the hash as a parameter rather than calling this mid-transaction.
+  Future<String> hashPassword(String password) =>
+      Isolate.run(() => BCrypt.hashpw(password, BCrypt.gensalt()));
 
-  bool _verifyPassword(String password, String hash) {
+  Future<bool> _verifyPassword(String password, String hash) async {
     try {
-      return BCrypt.checkpw(password, hash);
+      return await Isolate.run(() => BCrypt.checkpw(password, hash));
     } catch (_) {
       return false;
     }
@@ -122,14 +141,28 @@ class AuthService {
       );
 
   /// Creates a user record. Returns the new user's id.
-  int createUser(
+  Future<int> createUser(
     String email,
     String password, {
     String name = '',
     bool isAdmin = false,
-  }) {
+  }) async {
     _requireStrongEnough(password);
-    final passwordHash = hashPassword(password);
+    // Hashed before any database work starts, so the insert below stays a
+    // single synchronous step -- see the note on [hashPassword].
+    final passwordHash = await hashPassword(password);
+    return _insertUser(email, passwordHash, name: name, isAdmin: isAdmin);
+  }
+
+  /// The synchronous half of [createUser], taking an already-computed hash.
+  /// Split out so a caller that needs the insert inside a transaction can hash
+  /// first and keep the transaction free of awaits.
+  int _insertUser(
+    String email,
+    String passwordHash, {
+    String name = '',
+    bool isAdmin = false,
+  }) {
     try {
       db.execute(
         'INSERT INTO users (email, password_hash, created_at, name, is_admin) VALUES (?, ?, ?, ?, ?)',
@@ -165,6 +198,21 @@ class AuthService {
     db.execute('DELETE FROM sessions WHERE user_id = ?', [userId]);
   }
 
+  /// Drops sessions that expired without ever being presented again, and
+  /// returns how many went.
+  ///
+  /// [authenticate] only ever clears the one token in front of it, so a
+  /// session belonging to a device that was wiped, reinstalled or simply never
+  /// opened again is never reached and stays in the table for good. Called at
+  /// startup: cheap, and the table is otherwise append-mostly.
+  int pruneExpiredSessions() {
+    db.execute(
+      'DELETE FROM sessions WHERE expires_at < ?',
+      [DateTime.now().millisecondsSinceEpoch],
+    );
+    return db.updatedRows;
+  }
+
   AuthUser? findUserById(int userId) {
     final rows = db.select(
       'SELECT id, email, name, is_admin FROM users WHERE id = ?',
@@ -184,14 +232,16 @@ class AuthService {
   ///
   /// Returns the user alongside the session so callers can hand the client its
   /// profile without a second round trip.
-  (Session, AuthUser) login(String email, String password) {
+  Future<(Session, AuthUser)> login(String email, String password) async {
     final rows = db.select(
       'SELECT id, email, name, is_admin, password_hash FROM users WHERE email = ?',
       [email],
     );
     if (rows.isEmpty) throw InvalidCredentialsException();
     final passwordHash = rows.first['password_hash'] as String;
-    if (!_verifyPassword(password, passwordHash)) throw InvalidCredentialsException();
+    if (!await _verifyPassword(password, passwordHash)) {
+      throw InvalidCredentialsException();
+    }
     final user = _userFromRow(rows.first);
     return (_issueSession(user.id), user);
   }
@@ -202,17 +252,22 @@ class AuthService {
   /// afterwards -- the same bootstrap model Nextcloud and Immich use. The
   /// count check and the insert are one transaction so two simultaneous
   /// requests can't both believe they are first.
-  (Session, AuthUser) setupFirstUser({
+  Future<(Session, AuthUser)> setupFirstUser({
     required String email,
     required String name,
     required String password,
-  }) {
+  }) async {
     _requireStrongEnough(password);
+    // Hashed before BEGIN, deliberately. The count-then-insert below is only
+    // atomic because it is one uninterrupted synchronous run on the event
+    // loop; an `await` between them would reopen exactly the race this
+    // transaction exists to close. See the note on [hashPassword].
+    final passwordHash = await hashPassword(password);
     late int userId;
     db.execute('BEGIN IMMEDIATE');
     try {
       if (countUsers() > 0) throw SetupAlreadyCompletedException();
-      userId = createUser(email, password, name: name, isAdmin: true);
+      userId = _insertUser(email, passwordHash, name: name, isAdmin: true);
       db.execute('COMMIT');
     } catch (_) {
       db.execute('ROLLBACK');
@@ -271,16 +326,19 @@ class AuthService {
   /// Verifies the current password, sets a new one, and signs every device out
   /// of the account -- then issues one fresh session so the caller's own device
   /// stays signed in.
-  Session changePassword(int userId, String currentPassword, String newPassword) {
+  Future<Session> changePassword(
+      int userId, String currentPassword, String newPassword) async {
     final rows = db.select('SELECT password_hash FROM users WHERE id = ?', [userId]);
     if (rows.isEmpty) throw UserNotFoundException();
-    if (!_verifyPassword(currentPassword, rows.first['password_hash'] as String)) {
+    if (!await _verifyPassword(
+        currentPassword, rows.first['password_hash'] as String)) {
       throw InvalidCredentialsException();
     }
     _requireStrongEnough(newPassword);
+    final newHash = await hashPassword(newPassword);
     db.execute(
       'UPDATE users SET password_hash = ? WHERE id = ?',
-      [hashPassword(newPassword), userId],
+      [newHash, userId],
     );
     revokeAllSessions(userId);
     return _issueSession(userId);
@@ -289,12 +347,13 @@ class AuthService {
   /// Sets a password without knowing the old one. For the admin reset endpoint
   /// and the operator's rescue CLI -- never reachable by the account's own
   /// holder, who must go through [changePassword].
-  void setPassword(int userId, String newPassword) {
+  Future<void> setPassword(int userId, String newPassword) async {
     _requireStrongEnough(newPassword);
     requireUserById(userId);
+    final newHash = await hashPassword(newPassword);
     db.execute(
       'UPDATE users SET password_hash = ? WHERE id = ?',
-      [hashPassword(newPassword), userId],
+      [newHash, userId],
     );
     revokeAllSessions(userId);
   }

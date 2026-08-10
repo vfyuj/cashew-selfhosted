@@ -19,6 +19,14 @@ Future<void> main(List<String> args) async {
   final db = openDatabase(dataDir);
   final authService = AuthService(db);
 
+  // Sessions are only cleared lazily when their own token shows up again, so
+  // anything belonging to a device that never came back would otherwise stay
+  // forever. Startup is the natural place to sweep.
+  final prunedSessions = authService.pruneExpiredSessions();
+  if (prunedSessions > 0) {
+    print('Pruned $prunedSessions expired session(s)');
+  }
+
   // Reported by /health so a deploy can be confirmed without opening the app.
   // Read from the web build itself, so it always matches what the browser gets.
   final appVersion = webDir == null ? null : readWebBuildVersion(webDir);
@@ -28,7 +36,15 @@ Future<void> main(List<String> args) async {
       ? apiHandler
       : Cascade().add(apiHandler).add(buildWebHandler(webDir)).handler;
 
-  final handler = const Pipeline().addMiddleware(logRequests()).addHandler(rootHandler);
+  // On by default: the operator is more likely to need "what did the server
+  // see?" than to need the last few megabytes of SD card. Kept affordable by
+  // log rotation in docker-compose.yml rather than by staying silent. Set
+  // LOG_REQUESTS=false to turn it off entirely.
+  final logRequestsEnabled =
+      (Platform.environment['LOG_REQUESTS'] ?? 'true').toLowerCase() != 'false';
+  final handler = logRequestsEnabled
+      ? const Pipeline().addMiddleware(logRequests()).addHandler(rootHandler)
+      : rootHandler;
 
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
   print('Server listening on port ${server.port}');

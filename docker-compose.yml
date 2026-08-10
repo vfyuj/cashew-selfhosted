@@ -11,7 +11,44 @@ services:
     environment:
       - PORT=8080
       - DATA_DIR=/data
+      # Set to false to silence per-request logging entirely. Left on because
+      # the operator is more likely to need the log than the disk; rotation
+      # below is what keeps it affordable.
+      - LOG_REQUESTS=true
+      # X-Forwarded-For is trusted for rate-limiting identity, which is correct
+      # behind the Nginx Proxy Manager setup DEPLOYMENT.md describes. Set to
+      # false if this port is ever exposed directly, where the header is
+      # attacker-controlled. See server/lib/src/auth/rate_limiter.dart.
+      - TRUST_PROXY_HEADER=true
     restart: unless-stopped
+
+    # Docker's json-file driver keeps every line forever by default. On a Pi
+    # that is a slow, permanent write stream to the SD card and an unbounded
+    # claim on its free space -- capped here at 30 MB total.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # `restart: unless-stopped` covers a crash but not a hang, which is the
+    # failure this catches. Note plain Compose does not restart an unhealthy
+    # container by itself -- this marks it unhealthy so `docker ps` and any
+    # monitoring show it; pair it with something like autoheal if you want the
+    # restart to be automatic. /health is unauthenticated and precomputed, so
+    # polling it costs essentially nothing.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    # A Raspberry Pi has no headroom to give away. Capped so a runaway takes
+    # only itself down instead of the whole box; the server idles far below
+    # this, and the ceiling is really for backup upload/restore, which reads a
+    # whole file into memory.
+    mem_limit: 512m
 
 volumes:
   server-data:

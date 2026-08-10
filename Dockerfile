@@ -9,6 +9,25 @@ COPY app/ .
 RUN flutter pub get
 RUN flutter build web --release
 
+# Pre-compress everything worth compressing, keeping the original beside it
+# (-k) for clients that don't accept gzip. server/lib/src/web_handler.dart
+# serves the .gz when the request allows it.
+#
+# Done here, once per image build, rather than per request: the target is a
+# Raspberry Pi, and gzipping a 7.6 MB main.dart.js on every page load would
+# swap a bandwidth cost for a worse CPU one. Whole build is ~39 MB raw against
+# ~12 MB gzipped.
+#
+# Skips files under 1k (the header outweighs the saving) and formats that are
+# already compressed (png/jpg/webp/woff2/ico) -- gzipping those grows them.
+RUN find build/web -type f -size +1k \
+      \( -name '*.js'    -o -name '*.json' -o -name '*.css' \
+      -o -name '*.html'  -o -name '*.wasm' -o -name '*.ttf' \
+      -o -name '*.otf'   -o -name '*.svg'  -o -name '*.map' \
+      -o -name '*.symbols' \
+      -o -name 'NOTICES' \) \
+      -exec gzip -9 -k {} +
+
 FROM dart:stable AS server-build
 WORKDIR /server
 COPY server/pubspec.* ./
@@ -19,8 +38,10 @@ RUN dart compile exe bin/server.dart -o bin/server
 RUN dart compile exe bin/create_user.dart -o bin/create_user
 
 FROM debian:bookworm-slim
+# curl is here for the container healthcheck in docker-compose.yml (and is
+# handy for poking /health from inside the container when debugging).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libsqlite3-dev ca-certificates \
+    && apt-get install -y --no-install-recommends libsqlite3-dev ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=server-build /server/bin/server /app/bin/server
 COPY --from=server-build /server/bin/create_user /app/bin/create_user

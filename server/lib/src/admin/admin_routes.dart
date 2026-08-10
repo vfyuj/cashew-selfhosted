@@ -57,7 +57,7 @@ Router buildAdminRouter(AuthService authService, String dataDir) {
 
     final temporaryPassword = authService.generateTemporaryPassword();
     try {
-      final id = authService.createUser(
+      final id = await authService.createUser(
         email,
         temporaryPassword,
         name: name,
@@ -72,14 +72,14 @@ Router buildAdminRouter(AuthService authService, String dataDir) {
     }
   });
 
-  router.post('/users/<id>/password', (Request request, String id) {
+  router.post('/users/<id>/password', (Request request, String id) async {
     final userId = int.tryParse(id);
     if (userId == null) return _error(400, 'invalid user id');
     final temporaryPassword = authService.generateTemporaryPassword();
     try {
       // Also signs that user's devices out -- a reset that left old sessions
       // alive would not actually take the account back.
-      authService.setPassword(userId, temporaryPassword);
+      await authService.setPassword(userId, temporaryPassword);
       return _json({'temporaryPassword': temporaryPassword});
     } on UserNotFoundException {
       return _error(404, 'user not found');

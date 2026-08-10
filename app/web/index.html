@@ -66,28 +66,21 @@
       }
     }
   </style>
-  <script type="module">
-    // Import the functions you need from the SDKs you need
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-    import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+  <!--
+    Upstream hand-loaded the Firebase JS SDK here, from Google's CDN, and
+    initialized a second JS-side app against upstream's own Firebase project.
+    Removed: it was three blocking requests to www.gstatic.com on every page
+    load, for an app instance nothing in this fork ever read.
 
-    // TODO: Add SDKs for Firebase products that you want to use
-    // https://firebase.google.com/docs/web/setup#available-libraries
-  
-    // Your web app's Firebase configuration
-    const firebaseConfig = {
-      apiKey: "AIzaSyBGiaRl72d4k3Ki0dh8ra-gU4v2z04CgIw",
-      authDomain: "budget-app-flutter.firebaseapp.com",
-      projectId: "budget-app-flutter",
-      storageBucket: "budget-app-flutter.appspot.com",
-      messagingSenderId: "267621253497",
-      appId: "1:267621253497:web:12558fe9abebf7fa842fa8"
-    };
-  
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-  </script>
+    Nothing needs to replace it. The `firebase_core_web` plugin injects the
+    SDK it wants at runtime by itself, and it explicitly asks that manual
+    <script> tags for the SDK be removed -- having both is a version conflict
+    it warns about, not a belt-and-braces.
+
+    The Dart-side Firebase/Google dependency is a separate matter: it is still
+    genuinely used by the opt-in Gmail receipt scanning, Drive attachment and
+    shared-budget paths inherited from upstream. See specs/03-stage-1-kill-google.md.
+  -->
   <script defer src="sql-wasm.js"></script>
   <div id="loading">
     <style>
