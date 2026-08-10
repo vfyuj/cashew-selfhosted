@@ -162,10 +162,15 @@ class App extends StatelessWidget {
           updateGlobalAppLifecycleState: true,
           onAppResume: () async {
             await setHighRefreshRate();
-            // Catch up immediately on resume rather than waiting for the
-            // next periodic tick -- see specs/04-stage-2-instant-sync.md.
-            runLiveSyncCycle();
+            // Restarts the poll and the wake-up socket, then catches up
+            // immediately rather than waiting for the next tick.
+            // See specs/04-stage-2-instant-sync.md.
+            resumeLiveSync();
           },
+          // Backgrounded: stop polling and drop the socket. On Android the
+          // process commonly outlives the UI, so without this the phone kept
+          // syncing on a timer in someone's pocket.
+          onAppPaused: () => pauseLiveSync(),
           child: InitializeBiometrics(
             child: InitializeNotificationService(
               child: InitializeAppLinks(
