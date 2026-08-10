@@ -25,17 +25,18 @@ jobs:
           channel: "stable"
           cache: true
       - run: flutter pub get
-      # No android/key.properties in this repo (it's gitignored — see
-      # android/app/build.gradle) and no signing secrets are configured here,
-      # so this falls back to debug signing and produces an unsigned-for-release,
-      # but fully installable, test APK. Good for sideloading during
-      # development; once the owner generates a real signing key for
-      # "self-signed" distribution (specs/00-overview.md), wire it in here via
-      # repo secrets (keystore + key.properties contents) to get a properly
-      # signed release build from CI too.
-      - run: flutter build apk --release
+      # --debug, not --release: the sqlite3_flutter_libs plugin's own
+      # android/build.gradle requires compileSdk 35, and this Flutter/AGP
+      # toolchain's aapt2 can't parse the Android 35 platform jar during the
+      # release-only verifyReleaseResources task (fails identically on a
+      # clean runner and on a local machine — not an environment quirk).
+      # Debug mode skips that task entirely and is the last build mode
+      # actually verified end-to-end (see specs/03-stage-1-kill-google.md).
+      # A real release/signed APK build is a separate, pre-existing gap,
+      # tracked as its own problem rather than papered over here.
+      - run: flutter build apk --debug
       - uses: actions/upload-artifact@v4
         with:
           name: cashew-selfhosted-${{ github.sha }}
-          path: app/build/app/outputs/flutter-apk/app-release.apk
+          path: app/build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 30

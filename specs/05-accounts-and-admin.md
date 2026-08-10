@@ -25,7 +25,7 @@ Revises Stage 1's provisioning story. Read `01-local-first-invariant.md` first �
 ### Not done
 - [ ] Owner acceptance pass — see "Acceptance criteria" below. Needs a real deployed server.
 - [ ] Translations are **English only**. The other 46 languages fall back to English until the maintainer's CSV pipeline is re-run.
-- [ ] `flutter build apk` not re-run since these changes (web build is the one verified).
+- [x] `flutter build apk --debug` re-run 2026-08-10 via CI and succeeds. `--release` does not — see the SDK-35/aapt2 gap logged in `specs/02-stage-0-foundations.md` Task 1, unrelated to these changes.
 
 ## The bootstrap model
 
