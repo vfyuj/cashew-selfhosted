@@ -1279,5 +1279,14 @@
   "onboarding-no-income-categories": "You don't have any income categories yet, so there is nothing to plan here.",
   "onboarding-add-income-category": "Add Income Category",
   "onboarding-no-expense-categories": "You don't have any expense categories yet, so there is nothing to plan here.",
-  "onboarding-add-expense-category": "Add Expense Category"
+  "onboarding-add-expense-category": "Add Expense Category",
+  "general-settings": "General Settings",
+  "general-settings-description": "Biometric lock, home screen, notifications",
+  "theme-and-style": "Theme & Style",
+  "theme-and-style-description": "Theme color, icon style, animations, font",
+  "transactions-settings-description": "New transaction, accounts, budgets, goals",
+  "localization-and-formatting": "Localization & Formatting",
+  "localization-and-formatting-description": "Language, currency, formatting",
+  "import-and-export-data": "Import & Export Data",
+  "import-and-export-data-description": "Import CSV, backup data"
 }

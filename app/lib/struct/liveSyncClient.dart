@@ -425,16 +425,12 @@ Future<void> runLiveSyncCycle() async {
       ));
     }
 
-    if (conflictCount > 0) {
-      openSnackbar(SnackbarMessage(
-        title: conflictCount == 1
-            ? "1 change was overwritten by a newer edit from another device"
-            : "$conflictCount changes were overwritten by newer edits from another device",
-        icon: appStateSettings["outlinedIcons"] == true
-            ? Icons.sync_problem_outlined
-            : Icons.sync_problem_rounded,
-      ));
-    }
+    // Deliberately not surfaced: conflictCount is just last-write-wins doing
+    // its job. It fires on the ordinary cases -- signing in on a new browser,
+    // or a device catching up after being away -- where nothing is actually
+    // lost and there is nothing for the user to do, so the warning only ever
+    // read as alarming. skippedChanges above is different and still shown:
+    // that one means a row could not be read at all.
   } catch (e) {
     print("Live sync cycle error: $e");
     reachedServer ??= false;

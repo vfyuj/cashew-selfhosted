@@ -715,3 +715,55 @@ class SettingsHeader extends StatelessWidget {
     );
   }
 }
+
+/// Groups consecutive settings rows into one rounded card with hairline
+/// dividers between them, so the settings pages read as a few labelled groups
+/// rather than one long undifferentiated list.
+///
+/// Entries are `Widget?` on purpose: a conditionally-hidden row passes `null`
+/// rather than `SizedBox.shrink()`, so it is dropped *before* dividers are
+/// inserted. Passing a shrunk box instead leaves a stray divider with nothing
+/// between it and the next one.
+class SettingsGroup extends StatelessWidget {
+  const SettingsGroup({
+    required this.children,
+    this.padding,
+    Key? key,
+  }) : super(key: key);
+
+  final List<Widget?> children;
+  final EdgeInsetsDirectional? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> rows = children.whereType<Widget>().toList();
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    final List<Widget> laidOut = [];
+    for (int i = 0; i < rows.length; i++) {
+      if (i > 0)
+        laidOut.add(Container(
+          height: 1,
+          margin: const EdgeInsetsDirectional.only(start: 18, end: 18),
+          color: getColor(context, "dividerColor"),
+        ));
+      laidOut.add(rows[i]);
+    }
+
+    return Padding(
+      padding: padding ??
+          const EdgeInsetsDirectional.symmetric(horizontal: 13, vertical: 5),
+      child: ClipRRect(
+        borderRadius: BorderRadiusDirectional.circular(
+            getPlatform() == PlatformOS.isIOS ? 12 : 18),
+        child: Container(
+          color: getColor(context, "lightDarkAccentHeavyLight"),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: laidOut,
+          ),
+        ),
+      ),
+    );
+  }
+}
