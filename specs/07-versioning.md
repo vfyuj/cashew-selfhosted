@@ -78,6 +78,8 @@ Format:
 
 `getMajorChanges()` (the highlighted, tappable cards above the bullets) is empty. Upstream's entries were all `.tr()` keys and could not be carried over. It remains as an extension point.
 
+This section covers *mechanics* only — the file, the parser, the format. For guidance on *what* to actually write (how to decide something's worth a section, how to phrase it, how much is too much), see `08-release-notes-style.md`.
+
 ### Version ordering
 
 `parseVersionInt()` maps a version string to a comparable integer with semver ordering: `1.0.0-beta.1 < 1.0.0-beta.2 < 1.0.0 < 1.0.1`. A release outranks every pre-release of the same `major.minor.patch`.

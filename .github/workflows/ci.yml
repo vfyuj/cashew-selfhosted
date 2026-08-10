@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App — analyze & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          # Pinned to match the Dockerfile's `ghcr.io/cirruslabs/flutter` tag,
+          # so CI and the real deploy build with the same toolchain.
+          flutter-version: "3.19.6"
+          channel: "stable"
+          cache: true
+      - run: flutter pub get
+      # --no-fatal-infos/--no-fatal-warnings: this fork carries ~260 pre-existing
+      # warning/info-level issues (mostly inside vendored, modified packages
+      # under packages/), zero of which are errors. Flutter treats warnings and
+      # infos as fatal by default, which would make every run red for reasons
+      # unrelated to whatever the run is actually checking. Real errors (the
+      # "doesn't even compile" bar from CLAUDE.md) still fail the build.
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter test
+
+  server:
+    name: Server — analyze & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - run: dart pub get
+      - run: dart analyze
+      - run: dart test
+
+  docker-build:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No push here — this only confirms the production Dockerfile (Flutter
+      # web build + Dart server build, see /Dockerfile) still builds clean.
+      # Publishing an image is a separate, deliberate step, not part of CI.
+      - run: docker build -t cashew-selfhosted:ci .
