@@ -1,0 +1,41 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.6"
+          channel: "stable"
+          cache: true
+      - run: flutter pub get
+      # No android/key.properties in this repo (it's gitignored — see
+      # android/app/build.gradle) and no signing secrets are configured here,
+      # so this falls back to debug signing and produces an unsigned-for-release,
+      # but fully installable, test APK. Good for sideloading during
+      # development; once the owner generates a real signing key for
+      # "self-signed" distribution (specs/00-overview.md), wire it in here via
+      # repo secrets (keystore + key.properties contents) to get a properly
+      # signed release build from CI too.
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cashew-selfhosted-${{ github.sha }}
+          path: app/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
