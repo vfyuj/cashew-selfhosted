@@ -101,8 +101,7 @@ class _ImportCSVState extends State<ImportCSV> {
     return null;
   }
 
-  Future<void> _assignColumns(String csvString,
-      {bool importFromSheets = false}) async {
+  Future<void> _assignColumns(String csvString) async {
     try {
       List<List<String>> fileContents = CsvToListConverter().convert(
         csvString,
@@ -193,36 +192,6 @@ class _ImportCSVState extends State<ImportCSV> {
         assignedColumns[key]!["setHeaderIndex"] =
             _getHeaderIndex(headers, setHeaderValue);
       }
-
-      // Skip assigning columns, if they used the template this will succeed
-      if (importFromSheets) {
-        try {
-          await _importEntries(assignedColumns, dateFormat, fileContents,
-              noPop: true);
-          return;
-        } catch (e) {
-          openPopup(
-            context,
-            icon: appStateSettings["outlinedIcons"]
-                ? Icons.warning_outlined
-                : Icons.warning_rounded,
-            title: "csv-error".tr(),
-            description: "consider-csv-template".tr() + "\n" + e.toString(),
-            onCancelWithBoxContext: (BuildContext boxContext) async {
-              await importFromSheets
-                  ? getGoogleSheetTemplate(context)
-                  : saveSampleCSV(boxContext: boxContext);
-              popRoute(context);
-            },
-            onCancelLabel: "get-template".tr(),
-            onSubmit: () {
-              popRoute(context);
-            },
-            onSubmitLabel: "ok".tr(),
-          );
-        }
-      }
-
       GlobalKey<_CustomDateFormatInputState> customDateFormatKey = GlobalKey();
       Color containerColor = appStateSettings["materialYou"]
           ? dynamicPastel(
@@ -396,9 +365,7 @@ class _ImportCSVState extends State<ImportCSV> {
                         onSubmitLabel: "ok".tr(),
                         onCancelWithBoxContext:
                             (BuildContext boxContext) async {
-                          await importFromSheets
-                              ? getGoogleSheetTemplate(context)
-                              : saveSampleCSV(boxContext: boxContext);
+                          await saveSampleCSV(boxContext: boxContext);
                           popRoute(context);
                         },
                         onCancelLabel: "get-template".tr(),
@@ -519,80 +486,6 @@ class _ImportCSVState extends State<ImportCSV> {
     return "";
   }
 
-  _enterGoogleSheetURL() {
-    // print(DateTime.now().toString());
-    openBottomSheet(
-      context,
-      popupWithKeyboard: true,
-      PopupFramework(
-        title: "enter-google-sheet-url".tr(),
-        subtitle: "enter-google-sheet-url-description".tr(),
-        child: SelectText(
-          buttonLabel: "import".tr(),
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.link_outlined
-              : Icons.link_rounded,
-          setSelectedText: (_) {},
-          nextWithInput: (url) async {
-            String? csvString;
-            await openLoadingPopupTryCatch(() async {
-              String? csvURL = convertGoogleSheetsUrlToCsvUrl(url);
-              csvString = await fetchDataFromCsvUrl(csvURL);
-            }, onError: (e) {
-              openPopup(
-                context,
-                title: "csv-error".tr(),
-                description: "consider-csv-template".tr() + "\n" + e.toString(),
-                onCancelWithBoxContext: (BuildContext boxContext) async {
-                  await saveSampleCSV(boxContext: boxContext);
-                  popRoute(context);
-                },
-                onCancelLabel: "get-template".tr(),
-                icon: appStateSettings["outlinedIcons"]
-                    ? Icons.error_outlined
-                    : Icons.error_rounded,
-                onSubmitLabel: "ok".tr(),
-                onSubmit: () {
-                  popRoute(context);
-                },
-                barrierDismissible: false,
-              );
-            });
-            if (csvString != null) {
-              _assignColumns(csvString!, importFromSheets: true);
-            }
-          },
-          placeholder:
-              "https://docs.google.com/spreadsheets/d/1Eiib2fiaC8SNdau8T8TBQql-wyWXVYOLJY-7Ycuky4I/edit?usp=sharing",
-          autoFocus: true,
-        ),
-      ),
-    );
-  }
-
-  String? convertGoogleSheetsUrlToCsvUrl(String googleSheetsUrl) {
-    List<String> parts = googleSheetsUrl.split("/");
-    int index = parts.indexOf("d");
-    if (index != -1 && index + 1 < parts.length) {
-      String spreadsheetId = parts[index + 1];
-      String csvUrl =
-          "https://docs.google.com/spreadsheets/d/$spreadsheetId/gviz/tq?tqx=out:csv";
-      return csvUrl;
-    }
-    throw ("Error parsing URL");
-  }
-
-  Future<String?> fetchDataFromCsvUrl(String? csvUrl) async {
-    if (csvUrl == null) throw ("URL Parsing error.");
-    final response = await http.get(Uri.parse(csvUrl));
-    if (response.statusCode == 200) {
-      String data = response.body;
-      return data;
-    } else {
-      throw ("HTTP Request failed with status code: ${response.statusCode}");
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -627,31 +520,6 @@ class _ImportCSVState extends State<ImportCSV> {
               text: "template".tr(),
             );
           }),
-        ),
-        SettingsContainer(
-          onTap: () async {
-            await _enterGoogleSheetURL();
-          },
-          title: "import-google-sheet".tr(),
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.table_chart_outlined
-              : Icons.table_chart_rounded,
-          afterWidget: LowKeyButton(
-            onTap: () async {
-              getGoogleSheetTemplate(context);
-            },
-            extraWidget: Padding(
-              padding: const EdgeInsetsDirectional.only(start: 4),
-              child: Icon(
-                appStateSettings["outlinedIcons"]
-                    ? Icons.open_in_new_outlined
-                    : Icons.open_in_new_rounded,
-                size: 18,
-                color: getColor(context, "black").withOpacity(0.5),
-              ),
-            ),
-            text: "template".tr(),
-          ),
         ),
       ],
     );
@@ -779,28 +647,6 @@ class _CustomDateFormatInputState extends State<CustomDateFormatInput> {
       ],
     );
   }
-}
-
-getGoogleSheetTemplate(BuildContext context) {
-  openUrl(
-      "https://docs.google.com/spreadsheets/d/1Eiib2fiaC8SNdau8T8TBQql-wyWXVYOLJY-7Ycuky4I/edit?usp=sharing");
-  openPopup(
-    context,
-    icon: appStateSettings["outlinedIcons"]
-        ? Icons.table_chart_outlined
-        : Icons.table_chart_rounded,
-    title: "create-template-copy".tr(),
-    description: "create-template-copy-description".tr(),
-    onSubmit: () {
-      popRoute(context);
-    },
-    onSubmitLabel: "ok".tr(),
-    onCancel: () {
-      openUrl(
-          "https://support.google.com/docs/answer/49114?hl=en&co=GENIE.Platform%3DDesktop#zippy=%2Cmake-a-copy-of-a-file#:~:text=Make%20a%20copy%20of%20a%20file");
-    },
-    onCancelLabel: "help".tr(),
-  );
 }
 
 Future saveSampleCSV({required BuildContext boxContext}) async {

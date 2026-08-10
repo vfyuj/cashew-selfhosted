@@ -7,7 +7,16 @@ FROM ghcr.io/cirruslabs/flutter:3.19.6 AS web-build
 WORKDIR /web
 COPY app/ .
 RUN flutter pub get
-RUN flutter build web --release
+# Default ("auto") renderer, deliberately: --web-renderer html was tried and
+# reverted because the owner disliked how it rendered. See
+# specs/03-stage-1-kill-google.md.
+#
+# FLUTTER_WEB_CANVASKIT_URL points the engine at the CanvasKit copy Flutter
+# already writes into build/web/canvaskit/. Without it the CanvasKit renderer
+# fetches canvaskit.js -- several MB -- from www.gstatic.com on every launch.
+# That was the large, blocking Google request, and it stays fixed here.
+RUN flutter build web --release \
+      --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/
 
 # Pre-compress everything worth compressing, keeping the original beside it
 # (-k) for clients that don't accept gzip. server/lib/src/web_handler.dart

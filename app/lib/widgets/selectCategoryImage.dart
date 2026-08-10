@@ -4,7 +4,6 @@ import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
 import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
-import 'package:cashew_selfhosted/widgets/ratingPopup.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
 import 'package:cashew_selfhosted/struct/iconObjects.dart';
 import 'package:cashew_selfhosted/widgets/textInput.dart';
@@ -207,10 +206,6 @@ class _SelectCategoryImageState extends State<SelectCategoryImage> {
                   }),
                 )
               : SizedBox.shrink(),
-          Padding(
-            padding: const EdgeInsetsDirectional.only(top: 8.0),
-            child: SuggestIcon(),
-          ),
         ],
       ),
     );
@@ -258,116 +253,6 @@ class UseEmoji extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class SuggestIcon extends StatelessWidget {
-  const SuggestIcon({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tappable(
-      onTap: () {
-        openBottomSheet(
-          context,
-          SuggestIconPopup(),
-          popupWithKeyboard: true,
-          reAssignBottomSheetControllerGlobal: false,
-          useCustomController: true,
-        );
-      },
-      color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.7),
-      borderRadius: 15,
-      child: Padding(
-        padding: const EdgeInsetsDirectional.only(
-            start: 15, end: 10, top: 12, bottom: 12),
-        child: Row(
-          children: [
-            Padding(
-              padding: const EdgeInsetsDirectional.only(end: 12),
-              child: Icon(
-                appStateSettings["outlinedIcons"]
-                    ? Icons.reviews_outlined
-                    : Icons.reviews_rounded,
-                color: Theme.of(context).colorScheme.secondary,
-                size: 31,
-              ),
-            ),
-            Expanded(
-              child: TextFont(
-                textColor: Theme.of(context).colorScheme.onSecondaryContainer,
-                text: "icon-suggestion-details".tr(),
-                maxLines: 5,
-                fontSize: 14,
-              ),
-            ),
-            Icon(
-              appStateSettings["outlinedIcons"]
-                  ? Icons.chevron_right_outlined
-                  : Icons.chevron_right_rounded,
-              size: 25,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class SuggestIconPopup extends StatefulWidget {
-  const SuggestIconPopup({super.key});
-
-  @override
-  State<SuggestIconPopup> createState() => _SuggestIconPopupState();
-}
-
-class _SuggestIconPopupState extends State<SuggestIconPopup> {
-  TextEditingController _feedbackController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupFramework(
-      title: "suggest-icon".tr(),
-      child: Column(
-        children: [
-          TextInput(
-            labelText: "suggestion".tr(),
-            keyboardType: TextInputType.multiline,
-            maxLines: null,
-            minLines: 3,
-            padding: EdgeInsetsDirectional.zero,
-            controller: _feedbackController,
-            onChanged: (value) {
-              setState(() {});
-            },
-          ),
-          SizedBox(height: 10),
-          Opacity(
-            opacity: 0.4,
-            child: TextFont(
-              text: "icon-suggestion-privacy".tr(),
-              textAlign: TextAlign.center,
-              fontSize: 12,
-              maxLines: 5,
-            ),
-          ),
-          SizedBox(height: 15),
-          Button(
-            label: "submit".tr(),
-            onTap: () async {
-              shareFeedback(_feedbackController.text, "icon");
-              popRoute(context);
-            },
-            disabled: _feedbackController.text == "",
-          )
-        ],
       ),
     );
   }

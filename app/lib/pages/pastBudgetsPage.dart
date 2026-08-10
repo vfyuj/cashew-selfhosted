@@ -575,16 +575,7 @@ class __PastBudgetsPageContentState extends State<_PastBudgetsPageContent> {
           sliver: MultiSliver(
             children: [
               SliverToBoxAdapter(
-                child: appStateSettings["sharedBudgets"]
-                    ? BudgetSpenderSummary(
-                        budget: widget.budget,
-                        budgetRange: budgetRange,
-                        setSelectedMember: (member) {},
-                        disableMemberSelection: true,
-                        allTime: true,
-                        isLarge: true,
-                      )
-                    : SizedBox.shrink(),
+                child: SizedBox.shrink(),
               ),
               selectedCategoryFks.length > 0
                   ? SliverToBoxAdapter(

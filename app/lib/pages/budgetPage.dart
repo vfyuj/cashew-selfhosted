@@ -6,7 +6,6 @@ import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetLimitsPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageLineGraph.dart';
 import 'package:cashew_selfhosted/pages/pastBudgetsPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/pages/transactionFilters.dart';
 import 'package:cashew_selfhosted/pages/walletDetailsPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
@@ -114,18 +113,13 @@ class _BudgetPageContentState extends State<_BudgetPageContent> {
 
   @override
   void initState() {
-    Future.delayed(Duration.zero, () {
-      if (isPastBudget == true) premiumPopupPastBudgets(context);
-    });
     super.initState();
   }
 
   void changeSelectedDateRange(int delta) async {
     int index = (dateForRangeIndex) - delta;
     if (index >= 0) {
-      if (budgetHistoryDismissedPremium == false)
-        budgetHistoryDismissedPremium = await premiumPopupPastBudgets(context);
-      if (budgetHistoryDismissedPremium) {
+      {
         setState(() {
           dateForRangeIndex = index;
           dateForRange = getDatePastToDetermineBudgetDate(
@@ -736,20 +730,6 @@ class _BudgetPageContentState extends State<_BudgetPageContent> {
                         ),
                         SliverToBoxAdapter(
                             child: Column(children: [
-                          appStateSettings["sharedBudgets"]
-                              ? BudgetSpenderSummary(
-                                  budget: widget.budget,
-                                  budgetRange: budgetRange,
-                                  setSelectedMember: (member) {
-                                    setState(() {
-                                      selectedMember = member;
-                                      selectedCategory = null;
-                                    });
-                                    _pieChartDisplayStateKey.currentState
-                                        ?.setTouchedIndex(-1);
-                                  },
-                                )
-                              : SizedBox.shrink(),
                           if (categoryWithTotals.length > 0)
                             SizedBox(height: 37),
 

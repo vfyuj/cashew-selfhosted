@@ -9,7 +9,6 @@ import 'package:cashew_selfhosted/pages/editHomePage.dart';
 import 'package:cashew_selfhosted/pages/editObjectivesPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageNetWorth.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/pages/transactionsListPage.dart';
 import 'package:cashew_selfhosted/pages/upcomingOverdueTransactionsPage.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
@@ -21,7 +20,7 @@ import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
 import 'package:cashew_selfhosted/widgets/exportDB.dart';
 import 'package:cashew_selfhosted/widgets/importCSV.dart';
 import 'package:cashew_selfhosted/widgets/exportCSV.dart';
-import 'package:cashew_selfhosted/pages/autoTransactionsPageEmail.dart';
+import 'package:cashew_selfhosted/pages/autoTransactionsPageNotifications.dart';
 import 'package:cashew_selfhosted/pages/activityPage.dart';
 import 'package:cashew_selfhosted/pages/editAssociatedTitlesPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
@@ -37,7 +36,6 @@ import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/radioItems.dart';
-import 'package:cashew_selfhosted/widgets/ratingPopup.dart';
 import 'package:cashew_selfhosted/widgets/restartApp.dart';
 import 'package:cashew_selfhosted/widgets/selectAmount.dart';
 import 'package:cashew_selfhosted/widgets/selectColor.dart';
@@ -114,10 +112,6 @@ class MoreActionsPageState extends State<MoreActionsPage> {
           ),
         ],
         listWidgets: [
-          Padding(
-            padding: const EdgeInsetsDirectional.only(bottom: 8.0),
-            child: PremiumBanner(),
-          ),
           MorePages()
         ],
       );
@@ -174,48 +168,6 @@ class MorePages extends StatelessWidget {
                 ),
               ],
             ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Expanded(
-              //   child: Padding(
-              //     padding: EdgeInsetsDirectional.symmetric(vertical: 5, horizontal: 4),
-              //     child: SettingsContainer(
-              //       onTap: () {
-              //         openUrl("https://github.com/jameskokoska/Cashew");
-              //       },
-              //       title: "open-source".tr(),
-              //       icon: MoreIcons.github,
-              //       isOutlined: true,
-              //     ),
-              //   ),
-              // ),
-              Expanded(
-                child: SettingsContainerOpenPage(
-                  openPage: AboutPage(),
-                  title: "about-app".tr(namedArgs: {"app": globalAppName}),
-                  icon: navBarIconsData["about"]!.iconData,
-                  isOutlined: true,
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsetsDirectional.symmetric(
-                      vertical: 5, horizontal: 4),
-                  child: SettingsContainer(
-                    onTap: () {
-                      openBottomSheet(context, RatingPopup(), fullSnap: true);
-                    },
-                    title: "feedback".tr(),
-                    icon: appStateSettings["outlinedIcons"]
-                        ? Icons.rate_review_outlined
-                        : Icons.rate_review_rounded,
-                    isOutlined: true,
-                  ),
-                ),
-              ),
-            ],
-          ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -423,6 +375,13 @@ class SettingsPageFrameworkState extends State<SettingsPageFramework> {
   }
 }
 
+/// The settings landing page: a few grouped cards of "open a sub-page" rows,
+/// rather than one long scroll of every individual toggle. Each row names what
+/// is inside it, so finding a setting is one read plus one tap.
+///
+/// Every setting the app had still exists -- this regrouped them, it did not
+/// remove any. AccentColorSetting/ThemeSettingsDropdown and friends all moved
+/// into the sub-pages below.
 class SettingsPageContent extends StatelessWidget {
   const SettingsPageContent({super.key});
 
@@ -432,66 +391,140 @@ class SettingsPageContent extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SettingsHeader(title: "theme".tr()),
-        Builder(
-          builder: (context) {
-            late Color? selectedColor =
-                HexColor(appStateSettings["accentColor"]);
-
-            return SettingsContainer(
-              onTap: () {
-                openBottomSheet(
-                  context,
-                  useParentContextForTheme: false,
-                  PopupFramework(
-                    title: "select-color".tr(),
-                    child: Column(
-                      children: [
-                        getPlatform() == PlatformOS.isIOS
-                            ? Padding(
-                                padding: const EdgeInsetsDirectional.only(
-                                    bottom: 8.0),
-                                child: SettingsContainerSwitch(
-                                  title: "colorful-interface".tr(),
-                                  onSwitched: (value) {
-                                    updateSettings("materialYou", value,
-                                        updateGlobalState: true);
-                                  },
-                                  initialValue: appStateSettings["materialYou"],
-                                  icon: appStateSettings["outlinedIcons"]
-                                      ? Icons.brush_outlined
-                                      : Icons.brush_rounded,
-                                  enableBorderRadius: true,
-                                ),
-                              )
-                            : SizedBox.shrink(),
-                        SelectColor(
-                          selectableColorsList: selectableAccentColors(context),
-                          includeThemeColor: false,
-                          selectedColor: selectedColor,
-                          setSelectedColor: (color) {
-                            selectedColor = color;
-                            updateSettings("accentColor", toHexString(color),
-                                updateGlobalState: true);
-                            updateSettings("accentSystemColor", false,
-                                updateGlobalState: true);
-                            updateWidgetColorsAndText(context);
-                          },
-                          useSystemColorPrompt: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-              title: "accent-color".tr(),
-              description: "accent-color-description".tr(),
+        SettingsGroup(
+          children: [
+            SettingsContainerOpenPage(
+              openPage: GeneralSettingsPage(),
+              title: "general-settings".tr(),
+              description: "general-settings-description".tr(),
               icon: appStateSettings["outlinedIcons"]
-                  ? Icons.color_lens_outlined
-                  : Icons.color_lens_rounded,
-            );
-          },
+                  ? Icons.settings_outlined
+                  : Icons.settings_rounded,
+            ),
+            SettingsContainerOpenPage(
+              openPage: ThemeAndStyleSettingsPage(),
+              title: "theme-and-style".tr(),
+              description: "theme-and-style-description".tr(),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.palette_outlined
+                  : Icons.palette_rounded,
+            ),
+            SettingsContainerOpenPage(
+              openPage: TransactionsSettingsPage(),
+              title: "transactions".tr(),
+              description: "transactions-settings-description".tr(),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.receipt_long_outlined
+                  : Icons.receipt_long_rounded,
+            ),
+            SettingsContainerOpenPage(
+              openPage: LocalizationSettingsPage(),
+              title: "localization-and-formatting".tr(),
+              description: "localization-and-formatting-description".tr(),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.language_outlined
+                  : Icons.language_rounded,
+            ),
+            SettingsContainerOpenPage(
+              openPage: ImportExportSettingsPage(),
+              title: "import-and-export-data".tr(),
+              description: "import-and-export-data-description".tr(),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.save_outlined
+                  : Icons.save_rounded,
+            ),
+            SettingsContainerOpenPage(
+              openPage: AboutPage(),
+              title: "about-app".tr(namedArgs: {"app": globalAppName}),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.info_outlined
+                  : Icons.info_rounded,
+            ),
+          ],
         ),
+        SettingsHeader(title: "tools-and-extras".tr()),
+        SettingsGroup(
+          children: [
+            SettingsContainerOpenPage(
+              openPage: BillSplitter(),
+              title: "bill-splitter".tr(),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.summarize_outlined
+                  : Icons.summarize_rounded,
+            ),
+            SettingsContainerOpenPage(
+              openPage: ActivityPage(),
+              title: "transaction-activity-log".tr(),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.ballot_outlined
+                  : Icons.ballot_rounded,
+            ),
+            // Android-only, and behind the notification-scanning debug flag.
+            // Null rather than SizedBox.shrink() so SettingsGroup drops it
+            // without leaving a divider behind.
+            appStateSettings["notificationScanningDebug"] == true &&
+                    getPlatform(ignoreEmulation: true) == PlatformOS.isAndroid
+                ? SettingsContainerOpenPage(
+                    title: "Notification Transactions",
+                    openPage: AutoTransactionsPageNotifications(),
+                    icon: appStateSettings["outlinedIcons"]
+                        ? Icons.edit_notifications_outlined
+                        : Icons.edit_notifications_rounded,
+                  )
+                : null,
+          ],
+        ),
+        SizedBox(height: 8),
+      ],
+    );
+  }
+}
+
+class GeneralSettingsPage extends StatelessWidget {
+  const GeneralSettingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return PageFramework(
+      title: "general-settings".tr(),
+      dragDownToDismiss: true,
+      horizontalPaddingConstrained: true,
+      listWidgets: [
+        SettingsContainerOpenPage(
+          openPage: EditHomePage(),
+          title: "edit-home-page".tr(),
+          icon: appStateSettings["outlinedIcons"]
+              ? Icons.home_outlined
+              : Icons.home_rounded,
+        ),
+        notificationsGlobalEnabled && getIsFullScreen(context) == false
+            ? SettingsContainerOpenPage(
+                openPage: NotificationsPage(),
+                title: "notifications".tr(),
+                icon: appStateSettings["outlinedIcons"]
+                    ? Icons.notifications_outlined
+                    : Icons.notifications_rounded,
+              )
+            : SizedBox.shrink(),
+        BiometricsSettingToggle(),
+        WidgetSettings(),
+      ],
+    );
+  }
+}
+
+class ThemeAndStyleSettingsPage extends StatelessWidget {
+  const ThemeAndStyleSettingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return PageFramework(
+      title: "theme-and-style".tr(),
+      dragDownToDismiss: true,
+      horizontalPaddingConstrained: true,
+      listWidgets: [
+        SettingsHeader(title: "theme".tr()),
+        AccentColorSetting(),
         getPlatform() == PlatformOS.isIOS
             ? SizedBox.shrink()
             : SettingsContainerSwitch(
@@ -506,123 +539,189 @@ class SettingsPageContent extends StatelessWidget {
                     : Icons.brush_rounded,
               ),
         ThemeSettingsDropdown(),
+        SettingsHeader(title: "style".tr()),
+        HeaderHeightSetting(),
+        OutlinedIconsSetting(),
+        FontPickerSetting(),
+        AppAnimationSetting(),
+        CountingNumberAnimationSetting(),
+        IncreaseTextContrastSetting(),
+      ],
+    );
+  }
+}
 
-        // EnterName(),
-        SettingsHeader(title: "preferences".tr()),
+class TransactionsSettingsPage extends StatelessWidget {
+  const TransactionsSettingsPage({super.key});
 
-        SettingsContainerOpenPage(
-          openPage: EditHomePage(),
-          title: "edit-home-page".tr(),
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.home_outlined
-              : Icons.home_rounded,
-        ),
+  @override
+  Widget build(BuildContext context) {
+    return PageFramework(
+      title: "transactions".tr(),
+      dragDownToDismiss: true,
+      horizontalPaddingConstrained: true,
+      listWidgets: [
+        SettingsHeader(title: "transactions".tr()),
+        TransactionsSettings(),
+        SettingsHeader(title: "accounts".tr()),
+        WalletsSettings(),
+        SettingsHeader(title: "budgets".tr()),
+        BudgetSettings(),
+        SettingsHeader(title: "goals".tr()),
+        ObjectiveSettings(),
+        SettingsHeader(title: "titles".tr()),
+        TitlesSettings(),
+      ],
+    );
+  }
+}
 
-        notificationsGlobalEnabled && getIsFullScreen(context) == false
-            ? SettingsContainerOpenPage(
-                openPage: NotificationsPage(),
-                title: "notifications".tr(),
-                icon: appStateSettings["outlinedIcons"]
-                    ? Icons.notifications_outlined
-                    : Icons.notifications_rounded,
-              )
-            : SizedBox.shrink(),
+class LocalizationSettingsPage extends StatelessWidget {
+  const LocalizationSettingsPage({super.key});
 
-        BiometricsSettingToggle(),
+  @override
+  Widget build(BuildContext context) {
+    return PageFramework(
+      title: "localization-and-formatting".tr(),
+      dragDownToDismiss: true,
+      horizontalPaddingConstrained: true,
+      listWidgets: [
+        LanguageSetting(),
+        PrimaryCurrencySetting(),
+        SettingsHeader(title: "formatting".tr()),
+        NumberFormattingSetting(),
+        PercentagePrecisionSetting(),
+        Time24HourFormatSetting(),
+        FirstDayOfWeekSetting(updateHomePage: true),
+        NumberPadFormatSetting(),
+      ],
+    );
+  }
+}
 
-        SettingsContainer(
-          title: "language".tr(),
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.language_outlined
-              : Icons.language_rounded,
-          afterWidget: Tappable(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            borderRadius: 10,
-            child: Padding(
-              padding: const EdgeInsetsDirectional.symmetric(
-                  horizontal: 16, vertical: 10),
-              child: TextFont(
-                text: languageDisplayFilter(
-                    appStateSettings["locale"].toString()),
-                fontSize: 14,
-              ),
-            ),
-          ),
-          onTap: () {
-            openLanguagePicker(context);
-          },
-        ),
+class ImportExportSettingsPage extends StatelessWidget {
+  const ImportExportSettingsPage({super.key});
 
-        SettingsContainerOpenPage(
-          openPage: MoreOptionsPagePreferences(),
-          title: "more-options".tr(),
-          description: "more-options-description".tr(),
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.app_registration_outlined
-              : Icons.app_registration_rounded,
-        ),
-
-        SettingsHeader(title: "tools-and-extras".tr()),
-        // SettingsContainerOpenPage(
-        //   openPage: AutoTransactionsPage(),
-        //   title: "Auto Transactions",
-        //   icon: appStateSettings["outlinedIcons"] ? Icons.auto_fix_high_outlined : Icons.auto_fix_high_rounded,
-        // ),
-
-        appStateSettings["emailScanning"]
-            ? SettingsContainerOpenPage(
-                openPage: AutoTransactionsPageEmail(),
-                title: "auto-email-transactions".tr(),
-                icon: appStateSettings["outlinedIcons"]
-                    ? Icons.mark_email_unread_outlined
-                    : Icons.mark_email_unread_rounded,
-              )
-            : SizedBox.shrink(),
-
-        appStateSettings["notificationScanningDebug"] &&
-                getPlatform(ignoreEmulation: true) == PlatformOS.isAndroid
-            ? SettingsContainerOpenPage(
-                title: "Notification Transactions",
-                openPage: AutoTransactionsPageNotifications(),
-                icon: appStateSettings["outlinedIcons"]
-                    ? Icons.edit_notifications_outlined
-                    : Icons.edit_notifications_rounded,
-              )
-            : SizedBox.shrink(),
-
-        SettingsContainerOpenPage(
-          openPage: BillSplitter(),
-          title: "bill-splitter".tr(),
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.summarize_outlined
-              : Icons.summarize_rounded,
-        ),
-
-        SettingsContainerOpenPage(
-          openPage: ActivityPage(),
-          title: "transaction-activity-log".tr(),
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.ballot_outlined
-              : Icons.ballot_rounded,
-        ),
-
+  @override
+  Widget build(BuildContext context) {
+    return PageFramework(
+      title: "import-and-export-data".tr(),
+      dragDownToDismiss: true,
+      horizontalPaddingConstrained: true,
+      listWidgets: [
         SettingsHeader(title: "import-and-export".tr()),
-
         ExportCSV(),
-
         ImportCSV(),
-
         SettingsHeader(title: "backups".tr()),
-
         ExportDB(),
-
         ImportDB(),
-
         AccountLoginButton(
           isOutlinedButton: false,
           forceButtonName: "self-hosted-backup".tr(),
         ),
       ],
+    );
+  }
+}
+
+/// The accent-colour row, lifted out of the old landing page unchanged so it
+/// can live on the Theme & Style page.
+class AccentColorSetting extends StatelessWidget {
+  const AccentColorSetting({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    late Color? selectedColor = HexColor(appStateSettings["accentColor"]);
+    return SettingsContainer(
+      onTap: () {
+        openBottomSheet(
+          context,
+          useParentContextForTheme: false,
+          PopupFramework(
+            title: "select-color".tr(),
+            child: Column(
+              children: [
+                getPlatform() == PlatformOS.isIOS
+                    ? Padding(
+                        padding: const EdgeInsetsDirectional.only(bottom: 8.0),
+                        child: SettingsContainerSwitch(
+                          title: "colorful-interface".tr(),
+                          onSwitched: (value) {
+                            updateSettings("materialYou", value,
+                                updateGlobalState: true);
+                          },
+                          initialValue: appStateSettings["materialYou"],
+                          icon: appStateSettings["outlinedIcons"]
+                              ? Icons.brush_outlined
+                              : Icons.brush_rounded,
+                          enableBorderRadius: true,
+                        ),
+                      )
+                    : SizedBox.shrink(),
+                SelectColor(
+                  selectableColorsList: selectableAccentColors(context),
+                  includeThemeColor: false,
+                  selectedColor: selectedColor,
+                  setSelectedColor: (color) {
+                    selectedColor = color;
+                    updateSettings("accentColor", toHexString(color),
+                        updateGlobalState: true);
+                    updateSettings("accentSystemColor", false,
+                        updateGlobalState: true);
+                    updateWidgetColorsAndText(context);
+                  },
+                  useSystemColorPrompt: true,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      title: "accent-color".tr(),
+      description: "accent-color-description".tr(),
+      icon: appStateSettings["outlinedIcons"]
+          ? Icons.color_lens_outlined
+          : Icons.color_lens_rounded,
+      // Swatch of the colour currently in use, so the row shows what it is
+      // set to without having to open the picker.
+      afterWidget: Container(
+        width: 27,
+        height: 27,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selectedColor ?? Theme.of(context).colorScheme.primary,
+        ),
+      ),
+    );
+  }
+}
+
+/// The language row, lifted out of the old landing page unchanged.
+class LanguageSetting extends StatelessWidget {
+  const LanguageSetting({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsContainer(
+      title: "language".tr(),
+      icon: appStateSettings["outlinedIcons"]
+          ? Icons.language_outlined
+          : Icons.language_rounded,
+      afterWidget: Tappable(
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        borderRadius: 10,
+        child: Padding(
+          padding: const EdgeInsetsDirectional.symmetric(
+              horizontal: 16, vertical: 10),
+          child: TextFont(
+            text: languageDisplayFilter(appStateSettings["locale"].toString()),
+            fontSize: 14,
+          ),
+        ),
+      ),
+      onTap: () {
+        openLanguagePicker(context);
+      },
     );
   }
 }
@@ -677,47 +776,6 @@ class _ThemeSettingsDropdownState extends State<ThemeSettingsDropdown> {
       getLabel: (item) {
         return item.tr();
       },
-    );
-  }
-}
-
-class MoreOptionsPagePreferences extends StatelessWidget {
-  const MoreOptionsPagePreferences({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return PageFramework(
-      title: "more".tr(),
-      dragDownToDismiss: true,
-      horizontalPaddingConstrained: true,
-      listWidgets: [
-        SettingsHeader(title: "style".tr()),
-        HeaderHeightSetting(),
-        OutlinedIconsSetting(),
-        FontPickerSetting(),
-        AppAnimationSetting(),
-        CountingNumberAnimationSetting(),
-        IncreaseTextContrastSetting(),
-        SettingsHeader(title: "transactions".tr()),
-        TransactionsSettings(),
-        SettingsHeader(title: "accounts".tr()),
-        WalletsSettings(),
-        PrimaryCurrencySetting(),
-        SettingsHeader(title: "budgets".tr()),
-        BudgetSettings(),
-        SettingsHeader(title: "goals".tr()),
-        ObjectiveSettings(),
-        SettingsHeader(title: "titles".tr()),
-        TitlesSettings(),
-        SettingsHeader(title: "widgets".tr()),
-        WidgetSettings(),
-        SettingsHeader(title: "formatting".tr()),
-        NumberFormattingSetting(),
-        PercentagePrecisionSetting(),
-        Time24HourFormatSetting(),
-        FirstDayOfWeekSetting(updateHomePage: true),
-        NumberPadFormatSetting(),
-      ],
     );
   }
 }

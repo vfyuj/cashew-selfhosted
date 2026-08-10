@@ -19,11 +19,11 @@ import 'package:http/http.dart' as http;
 /// `BrowserClient` and the browser owns the connection pool anyway.
 final http.Client _httpClient = http.Client();
 
-/// Replaces Google Drive's appDataFolder + Firebase Auth for this fork's
+/// Replaced Google Drive's appDataFolder + Firebase Auth for this fork's
 /// self-hosted server (see specs/03-stage-1-kill-google.md). A file here is
 /// identified by its filename alone (unlike Drive's opaque file ids) --
-/// `id` is kept equal to `name` so existing UI code that expected a
-/// drive.File-shaped object with an `id` field needs no further changes.
+/// `id` is kept equal to `name` because the UI this replaced expected a
+/// drive.File-shaped object with an `id` field.
 class SyncFile {
   final String id;
   final String name;
@@ -47,10 +47,9 @@ class SyncFile {
   }
 }
 
-/// The signed-in session for this fork's self-hosted server. Kept entirely
-/// separate from `googleUser` (still used only by the opt-in receipt/
-/// attachment upload feature in uploadAttachment.dart, which is out of
-/// scope for the auth/sync/backup replacement -- see specs/03-stage-1-kill-google.md).
+/// The signed-in session for this fork's self-hosted server -- the single
+/// "are we signed in" source of truth now that every Google code path is gone
+/// (see specs/03-stage-1-kill-google.md).
 class SelfHostedSession {
   final String serverUrl;
   final String email;
@@ -84,7 +83,7 @@ class SelfHostedSession {
 /// Set at launch from persisted storage (see [loadPersistedSelfHostedSession])
 /// and updated by [selfHostedLogin]/[selfHostedLogout]/[selfHostedRefresh].
 /// This is the single "are we signed in" source of truth for the self-hosted
-/// path, mirroring the old `googleUser == null` check.
+/// path.
 SelfHostedSession? selfHostedSession;
 
 const _sessionPrefsKey = "selfHostedSession";
@@ -438,8 +437,7 @@ Future<ServerCallResult> selfHostedLoginDetailed({
 /// Silent, non-blocking re-auth: rotates the session token before it
 /// expires. Failure just leaves the old (possibly-expired) token in place --
 /// sync/backup calls will no-op until the next successful refresh or manual
-/// login, never blocking the app. Mirrors the old
-/// `signInGoogle(silentSignIn: true, waitForCompletion: false)` pattern.
+/// login, never blocking the app -- see specs/01-local-first-invariant.md.
 /// How much of a session's life is allowed to run out before the background
 /// sync cycle bothers renewing it. Sessions last 30 days
 /// (`sessionDuration` in server/lib/src/auth/auth_service.dart), so a device
@@ -515,6 +513,12 @@ Future<bool> selfHostedLogout() async {
 }
 
 class SelfHostedUnauthenticatedException implements Exception {}
+
+/// Thrown when an operation that genuinely needs the server is attempted while
+/// signed out. Deliberately rare: per specs/01-local-first-invariant.md almost
+/// everything must work signed out, so this is only for things with no local
+/// meaning at all, like uploading an attachment.
+class SelfHostedSignedOutException implements Exception {}
 
 /// Common shape for anywhere a backup can be stored/listed/restored from.
 /// Lets accountAndBackup.dart's backup functions work identically whether
@@ -627,6 +631,43 @@ class SelfHostedClient implements BackupTransport {
             .timeout(const Duration(seconds: 20));
         _throwIfUnauthenticated(response);
       });
+
+  /// Transaction attachments -- a third namespace alongside sync and backup,
+  /// replacing the Google Drive upload this fork inherited from upstream.
+  /// See specs/03-stage-1-kill-google.md.
+  ///
+  /// Returns the URL to store in the transaction note. It needs a session to
+  /// fetch, exactly as the Drive link it replaces needed a Google login, so
+  /// the in-app preview reads it back through [getAttachmentFile] rather than
+  /// handing it to the browser.
+  Future<String> putAttachmentFile(String filename, List<int> bytes) =>
+      _withRefreshRetry(() async {
+        final response = await _httpClient
+            .put(Uri.parse('${session.serverUrl}/attachments/$filename'),
+                headers: _authHeader, body: bytes)
+            .timeout(const Duration(seconds: 120));
+        _throwIfUnauthenticated(response);
+        if (response.statusCode != 200) {
+          throw Exception('attachment upload failed (${response.statusCode})');
+        }
+        return attachmentUrl(filename);
+      });
+
+  Future<List<int>> getAttachmentFile(String filename) =>
+      _withRefreshRetry(() async {
+        final response = await _httpClient
+            .get(Uri.parse('${session.serverUrl}/attachments/$filename'),
+                headers: _authHeader)
+            .timeout(const Duration(seconds: 120));
+        _throwIfUnauthenticated(response);
+        if (response.statusCode != 200) {
+          throw Exception('attachment download failed (${response.statusCode})');
+        }
+        return response.bodyBytes;
+      });
+
+  String attachmentUrl(String filename) =>
+      '${session.serverUrl}/attachments/$filename';
 
   /// Stage 2 row-level change feed -- see specs/04-stage-2-instant-sync.md.
   Future<SyncPushResult> pushSyncChanges({
@@ -801,6 +842,37 @@ class SelfHostedClient implements BackupTransport {
             .timeout(const Duration(seconds: 20));
         _throwUnlessOk(response);
       });
+}
+
+/// True when [url] points at the signed-in server's own attachment namespace,
+/// i.e. the app can fetch it with the session rather than opening a browser.
+bool isSelfHostedAttachmentUrl(String url) =>
+    attachmentFilenameFromUrl(url) != null;
+
+/// Uploads an attachment and returns its URL. Throws [SelfHostedSignedOutException]
+/// when signed out -- unlike sync there is no local fallback for "store this
+/// file where the other device can see it", so the caller must tell the user.
+Future<String> uploadAttachmentBytes(String filename, List<int> bytes) async {
+  final client = _currentClient();
+  if (client == null) throw SelfHostedSignedOutException();
+  return await client.putAttachmentFile(filename, bytes);
+}
+
+/// Fetches a previously uploaded attachment, or null when signed out.
+Future<List<int>?> downloadAttachmentBytes(String filename) async {
+  final client = _currentClient();
+  if (client == null) return null;
+  return await client.getAttachmentFile(filename);
+}
+
+/// The stored filename inside an attachment URL, or null if [url] isn't one.
+String? attachmentFilenameFromUrl(String url) {
+  final session = selfHostedSession;
+  if (session == null) return null;
+  final prefix = '${session.serverUrl}/attachments/';
+  if (!url.startsWith(prefix)) return null;
+  final filename = url.substring(prefix.length);
+  return filename.isEmpty ? null : filename;
 }
 
 /// Builds a client for the current session, or null when signed out. Every

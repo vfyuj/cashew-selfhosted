@@ -4,7 +4,7 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addEmailTemplate.dart';
 import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
-import 'package:cashew_selfhosted/pages/autoTransactionsPageEmail.dart';
+import 'package:cashew_selfhosted/pages/autoTransactionsPageNotifications.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/struct/throttler.dart';

@@ -4,7 +4,6 @@ import 'package:cashew_selfhosted/pages/addCategoryPage.dart';
 import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/pages/editObjectivesPage.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
@@ -349,9 +348,7 @@ class _AddObjectivePageState extends State<AddObjectivePage>
     } else {
       Future.delayed(Duration.zero, () async {
         if (widget.objective == null) {
-          bool result = await premiumPopupObjectives(context,
-              objectiveType: objectiveType);
-          if (result == true && objectiveType != ObjectiveType.loan) {
+          if (objectiveType != ObjectiveType.loan) {
             openBottomSheet(
               context,
               fullSnap: false,

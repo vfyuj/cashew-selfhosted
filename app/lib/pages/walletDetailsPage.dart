@@ -7,7 +7,6 @@ import 'package:cashew_selfhosted/pages/creditDebtTransactionsPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageLineGraph.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageNetWorth.dart';
 import 'package:cashew_selfhosted/pages/pastBudgetsPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/pages/transactionFilters.dart';
 import 'package:cashew_selfhosted/pages/transactionsSearchPage.dart';
 import 'package:cashew_selfhosted/pages/upcomingOverdueTransactionsPage.dart';
@@ -2583,12 +2582,7 @@ class _AllSpendingPastSpendingGraphState
             children: [
               Container(
                 color: Theme.of(context).colorScheme.background,
-                child: FadeOutAndLockFeature(
-                  hasInitiallyDismissed: allSpendingHistoryDismissedPremium,
-                  actionAfter: () {
-                    allSpendingHistoryDismissedPremium = true;
-                  },
-                  child: Stack(
+                child: Stack(
                     children: [
                       Padding(
                         padding: const EdgeInsetsDirectional.symmetric(
@@ -2647,7 +2641,6 @@ class _AllSpendingPastSpendingGraphState
                       ),
                     ],
                   ),
-                ),
               ),
               Transform.translate(
                 offset: Offset(0, -1),

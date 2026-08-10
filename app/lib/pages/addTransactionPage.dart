@@ -7,19 +7,17 @@ import 'package:cashew_selfhosted/pages/addObjectivePage.dart';
 import 'package:cashew_selfhosted/pages/addWalletPage.dart';
 import 'package:cashew_selfhosted/pages/editAssociatedTitlesPage.dart';
 import 'package:cashew_selfhosted/pages/editWalletsPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
-import 'package:cashew_selfhosted/pages/sharedBudgetSettings.dart';
 import 'package:cashew_selfhosted/pages/transactionsListPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/navBarIconsData.dart';
+import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/struct/upcomingTransactionsFunctions.dart';
 import 'package:cashew_selfhosted/struct/uploadAttachment.dart';
 import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/categoryIcon.dart';
 import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
@@ -591,13 +589,6 @@ class _AddTransactionPageState extends State<AddTransactionPage>
 
       // recentlyAddedTransactionID.value =
 
-      if (widget.transaction == null &&
-          appStateSettings["purchaseID"] == null) {
-        updateSettings("premiumPopupAddTransactionCount",
-            (appStateSettings["premiumPopupAddTransactionCount"] ?? 0) + 1,
-            updateGlobalState: false);
-      }
-
       return true;
     } catch (e) {
       if (e.toString() == "category-no-longer-exists") {
@@ -780,7 +771,6 @@ class _AddTransactionPageState extends State<AddTransactionPage>
           openTransferBalancePopup();
           return;
         }
-        await premiumPopupAddTransaction(context);
         if (widget.startInitialAddTransactionSequence == false) return;
         if (appStateSettings["askForTransactionTitle"]) {
           openBottomSheet(
@@ -1514,9 +1504,6 @@ class _AddTransactionPageState extends State<AddTransactionPage>
                     },
                     getSelected: (String item) {
                       return selectedPayer == item;
-                    },
-                    onLongPress: (String item) {
-                      memberPopup(context, item);
                     },
                   ),
                 ),
@@ -4122,61 +4109,6 @@ class ReorderCategoriesPopup extends StatelessWidget {
   }
 }
 
-String? getFileIdFromUrl(String url) {
-  RegExp regExp = RegExp(r"/d/([a-zA-Z0-9_-]+)");
-  Match? match = regExp.firstMatch(url);
-  if (match != null && match.groupCount >= 1) {
-    return match.group(1)!;
-  } else {
-    return null;
-  }
-}
-
-Future<List<int>?> getGoogleDriveFileImageData(String url) async {
-  dynamic result = await openLoadingPopupTryCatch(
-    () async {
-      String? fileId = getFileIdFromUrl(url);
-      if (fileId == null) throw ("No file id found!");
-
-      if (googleUser == null) {
-        await signInGoogle(drivePermissionsAttachments: true);
-      }
-
-      final authHeaders = await googleUser!.authHeaders;
-      final authenticateClient = GoogleAuthClient(authHeaders);
-      drive.DriveApi driveApi = drive.DriveApi(authenticateClient);
-
-      List<int> dataStore = [];
-
-      drive.File fileMetadata =
-          await driveApi.files.get(fileId, $fields: 'size') as drive.File;
-      int totalBytes = int.parse(fileMetadata.size ?? "0");
-
-      dynamic response = await driveApi.files
-          .get(fileId, downloadOptions: drive.DownloadOptions.fullMedia);
-
-      num receivedBytes = 0;
-
-      loadingProgressKey.currentState?.setProgressPercentage(0);
-
-      await for (var data in response.stream) {
-        dataStore.insertAll(dataStore.length, data);
-        receivedBytes += data.length;
-        double progress = receivedBytes / totalBytes;
-        loadingProgressKey.currentState?.setProgressPercentage(progress);
-      }
-      loadingProgressKey.currentState?.setProgressPercentage(0);
-      return dataStore;
-    },
-    onError: (error) {
-      loadingProgressKey.currentState?.setProgressPercentage(0);
-      print(error);
-    },
-  );
-  if (result is List<int>) return result;
-  return null;
-}
-
 class RenderImageData extends StatelessWidget {
   const RenderImageData(
       {required this.imageData, required this.openLinkOnError, super.key});
@@ -4534,7 +4466,7 @@ class _TransactionNotesTextInputState extends State<TransactionNotesTextInput> {
                           },
                           extraWidget: Row(
                             children: [
-                              if (link.contains("drive.google.com"))
+                              if (isSelfHostedAttachmentUrl(link))
                                 Padding(
                                   padding: const EdgeInsetsDirectional.only(
                                       end: 3, start: 5),
@@ -4546,8 +4478,7 @@ class _TransactionNotesTextInputState extends State<TransactionNotesTextInput> {
                                     scale: 1.6,
                                     onTap: () async {
                                       List<int>? result =
-                                          await getGoogleDriveFileImageData(
-                                              link);
+                                          await getServerAttachmentData(link);
                                       if (result == null) {
                                         openUrl(link);
                                       } else {

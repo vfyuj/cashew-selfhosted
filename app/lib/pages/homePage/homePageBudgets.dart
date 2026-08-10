@@ -242,7 +242,6 @@ class EditHomePagePinnedBudgetsPopup extends StatelessWidget {
                         await database.getBudgetInstance(budget.budgetPk);
                     await database.createOrUpdateBudget(
                       budgetToUpdate.copyWith(pinned: !budgetToUpdate.pinned),
-                      updateSharedEntry: false,
                     );
                   },
                   onLongPress: (String budgetPk) async {

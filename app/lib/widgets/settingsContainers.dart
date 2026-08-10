@@ -199,6 +199,7 @@ class SettingsContainerOpenPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final Color? groupFill = SettingsGroupScope.of(context)?.fillColor;
     return Padding(
       padding: isOutlined == false || isOutlined == null
           ? EdgeInsetsDirectional.zero
@@ -206,13 +207,16 @@ class SettingsContainerOpenPage extends StatelessWidget {
       child: OpenContainerNavigation(
         onClosed: onClosed,
         onOpen: onOpen,
-        closedColor:
-            backgroundColor ?? Theme.of(context).colorScheme.background,
-        borderRadius: isOutlined == true
-            ? 10
-            : getIsFullScreen(context)
-                ? 20
-                : 0,
+        closedColor: backgroundColor ??
+            groupFill ??
+            Theme.of(context).colorScheme.background,
+        borderRadius: groupFill != null
+            ? 0
+            : isOutlined == true
+                ? 10
+                : getIsFullScreen(context)
+                    ? 20
+                    : 0,
         button: (openContainer) {
           return SettingsContainer(
             title: title,
@@ -220,7 +224,7 @@ class SettingsContainerOpenPage extends StatelessWidget {
             icon: icon,
             iconSize: iconSize,
             iconScale: iconScale,
-            backgroundColor: backgroundColor,
+            backgroundColor: backgroundColor ?? groupFill,
             onTap: onTap != null
                 ? () => onTap!(openContainer)
                 : () {
@@ -570,9 +574,12 @@ class SettingsContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color? groupFill = SettingsGroupScope.of(context)?.fillColor;
     return ClipRRect(
-      borderRadius: BorderRadiusDirectional.circular(
-          (enableBorderRadius || getIsFullScreen(context)) && isOutlined != true
+      borderRadius: BorderRadiusDirectional.circular(groupFill != null
+          ? 0
+          : (enableBorderRadius || getIsFullScreen(context)) &&
+                  isOutlined != true
               ? getPlatform() == PlatformOS.isIOS
                   ? 10
                   : 15
@@ -593,7 +600,7 @@ class SettingsContainer extends StatelessWidget {
               isWideOutlined: isWideOutlined,
             )
           : Tappable(
-              color: backgroundColor ?? Colors.transparent,
+              color: backgroundColor ?? groupFill ?? Colors.transparent,
               onTap: onTap,
               onLongPress: onLongPress,
               child: Padding(
@@ -711,6 +718,108 @@ class SettingsHeader extends StatelessWidget {
         fontSize: 15,
         fontWeight: FontWeight.bold,
         textColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+}
+
+/// Marks the subtree as living inside a [SettingsGroup], and carries the fill
+/// colour its rows should paint themselves with.
+///
+/// The rows need to know: on a wide window `SettingsContainer` and
+/// `SettingsContainerOpenPage` both round their own corners, which inside a
+/// card renders every hover and press as an inset pill floating in the middle
+/// of the row instead of a full-width band. Inside a group they go square and
+/// opaque, and the group's own clip supplies the outer rounding.
+class SettingsGroupScope extends InheritedWidget {
+  const SettingsGroupScope({
+    required this.fillColor,
+    required Widget child,
+    Key? key,
+  }) : super(key: key, child: child);
+
+  final Color fillColor;
+
+  static SettingsGroupScope? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SettingsGroupScope>();
+
+  @override
+  bool updateShouldNotify(SettingsGroupScope oldWidget) =>
+      oldWidget.fillColor != fillColor;
+}
+
+/// Groups consecutive settings rows into one rounded card with hairline
+/// dividers between them, so the settings pages read as a few labelled groups
+/// rather than one long undifferentiated list.
+///
+/// Entries are `Widget?` on purpose: a conditionally-hidden row passes `null`
+/// rather than `SizedBox.shrink()`, so it is dropped *before* dividers are
+/// inserted. Passing a shrunk box instead leaves a stray divider with nothing
+/// between it and the next one.
+class SettingsGroup extends StatelessWidget {
+  const SettingsGroup({
+    required this.children,
+    this.padding,
+    Key? key,
+  }) : super(key: key);
+
+  final List<Widget?> children;
+  final EdgeInsetsDirectional? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> rows = children.whereType<Widget>().toList();
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    // Derive the card from the page background rather than from a named colour
+    // token. Two earlier attempts failed on the same point: any fixed token is
+    // either a flat grey that ignores Material You, or -- like
+    // lightDarkAccentHeavyLight -- lands on top of the background under some
+    // combination of Material You, dark mode and battery saver and disappears.
+    //
+    // Background already carries the Material You tint, so stepping one fixed
+    // amount off it keeps the hue and guarantees the contrast, in every
+    // combination, with no special cases. Direction follows the Material 3
+    // convention: containers sit darker than the surface in light themes and
+    // lighter in dark ones.
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color background = Theme.of(context).colorScheme.background;
+    // 0.13 over the dark theme's black background lands on ~0xFF212121, the
+    // Material dark surface-container value; 0.055 over white gives ~0xFFF1F1F1.
+    final Color fillColor = isDark
+        ? Color.alphaBlend(Colors.white.withOpacity(0.13), background)
+        : Color.alphaBlend(Colors.black.withOpacity(0.055), background);
+    // dividerColor is lighter than the card in light mode, so it would read as
+    // a gap rather than a line. Tint against the fill instead.
+    final Color dividerColor = isDark
+        ? Colors.white.withOpacity(0.07)
+        : Colors.black.withOpacity(0.06);
+
+    final List<Widget> laidOut = [];
+    for (int i = 0; i < rows.length; i++) {
+      if (i > 0) laidOut.add(Container(height: 1, color: dividerColor));
+      laidOut.add(rows[i]);
+    }
+
+    return Padding(
+      padding: padding ??
+          const EdgeInsetsDirectional.symmetric(horizontal: 13, vertical: 5),
+      child: ClipRRect(
+        borderRadius: BorderRadiusDirectional.circular(
+            getPlatform() == PlatformOS.isIOS ? 12 : 18),
+        child: SettingsGroupScope(
+          fillColor: fillColor,
+          // The rows paint the fill themselves, so their hover and press
+          // states cover the full width of the card. This container only
+          // colours the 1px divider gaps.
+          child: Container(
+            color: fillColor,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: laidOut,
+            ),
+          ),
+        ),
       ),
     );
   }

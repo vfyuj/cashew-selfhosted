@@ -201,7 +201,6 @@ Future<int> ensureMainCategoryBudgetsExist() async {
       if (envelope.income != category.income) {
         await database.createOrUpdateBudget(
           envelope.copyWith(income: category.income),
-          updateSharedEntry: false,
         );
       }
       continue;
@@ -211,7 +210,6 @@ Future<int> ensureMainCategoryBudgetsExist() async {
       budgetForMainCategory(category),
       // Never route an auto created budget through the shared/Firestore branch
       // of createOrUpdateBudget - it is dead in this fork.
-      updateSharedEntry: false,
     );
     createdCount++;
   }

@@ -1,7 +1,7 @@
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addWalletPage.dart';
-import 'package:cashew_selfhosted/pages/autoTransactionsPageEmail.dart';
+import 'package:cashew_selfhosted/pages/autoTransactionsPageNotifications.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';

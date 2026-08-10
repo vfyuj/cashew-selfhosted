@@ -220,7 +220,6 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
         // Never route an envelope write through the dead Firestore branch of
         // createOrUpdateBudget -- same reasoning as
         // ensureMainCategoryBudgetsExist().
-        updateSharedEntry: false,
       );
     }
   }

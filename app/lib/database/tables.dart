@@ -4,14 +4,11 @@ import 'package:cashew_selfhosted/pages/homePage/homePageLineGraph.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
 import 'package:cashew_selfhosted/pages/transactionFilters.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
-import 'package:cashew_selfhosted/struct/firebaseAuthGlobal.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/shareBudget.dart';
 import 'package:cashew_selfhosted/struct/syncClient.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
 import 'package:cashew_selfhosted/widgets/periodCyclePicker.dart';
 import 'package:cashew_selfhosted/widgets/walletEntry.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:async/async.dart';
 import 'package:drift/drift.dart';
@@ -438,7 +435,10 @@ class Categories extends Table {
       .nullable()();
 
   // Attributes to configure sharing of transactions:
-  // sharedKey will have the key referencing the entry in the firebase database, if this is null, it is not shared
+  // Retained only to keep this schema byte-identical to upstream Cashew's so
+  // its backups stay importable (see CLAUDE.md). Nothing writes it: the
+  // Firestore-backed shared budgets it belonged to were removed with the rest
+  // of the Google integration.
   // TextColumn get sharedKey => text().nullable()();
   // IntColumn get sharedOwnerMember => intEnum<SharedOwnerMember>().nullable()();
   // DateTimeColumn get sharedDateUpdated => dateTime().nullable()();
@@ -536,7 +536,10 @@ class Budgets extends Table {
       .withDefault(const Constant(null))
       .map(const StringListInColumnConverter())();
   // Attributes to configure sharing of transactions:
-  // sharedKey will have the key referencing the entry in the firebase database, if this is null, it is not shared
+  // Retained only to keep this schema byte-identical to upstream Cashew's so
+  // its backups stay importable (see CLAUDE.md). Nothing writes it: the
+  // Firestore-backed shared budgets it belonged to were removed with the rest
+  // of the Google integration.
   TextColumn get sharedKey => text().nullable()();
   IntColumn get sharedOwnerMember => intEnum<SharedOwnerMember>().nullable()();
   DateTimeColumn get sharedDateUpdated => dateTime().nullable()();
@@ -3504,11 +3507,8 @@ class FinanceDatabase extends _$FinanceDatabase {
   Future<int?>? createOrUpdateTransaction(
     Transaction transaction, {
     bool insert = false,
-    bool updateSharedEntry = true,
     Transaction? originalTransaction,
   }) async {
-    if (updateSharedEntry == true && appStateSettings["sharedBudgets"] == false)
-      updateSharedEntry = false;
     double maxAmount = 999999999999;
     if (transaction.amount >= maxAmount)
       transaction = transaction.copyWith(amount: maxAmount);
@@ -3568,7 +3568,6 @@ class FinanceDatabase extends _$FinanceDatabase {
 
       await createOrUpdateCategory(
         categoryInUse.copyWith(dateTimeModified: Value(DateTime.now())),
-        updateSharedEntry: false,
       );
     } catch (e) {
       throw ("category-no-longer-exists");
@@ -3581,7 +3580,6 @@ class FinanceDatabase extends _$FinanceDatabase {
             await getCategoryInstance(transaction.subCategoryFk!);
         await createOrUpdateCategory(
           subCategoryInUse.copyWith(dateTimeModified: Value(DateTime.now())),
-          updateSharedEntry: false,
         );
       } catch (e) {
         print("subcategory no longer exists");
@@ -3592,65 +3590,10 @@ class FinanceDatabase extends _$FinanceDatabase {
     // Restrict transaction details when added to long term loan
     transaction = cleanseTransactionForLongTermLoan(transaction);
 
-    // Update the servers entry of the transaction
-    if (transaction.paid && updateSharedEntry == true) {
-      if (transaction.sharedReferenceBudgetPk != null) {
-        Budget budget = await database
-            .getBudgetInstance(transaction.sharedReferenceBudgetPk!);
-        if (originalTransaction != null) {
-          if (originalTransaction.sharedReferenceBudgetPk !=
-              transaction.sharedReferenceBudgetPk) {
-            await deleteTransaction(transaction.transactionPk);
-            return await createOrUpdateTransaction(
-              insert: true,
-              transaction.copyWith(
-                transactionPk: "-1",
-                sharedKey: Value(null),
-                // transactionOwnerEmail: Value(null),
-                // transactionOriginalOwnerEmail: Value(null),
-                sharedDateUpdated: Value(null),
-                sharedStatus: Value(null),
-                // sharedReferenceBudgetPk: Value(null),
-              ),
-            );
-          }
-        }
-
-        if (transaction.sharedKey != null && budget.sharedKey != null) {
-          sendTransactionSet(transaction, budget);
-          transaction =
-              transaction.copyWith(sharedStatus: Value(SharedStatus.waiting));
-        } else if (transaction.sharedKey == null && budget.sharedKey != null) {
-          sendTransactionAdd(transaction, budget);
-          transaction =
-              transaction.copyWith(sharedStatus: Value(SharedStatus.waiting));
-        }
-      } else {
-        if (transaction.sharedStatus == null &&
-            originalTransaction != null &&
-            originalTransaction.sharedStatus == null) {
-        } else {
-          try {
-            print("REMOVING SHARED");
-            await deleteTransaction(transaction.transactionPk);
-          } catch (e) {
-            print(e.toString());
-          }
-          return await createOrUpdateTransaction(
-              insert: true,
-              transaction.copyWith(
-                transactionPk: "-1",
-                sharedKey: Value(null),
-                transactionOwnerEmail: Value(null),
-                transactionOriginalOwnerEmail: Value(null),
-                sharedDateUpdated: Value(null),
-                sharedStatus: Value(null),
-                sharedReferenceBudgetPk: Value(null),
-              ),
-              updateSharedEntry: false);
-        }
-      }
-    }
+    // The shared/* columns below are kept only to preserve upstream Cashew's
+    // schema (see CLAUDE.md) so its backups stay importable. Nothing writes
+    // them any more -- the Firestore mirror that did was removed with the rest
+    // of the Google integration. Stage 4 replaces the feature server-side.
 
     transaction = transaction.copyWith(dateTimeModified: Value(DateTime.now()));
     TransactionsCompanion companionToInsert = transaction.toCompanion(true);
@@ -4091,13 +4034,9 @@ class FinanceDatabase extends _$FinanceDatabase {
   // create or update a category
   Future<int> createOrUpdateCategory(
     TransactionCategory category, {
-    bool updateSharedEntry = true,
     DateTime? customDateTimeModified,
     bool insert = false,
   }) async {
-    if (updateSharedEntry == true && appStateSettings["sharedBudgets"] == false)
-      updateSharedEntry = false;
-
     category = category.copyWith(name: category.name.trim());
     category = category.copyWith(
         dateTimeModified: Value(customDateTimeModified ?? DateTime.now()));
@@ -4113,51 +4052,7 @@ class FinanceDatabase extends _$FinanceDatabase {
     int result = await into(categories)
         .insert((companionToInsert), mode: InsertMode.insertOrReplace);
 
-    if (updateSharedEntry)
-      updateTransactionOnServerAfterChangingCategoryInformation(category);
     return result;
-  }
-
-  Future<int> createOrUpdateFromSharedBudget(Budget budget,
-      {insert = false}) async {
-    if (budget.sharedKey != null) {
-      Budget sharedBudget;
-
-      try {
-        // entry exists, update it
-        List<Budget> sharedBudgets = await (select(budgets)
-              ..where((t) => t.sharedKey.equals(budget.sharedKey ?? "")))
-            .get();
-        if (sharedBudgets.isEmpty) throw ("Need to make a new entry");
-        sharedBudget = sharedBudgets.first;
-        sharedBudget = budget.copyWith(
-            budgetPk: sharedBudget.budgetPk,
-            order: sharedBudget.order,
-            pinned: sharedBudget.pinned);
-        return into(budgets).insertOnConflictUpdate(
-            sharedBudget.copyWith(dateTimeModified: Value(DateTime.now())));
-      } catch (e) {
-        int numberOfBudgets = (await database.getAmountOfBudgets());
-        // new entry is needed
-        sharedBudget = budget.copyWith(
-            dateTimeModified: Value(DateTime.now()), order: numberOfBudgets);
-        BudgetsCompanion companionToInsert = sharedBudget.toCompanion(true);
-        if (insert) {
-          // Use auto incremented ID when inserting
-          companionToInsert =
-              companionToInsert.copyWith(budgetPk: Value.absent());
-        }
-        return into(budgets).insert((companionToInsert));
-      }
-    } else {
-      return 0;
-    }
-  }
-
-  Future<Budget> getSharedBudget(String sharedKey) async {
-    return (await (select(budgets)..where((t) => t.sharedKey.equals(sharedKey)))
-            .get())
-        .first;
   }
 
   Future<List<Transaction>> getAllTransactionsFromCategory(String categoryPk) {
@@ -4304,35 +4199,14 @@ class FinanceDatabase extends _$FinanceDatabase {
   }
 
   Future<int> createOrUpdateBudget(Budget budget,
-      {bool updateSharedEntry = true, bool insert = false}) async {
+      {bool insert = false}) async {
     budget = limitBudgetPeriod(budget);
 
     double maxAmount = 999999999999;
     if (budget.amount >= maxAmount) budget = budget.copyWith(amount: maxAmount);
 
-    if (updateSharedEntry == true && appStateSettings["sharedBudgets"] == false)
-      updateSharedEntry = false;
-
     budget = budget.copyWith(name: budget.name.trim());
     // print(budget);
-
-    if (budget.sharedKey != null && updateSharedEntry == true) {
-      FirebaseFirestore? db = await firebaseGetDBInstance();
-      if (db == null) {
-        return -1;
-      }
-      DocumentReference collectionRef =
-          db.collection('budgets').doc(budget.sharedKey);
-      collectionRef.update({
-        "name": budget.name,
-        "amount": budget.amount,
-        "colour": budget.colour,
-        "startDate": budget.startDate,
-        "endDate": budget.endDate,
-        "periodLength": budget.periodLength,
-        "reoccurrence": enumRecurrence[budget.reoccurrence],
-      });
-    }
 
     budget = budget.copyWith(dateTimeModified: Value(DateTime.now()));
     BudgetsCompanion companionToInsert = budget.toCompanion(true);
@@ -4903,15 +4777,6 @@ class FinanceDatabase extends _$FinanceDatabase {
 
   // delete budget given key
   Future<int> deleteBudget(context, Budget budget) async {
-    if (budget.sharedKey != null) {
-      loadingIndeterminateKey.currentState?.setVisibility(true);
-      if (budget.sharedOwnerMember == SharedOwnerMember.owner) {
-        bool result = await removedSharedFromBudget(budget);
-      } else {
-        bool result = await leaveSharedBudget(budget);
-      }
-      loadingIndeterminateKey.currentState?.setVisibility(false);
-    }
     if (budget.addedTransactionsOnly) {
       // Clear the budget the transactions are added to
       List<Transaction> transactionsAddedToThisBudget =
@@ -4959,45 +4824,14 @@ class FinanceDatabase extends _$FinanceDatabase {
   }
 
   //delete transaction given key
-  Future deleteTransaction(String transactionPk,
-      {bool updateSharedEntry = true}) async {
-    if (updateSharedEntry == true && appStateSettings["sharedBudgets"] == false)
-      updateSharedEntry = false;
-    // Send the delete log to the server
-    if (updateSharedEntry) {
-      Transaction transactionToDelete =
-          await database.getTransactionFromPk(transactionPk);
-      if (transactionToDelete.sharedKey != null &&
-          transactionToDelete.sharedReferenceBudgetPk != null) {
-        Budget budget = await database
-            .getBudgetInstance(transactionToDelete.sharedReferenceBudgetPk!);
-        sendTransactionDelete(transactionToDelete, budget);
-      }
-    }
+  Future deleteTransaction(String transactionPk) async {
     await createDeleteLog(DeleteLogType.Transaction, transactionPk);
     return (delete(transactions)
           ..where((t) => t.transactionPk.equals(transactionPk)))
         .go();
   }
 
-  Future deleteTransactions(List<String> transactionPks,
-      {bool updateSharedEntry = true}) async {
-    if (updateSharedEntry == true && appStateSettings["sharedBudgets"] == false)
-      updateSharedEntry = false;
-    // Send the delete log to the server
-    for (String transactionPk in transactionPks) {
-      if (updateSharedEntry) {
-        Transaction transactionToDelete =
-            await database.getTransactionFromPk(transactionPk);
-        if (transactionToDelete.sharedKey != null &&
-            transactionToDelete.sharedReferenceBudgetPk != null) {
-          Budget budget = await database
-              .getBudgetInstance(transactionToDelete.sharedReferenceBudgetPk!);
-          sendTransactionDelete(transactionToDelete, budget);
-        }
-      }
-    }
-
+  Future deleteTransactions(List<String> transactionPks) async {
     await createDeleteLogs(DeleteLogType.Transaction, transactionPks);
     return (delete(transactions)
           ..where((t) => t.transactionPk.isIn(transactionPks)))
@@ -7548,8 +7382,7 @@ class FinanceDatabase extends _$FinanceDatabase {
           ..where((t) => t.categoryFk.isNotIn(categoryPks)))
         .get();
     for (Transaction transaction in wanderingTransactions) {
-      await deleteTransaction(transaction.transactionPk,
-          updateSharedEntry: true);
+      await deleteTransaction(transaction.transactionPk);
     }
     if (wanderingTransactions.isNotEmpty) {
       print(

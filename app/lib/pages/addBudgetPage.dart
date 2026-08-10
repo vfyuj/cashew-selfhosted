@@ -4,14 +4,11 @@ import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/pages/addWalletPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetLimitsPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
-import 'package:cashew_selfhosted/pages/sharedBudgetSettings.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/shareBudget.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
 import 'package:cashew_selfhosted/widgets/globalSnackbar.dart';
@@ -286,58 +283,11 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
     loadingIndeterminateKey.currentState?.setVisibility(true);
     Budget createdBudget = await createBudget();
     print("Added budget");
-    int result = await database.createOrUpdateBudget(
+    await database.createOrUpdateBudget(
         insert: widget.budget == null, createdBudget);
-    if (selectedShared == true &&
-        widget.budget == null &&
-        appStateSettings["sharedBudgets"] == true) {
-      openLoadingPopup(context);
-      bool result2 = await shareBudget(createdBudget, context);
-      popRoute(context);
-      if (result2 == false) {
-        Future.delayed(Duration.zero, () {
-          openPopup(
-            context,
-            title: "No Connection",
-            icon: appStateSettings["outlinedIcons"]
-                ? Icons.signal_wifi_connected_no_internet_4_outlined
-                : Icons.signal_wifi_connected_no_internet_4_rounded,
-            description:
-                "You can only update the details of a shared budget online.",
-            onSubmit: () {
-              popRoute(context);
-            },
-            onSubmitLabel: "ok".tr(),
-          );
-        });
-        loadingIndeterminateKey.currentState?.setVisibility(false);
-        return;
-      }
-    }
     loadingIndeterminateKey.currentState?.setVisibility(false);
-    if (result == -1 && appStateSettings["sharedBudgets"] == true) {
-      openPopup(
-        context,
-        title: "No Connection",
-        icon: appStateSettings["outlinedIcons"]
-            ? Icons.signal_wifi_connected_no_internet_4_outlined
-            : Icons.signal_wifi_connected_no_internet_4_rounded,
-        description:
-            "You can only update the details of a shared category online.",
-        onCancel: () {
-          popRoute(context);
-          popRoute(context);
-        },
-        onSubmit: () {
-          popRoute(context);
-        },
-        onSubmitLabel: "ok".tr(),
-        onCancelLabel: "Exit Without Saving",
-      );
-    } else {
-      savingHapticFeedback();
-      popRoute(context);
-    }
+    savingHapticFeedback();
+    popRoute(context);
   }
 
   Future<Budget> createBudget() async {
@@ -415,8 +365,7 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
     super.initState();
     Future.delayed(Duration.zero, () async {
       if (widget.budget == null) {
-        bool result = await premiumPopupBudgets(context);
-        if (result == true && widget.isAddedOnlyBudget != true) {
+        if (widget.isAddedOnlyBudget != true) {
           dynamic result = await openBottomSheet(
             context,
             fullSnap: false,
@@ -1002,9 +951,6 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                         items: <String>[
                           "Added Only",
                           "All Transactions",
-                          ...(appStateSettings["sharedBudgets"]
-                              ? ["Shared Group Budget"]
-                              : [])
                         ],
                         getLabel: (String item) {
                           if (item == "Shared Group Budget")
@@ -1083,12 +1029,6 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                               BudgetTransactionFilters.includeDebtAndCredit,
                               BudgetTransactionFilters.addedToOtherBudget,
                               BudgetTransactionFilters.addedToObjective,
-                              ...(appStateSettings["sharedBudgets"]
-                                  ? [
-                                      BudgetTransactionFilters
-                                          .sharedToOtherBudget
-                                    ]
-                                  : []),
                               if (snapshot.hasData)
                                 BudgetTransactionFilters
                                     .includeBalanceCorrection,
@@ -1170,10 +1110,7 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                             },
                           ),
                           AnimatedExpanded(
-                            expand: appStateSettings["sharedBudgets"] == true &&
-                                (selectedBudgetTransactionFilters.contains(
-                                    BudgetTransactionFilters
-                                        .sharedToOtherBudget)),
+                            expand: false,
                             child: SelectChips(
                               items: ["All", ...allMembersOfAllBudgets],
                               getLabel: (String item) {
@@ -1341,11 +1278,6 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
           ),
         ],
         listWidgets: [
-          widget.budget != null && widget.budget!.sharedKey != null
-              ? SharedBudgetSettings(
-                  budget: widget.budget!,
-                )
-              : SizedBox.shrink(),
           SizedBox(height: 13),
           Container(height: 70),
         ],
