@@ -19,7 +19,11 @@ Future<void> main(List<String> args) async {
   final db = openDatabase(dataDir);
   final authService = AuthService(db);
 
-  final apiHandler = buildApiRouter(authService, db, dataDir).call;
+  // Reported by /health so a deploy can be confirmed without opening the app.
+  // Read from the web build itself, so it always matches what the browser gets.
+  final appVersion = webDir == null ? null : readWebBuildVersion(webDir);
+
+  final apiHandler = buildApiRouter(authService, db, dataDir, appVersion: appVersion).call;
   final rootHandler = webDir == null
       ? apiHandler
       : Cascade().add(apiHandler).add(buildWebHandler(webDir)).handler;

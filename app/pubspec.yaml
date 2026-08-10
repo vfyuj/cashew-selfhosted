@@ -5,17 +5,21 @@ description: A self-hosted fork of Cashew, a budget and financial tracking appli
 # pub.dev using `pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
-# The following defines the version and build number for your application.
-# A version number is three numbers separated by dots, like 1.2.43
-# followed by an optional build number separated by a +.
-# Both the version and the builder number may be overridden in flutter
-# build by specifying --build-name and --build-number, respectively.
+# The single source of truth for this fork's version -- see specs/07-versioning.md.
+# The fork restarted numbering at 1.0.0-beta.1; it does NOT continue upstream
+# Cashew's 5.x line (the upstream release this was forked from is recorded as
+# upstreamBaseVersion in lib/widgets/showChangelog.dart).
+#
+# The beta counter and the build number move together, and .githooks/pre-commit
+# increments both on every commit, so every deployed build is visibly distinct.
+# Don't edit this line by hand unless you mean to (the hook stands down when a
+# commit already changes it).
+#
 # In Android, build-name is used as versionName while build-number used as versionCode.
-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
-# Read more about iOS versioning at
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-version: 5.4.3+416
+# In iOS, build-name is used as CFBundleShortVersionString -- note that a
+# pre-release suffix is not valid there for App Store submission. Irrelevant
+# while this fork only ships web and sideloaded APKs.
+version: 1.0.0-beta.4+4
 
 environment:
   sdk: ">= 3.0.0"
