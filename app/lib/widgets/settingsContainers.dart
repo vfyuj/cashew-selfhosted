@@ -771,15 +771,21 @@ class SettingsGroup extends StatelessWidget {
     final List<Widget> rows = children.whereType<Widget>().toList();
     if (rows.isEmpty) return const SizedBox.shrink();
 
-    final Color fillColor = getColor(context, "lightDarkAccentHeavyLight");
+    // Deliberately NOT lightDarkAccentHeavyLight: with Material You off that
+    // resolves to pure 0xFFFFFFFF, which is also the page background, so the
+    // card vanished and only the hover state was visible. canvasContainer is
+    // 0xFFEBEBEB / 0xFF242424, distinct from the background in both themes and
+    // in all four Material You / dark combinations.
+    final Color fillColor = getColor(context, "canvasContainer");
+    // dividerColor is lighter than the card in light mode, so it would read as
+    // a gap rather than a line. Tint against the fill instead.
+    final Color dividerColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white.withOpacity(0.07)
+        : Colors.black.withOpacity(0.06);
 
     final List<Widget> laidOut = [];
     for (int i = 0; i < rows.length; i++) {
-      if (i > 0)
-        laidOut.add(Container(
-          height: 1,
-          color: getColor(context, "dividerColor"),
-        ));
+      if (i > 0) laidOut.add(Container(height: 1, color: dividerColor));
       laidOut.add(rows[i]);
     }
 
