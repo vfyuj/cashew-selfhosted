@@ -66,6 +66,22 @@ class PlannedBudgetTotals {
   }
 }
 
+// The system-reserved wallet/account-correction category (see the "0" note
+// in defaultCategories.dart). It is created programmatically by
+// initializeBalanceCorrectionCategory() in addWalletPage.dart with a fixed
+// pk rather than picked from defaultCategories, so checking the pk - unlike
+// matching on a category's name - keeps working for a backup restored from
+// a non-English original-Cashew install, where every other default category
+// name is translated but this one is generated with a hardcoded pk. The same
+// category also stands in for account-to-account transfers
+// (createCorrectionTransaction is used by both). Neither a correction nor a
+// transfer is a planned expense or income, so this category never gets an
+// envelope.
+const String _balanceCorrectionCategoryPk = "0";
+
+bool _isEnvelopeEligible(TransactionCategory category) =>
+    category.categoryPk != _balanceCorrectionCategoryPk;
+
 StreamController<PlannedBudgetTotals>? _totalsController;
 PlannedBudgetTotals? _latestPlannedBudgetTotals;
 
@@ -127,6 +143,21 @@ Future<int> ensureMainCategoryBudgetsExist() async {
     final List<Budget> envelopes =
         envelopesByCategoryPk[category.categoryPk] ?? [];
 
+    if (!_isEnvelopeEligible(category)) {
+      // Remove an envelope this function itself created before the category
+      // was excluded, identified the same way the duplicate cleanup below
+      // identifies one: budgetPk == categoryPk. A hand-made budget that
+      // happens to target only this category is left alone - it simply stops
+      // counting as a main-category envelope (see isMainCategoryBudget) and
+      // falls back to the Custom tab.
+      for (Budget envelope in envelopes) {
+        if (envelope.budgetPk == category.categoryPk) {
+          await database.deleteBudget(null, envelope);
+        }
+      }
+      continue;
+    }
+
     if (envelopes.length > 1) {
       // A duplicate left over from before this function recognised a
       // hand-made budget as already covering the category, and created a
@@ -156,7 +187,25 @@ Future<int> ensureMainCategoryBudgetsExist() async {
       continue;
     }
 
-    if (envelopes.isNotEmpty) continue;
+    if (envelopes.isNotEmpty) {
+      // The envelope already exists - but its income/expense flag has to
+      // keep tracking the category's, not just start out matching it at
+      // creation. Without this, editing a category's type after its envelope
+      // already exists (or reconciliation adopting a pre-existing hand-made
+      // budget whose income flag disagreed with the category) leaves the
+      // envelope permanently mis-sorted between the Main Categories tab's
+      // Income and Expense sections - and its "actual spent" query silently
+      // wrong, since that query filters transactions by the budget's own
+      // income flag, not the category's.
+      final Budget envelope = envelopes.single;
+      if (envelope.income != category.income) {
+        await database.createOrUpdateBudget(
+          envelope.copyWith(income: category.income),
+          updateSharedEntry: false,
+        );
+      }
+      continue;
+    }
 
     await database.createOrUpdateBudget(
       budgetForMainCategory(category),
@@ -202,7 +251,8 @@ Future<PlannedBudgetTotals> _totalsForBudgets(List<Budget> budgets) async {
   final PlannedBudgetTotals totals = PlannedBudgetTotals(
     budgets: budgets,
     mainCategoryPks: {
-      for (TransactionCategory category in mainCategories) category.categoryPk
+      for (TransactionCategory category in mainCategories)
+        if (_isEnvelopeEligible(category)) category.categoryPk
     },
   );
   _latestPlannedBudgetTotals = totals;
