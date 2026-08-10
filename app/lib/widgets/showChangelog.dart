@@ -42,6 +42,13 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.0.0-beta.12
+    Every remaining Google dependency is gone. The app no longer contacts Google at all, on any screen, at any point.
+    Receipt attachments now upload to your own server instead of Google Drive. Attachments you added before this update keep their old Drive links and still open, but only new ones get the in-app preview.
+    Everything is unlocked. The upstream paywall on budgets, goals, past budgets and custom colours has been removed.
+    Removed with it: shared budgets, Gmail receipt scanning, Google Sheets import, and the feedback and app-rating prompts.
+    Scanning transactions from Android notifications is unaffected, along with importing a CSV file.
+
     < 1.0.0-beta.1
     Cashew Selfhosted now has its own version number, starting over at 1.0.0-beta.1. It no longer follows upstream Cashew's 5.x releases.
     The version is shown in the sidebar, so you can tell at a glance whether a redeploy actually reached your browser.
