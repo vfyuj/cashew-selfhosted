@@ -42,6 +42,11 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.0.0-beta.20
+    The Home and Budgets pages now show Monthly Cash Flow instead of Planned vs. Actual: income and expenses as two separate, readable figures instead of one net number nobody could reconstruct on sight.
+    Settings is reorganized into grouped cards and now follows your Material You accent colour, with a colour swatch on the Accent Color row so you can see what's set without opening the picker.
+    The "changes were overwritten by another device" message is gone from ordinary syncing. It only ever meant last-write-wins doing its job, not lost data.
+
     < 1.0.0-beta.12
     Every remaining Google dependency is gone. The app no longer contacts Google at all, on any screen, at any point.
     Receipt attachments now upload to your own server instead of Google Drive. Attachments you added before this update keep their old Drive links and still open, but only new ones get the in-app preview.
