@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString -- note that a
 # pre-release suffix is not valid there for App Store submission. Irrelevant
 # while this fork only ships web and sideloaded APKs.
-version: 1.0.0-beta.16+16
+version: 1.0.0-beta.17+17
 
 environment:
   sdk: ">= 3.0.0"

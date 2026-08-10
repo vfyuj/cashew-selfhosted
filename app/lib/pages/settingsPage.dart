@@ -703,6 +703,16 @@ class AccentColorSetting extends StatelessWidget {
       icon: appStateSettings["outlinedIcons"]
           ? Icons.color_lens_outlined
           : Icons.color_lens_rounded,
+      // Swatch of the colour currently in use, so the row shows what it is
+      // set to without having to open the picker.
+      afterWidget: Container(
+        width: 27,
+        height: 27,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selectedColor ?? Theme.of(context).colorScheme.primary,
+        ),
+      ),
     );
   }
 }

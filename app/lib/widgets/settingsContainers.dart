@@ -771,12 +771,20 @@ class SettingsGroup extends StatelessWidget {
     final List<Widget> rows = children.whereType<Widget>().toList();
     if (rows.isEmpty) return const SizedBox.shrink();
 
-    // Deliberately NOT lightDarkAccentHeavyLight: with Material You off that
-    // resolves to pure 0xFFFFFFFF, which is also the page background, so the
-    // card vanished and only the hover state was visible. canvasContainer is
-    // 0xFFEBEBEB / 0xFF242424, distinct from the background in both themes and
-    // in all four Material You / dark combinations.
-    final Color fillColor = getColor(context, "canvasContainer");
+    // Prefer the app's own surface token so the card picks up the Material You
+    // tint (it becomes lightenPastel(accentColor) / darkenPastel(accentColor)
+    // when that is on) rather than sitting there as a flat grey slab.
+    //
+    // The catch is that with Material You off in the light theme the same token
+    // resolves to pure 0xFFFFFFFF, which is exactly colorScheme.background --
+    // white card on a white page, invisible. So fall through to the next
+    // surface down only in that collision case, instead of hardcoding a grey
+    // and losing the tint everywhere else.
+    final Color background = Theme.of(context).colorScheme.background;
+    final Color preferredFill = getColor(context, "lightDarkAccentHeavyLight");
+    final Color fillColor = preferredFill == background
+        ? getColor(context, "lightDarkAccent")
+        : preferredFill;
     // dividerColor is lighter than the card in light mode, so it would read as
     // a gap rather than a line. Tint against the fill instead.
     final Color dividerColor = Theme.of(context).brightness == Brightness.dark
