@@ -771,23 +771,27 @@ class SettingsGroup extends StatelessWidget {
     final List<Widget> rows = children.whereType<Widget>().toList();
     if (rows.isEmpty) return const SizedBox.shrink();
 
-    // Prefer the app's own surface token so the card picks up the Material You
-    // tint (it becomes lightenPastel(accentColor) / darkenPastel(accentColor)
-    // when that is on) rather than sitting there as a flat grey slab.
+    // Derive the card from the page background rather than from a named colour
+    // token. Two earlier attempts failed on the same point: any fixed token is
+    // either a flat grey that ignores Material You, or -- like
+    // lightDarkAccentHeavyLight -- lands on top of the background under some
+    // combination of Material You, dark mode and battery saver and disappears.
     //
-    // The catch is that with Material You off in the light theme the same token
-    // resolves to pure 0xFFFFFFFF, which is exactly colorScheme.background --
-    // white card on a white page, invisible. So fall through to the next
-    // surface down only in that collision case, instead of hardcoding a grey
-    // and losing the tint everywhere else.
+    // Background already carries the Material You tint, so stepping one fixed
+    // amount off it keeps the hue and guarantees the contrast, in every
+    // combination, with no special cases. Direction follows the Material 3
+    // convention: containers sit darker than the surface in light themes and
+    // lighter in dark ones.
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color background = Theme.of(context).colorScheme.background;
-    final Color preferredFill = getColor(context, "lightDarkAccentHeavyLight");
-    final Color fillColor = preferredFill == background
-        ? getColor(context, "lightDarkAccent")
-        : preferredFill;
+    // 0.13 over the dark theme's black background lands on ~0xFF212121, the
+    // Material dark surface-container value; 0.055 over white gives ~0xFFF1F1F1.
+    final Color fillColor = isDark
+        ? Color.alphaBlend(Colors.white.withOpacity(0.13), background)
+        : Color.alphaBlend(Colors.black.withOpacity(0.055), background);
     // dividerColor is lighter than the card in light mode, so it would read as
     // a gap rather than a line. Tint against the fill instead.
-    final Color dividerColor = Theme.of(context).brightness == Brightness.dark
+    final Color dividerColor = isDark
         ? Colors.white.withOpacity(0.07)
         : Colors.black.withOpacity(0.06);
 

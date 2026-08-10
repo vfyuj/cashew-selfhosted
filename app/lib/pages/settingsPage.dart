@@ -490,27 +490,23 @@ class GeneralSettingsPage extends StatelessWidget {
       dragDownToDismiss: true,
       horizontalPaddingConstrained: true,
       listWidgets: [
-        SettingsGroup(
-          children: [
-            SettingsContainerOpenPage(
-              openPage: EditHomePage(),
-              title: "edit-home-page".tr(),
-              icon: appStateSettings["outlinedIcons"]
-                  ? Icons.home_outlined
-                  : Icons.home_rounded,
-            ),
-            notificationsGlobalEnabled && getIsFullScreen(context) == false
-                ? SettingsContainerOpenPage(
-                    openPage: NotificationsPage(),
-                    title: "notifications".tr(),
-                    icon: appStateSettings["outlinedIcons"]
-                        ? Icons.notifications_outlined
-                        : Icons.notifications_rounded,
-                  )
-                : null,
-            BiometricsSettingToggle(),
-          ],
+        SettingsContainerOpenPage(
+          openPage: EditHomePage(),
+          title: "edit-home-page".tr(),
+          icon: appStateSettings["outlinedIcons"]
+              ? Icons.home_outlined
+              : Icons.home_rounded,
         ),
+        notificationsGlobalEnabled && getIsFullScreen(context) == false
+            ? SettingsContainerOpenPage(
+                openPage: NotificationsPage(),
+                title: "notifications".tr(),
+                icon: appStateSettings["outlinedIcons"]
+                    ? Icons.notifications_outlined
+                    : Icons.notifications_rounded,
+              )
+            : SizedBox.shrink(),
+        BiometricsSettingToggle(),
         WidgetSettings(),
       ],
     );
@@ -528,37 +524,28 @@ class ThemeAndStyleSettingsPage extends StatelessWidget {
       horizontalPaddingConstrained: true,
       listWidgets: [
         SettingsHeader(title: "theme".tr()),
-        SettingsGroup(
-          children: [
-            AccentColorSetting(),
-            getPlatform() == PlatformOS.isIOS
-                ? null
-                : SettingsContainerSwitch(
-                    title: "material-you".tr(),
-                    description: "material-you-description".tr(),
-                    onSwitched: (value) {
-                      updateSettings("materialYou", value,
-                          updateGlobalState: true);
-                    },
-                    initialValue: appStateSettings["materialYou"],
-                    icon: appStateSettings["outlinedIcons"]
-                        ? Icons.brush_outlined
-                        : Icons.brush_rounded,
-                  ),
-            ThemeSettingsDropdown(),
-          ],
-        ),
+        AccentColorSetting(),
+        getPlatform() == PlatformOS.isIOS
+            ? SizedBox.shrink()
+            : SettingsContainerSwitch(
+                title: "material-you".tr(),
+                description: "material-you-description".tr(),
+                onSwitched: (value) {
+                  updateSettings("materialYou", value, updateGlobalState: true);
+                },
+                initialValue: appStateSettings["materialYou"],
+                icon: appStateSettings["outlinedIcons"]
+                    ? Icons.brush_outlined
+                    : Icons.brush_rounded,
+              ),
+        ThemeSettingsDropdown(),
         SettingsHeader(title: "style".tr()),
-        SettingsGroup(
-          children: [
-            HeaderHeightSetting(),
-            OutlinedIconsSetting(),
-            FontPickerSetting(),
-            AppAnimationSetting(),
-            CountingNumberAnimationSetting(),
-            IncreaseTextContrastSetting(),
-          ],
-        ),
+        HeaderHeightSetting(),
+        OutlinedIconsSetting(),
+        FontPickerSetting(),
+        AppAnimationSetting(),
+        CountingNumberAnimationSetting(),
+        IncreaseTextContrastSetting(),
       ],
     );
   }
@@ -599,22 +586,14 @@ class LocalizationSettingsPage extends StatelessWidget {
       dragDownToDismiss: true,
       horizontalPaddingConstrained: true,
       listWidgets: [
-        SettingsGroup(
-          children: [
-            LanguageSetting(),
-            PrimaryCurrencySetting(),
-          ],
-        ),
+        LanguageSetting(),
+        PrimaryCurrencySetting(),
         SettingsHeader(title: "formatting".tr()),
-        SettingsGroup(
-          children: [
-            NumberFormattingSetting(),
-            PercentagePrecisionSetting(),
-            Time24HourFormatSetting(),
-            FirstDayOfWeekSetting(updateHomePage: true),
-            NumberPadFormatSetting(),
-          ],
-        ),
+        NumberFormattingSetting(),
+        PercentagePrecisionSetting(),
+        Time24HourFormatSetting(),
+        FirstDayOfWeekSetting(updateHomePage: true),
+        NumberPadFormatSetting(),
       ],
     );
   }
