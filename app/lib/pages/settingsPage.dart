@@ -171,32 +171,6 @@ class MorePages extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Expanded(
-              //   child: Padding(
-              //     padding: EdgeInsetsDirectional.symmetric(vertical: 5, horizontal: 4),
-              //     child: SettingsContainer(
-              //       onTap: () {
-              //         openUrl("https://github.com/jameskokoska/Cashew");
-              //       },
-              //       title: "open-source".tr(),
-              //       icon: MoreIcons.github,
-              //       isOutlined: true,
-              //     ),
-              //   ),
-              // ),
-              Expanded(
-                child: SettingsContainerOpenPage(
-                  openPage: AboutPage(),
-                  title: "about-app".tr(namedArgs: {"app": globalAppName}),
-                  icon: navBarIconsData["about"]!.iconData,
-                  isOutlined: true,
-                ),
-              ),
-            ],
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
               appStateSettings["showBillSplitterShortcut"] == true &&
                       hasSideNavigation == false
                   ? Expanded(

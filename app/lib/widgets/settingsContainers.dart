@@ -199,6 +199,7 @@ class SettingsContainerOpenPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final Color? groupFill = SettingsGroupScope.of(context)?.fillColor;
     return Padding(
       padding: isOutlined == false || isOutlined == null
           ? EdgeInsetsDirectional.zero
@@ -206,13 +207,16 @@ class SettingsContainerOpenPage extends StatelessWidget {
       child: OpenContainerNavigation(
         onClosed: onClosed,
         onOpen: onOpen,
-        closedColor:
-            backgroundColor ?? Theme.of(context).colorScheme.background,
-        borderRadius: isOutlined == true
-            ? 10
-            : getIsFullScreen(context)
-                ? 20
-                : 0,
+        closedColor: backgroundColor ??
+            groupFill ??
+            Theme.of(context).colorScheme.background,
+        borderRadius: groupFill != null
+            ? 0
+            : isOutlined == true
+                ? 10
+                : getIsFullScreen(context)
+                    ? 20
+                    : 0,
         button: (openContainer) {
           return SettingsContainer(
             title: title,
@@ -220,7 +224,7 @@ class SettingsContainerOpenPage extends StatelessWidget {
             icon: icon,
             iconSize: iconSize,
             iconScale: iconScale,
-            backgroundColor: backgroundColor,
+            backgroundColor: backgroundColor ?? groupFill,
             onTap: onTap != null
                 ? () => onTap!(openContainer)
                 : () {
@@ -570,9 +574,12 @@ class SettingsContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Color? groupFill = SettingsGroupScope.of(context)?.fillColor;
     return ClipRRect(
-      borderRadius: BorderRadiusDirectional.circular(
-          (enableBorderRadius || getIsFullScreen(context)) && isOutlined != true
+      borderRadius: BorderRadiusDirectional.circular(groupFill != null
+          ? 0
+          : (enableBorderRadius || getIsFullScreen(context)) &&
+                  isOutlined != true
               ? getPlatform() == PlatformOS.isIOS
                   ? 10
                   : 15
@@ -593,7 +600,7 @@ class SettingsContainer extends StatelessWidget {
               isWideOutlined: isWideOutlined,
             )
           : Tappable(
-              color: backgroundColor ?? Colors.transparent,
+              color: backgroundColor ?? groupFill ?? Colors.transparent,
               onTap: onTap,
               onLongPress: onLongPress,
               child: Padding(
@@ -716,6 +723,31 @@ class SettingsHeader extends StatelessWidget {
   }
 }
 
+/// Marks the subtree as living inside a [SettingsGroup], and carries the fill
+/// colour its rows should paint themselves with.
+///
+/// The rows need to know: on a wide window `SettingsContainer` and
+/// `SettingsContainerOpenPage` both round their own corners, which inside a
+/// card renders every hover and press as an inset pill floating in the middle
+/// of the row instead of a full-width band. Inside a group they go square and
+/// opaque, and the group's own clip supplies the outer rounding.
+class SettingsGroupScope extends InheritedWidget {
+  const SettingsGroupScope({
+    required this.fillColor,
+    required Widget child,
+    Key? key,
+  }) : super(key: key, child: child);
+
+  final Color fillColor;
+
+  static SettingsGroupScope? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SettingsGroupScope>();
+
+  @override
+  bool updateShouldNotify(SettingsGroupScope oldWidget) =>
+      oldWidget.fillColor != fillColor;
+}
+
 /// Groups consecutive settings rows into one rounded card with hairline
 /// dividers between them, so the settings pages read as a few labelled groups
 /// rather than one long undifferentiated list.
@@ -739,12 +771,13 @@ class SettingsGroup extends StatelessWidget {
     final List<Widget> rows = children.whereType<Widget>().toList();
     if (rows.isEmpty) return const SizedBox.shrink();
 
+    final Color fillColor = getColor(context, "lightDarkAccentHeavyLight");
+
     final List<Widget> laidOut = [];
     for (int i = 0; i < rows.length; i++) {
       if (i > 0)
         laidOut.add(Container(
           height: 1,
-          margin: const EdgeInsetsDirectional.only(start: 18, end: 18),
           color: getColor(context, "dividerColor"),
         ));
       laidOut.add(rows[i]);
@@ -756,11 +789,17 @@ class SettingsGroup extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadiusDirectional.circular(
             getPlatform() == PlatformOS.isIOS ? 12 : 18),
-        child: Container(
-          color: getColor(context, "lightDarkAccentHeavyLight"),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: laidOut,
+        child: SettingsGroupScope(
+          fillColor: fillColor,
+          // The rows paint the fill themselves, so their hover and press
+          // states cover the full width of the card. This container only
+          // colours the 1px divider gaps.
+          child: Container(
+            color: fillColor,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: laidOut,
+            ),
           ),
         ),
       ),
