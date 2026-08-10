@@ -79,7 +79,11 @@
 
     The Dart-side Firebase/Google dependency is a separate matter: it is still
     genuinely used by the opt-in Gmail receipt scanning, Drive attachment and
-    shared-budget paths inherited from upstream. See specs/03-stage-1-kill-google.md.
+    shared-budget paths inherited from upstream. It no longer runs at launch
+    though -- `Firebase.initializeApp` injects those same gstatic scripts, so
+    it was moved out of main() and behind ensureFirebaseInitialized(), called
+    on first use by the opt-in paths only. A plain launch of this app makes no
+    request to Google. See specs/03-stage-1-kill-google.md.
   -->
   <script defer src="sql-wasm.js"></script>
   <div id="loading">
