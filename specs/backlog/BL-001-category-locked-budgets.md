@@ -1,7 +1,10 @@
 # BL-001 — Category budgets, percent-of-income entry, and share-of-plan labels
 
 **Status:** Implemented 2026-08-09 on branch `claude/new-budgeting-system-88283e`. Not yet
-acceptance-tested by the owner.
+acceptance-tested by the owner. Extended the same day: the Planned vs. Actual summary (§9) shipped
+after this document was first written, then got a second home on the Budgets page (§7); the
+balance-correction/transfer category is now excluded from the envelope system entirely (§4); and an
+envelope's income/expense flag now tracks its category's instead of going stale (§4, §10).
 
 **Origin:** owner-submitted feature request (2026-08-09), reviewed against the fork source, then
 **redesigned by the owner** the same day around a hard "no schema changes" constraint. This document
@@ -133,6 +136,30 @@ empty history.
 **Subcategories get no envelope.** They roll up into their main category's card. The existing nested
 Category Spending Goal mechanism stays available inside an envelope for finer tracking.
 
+**The balance-correction/transfer category gets no envelope either.** Category pk `"0"` is
+system-reserved (see the note in `app/lib/struct/defaultCategories.dart`) — created programmatically
+by `initializeBalanceCorrectionCategory()` in `app/lib/pages/addWalletPage.dart`, with a fixed pk
+rather than a name pulled from `defaultCategories`. It stands for both manual balance corrections and
+account-to-account transfers (`createCorrectionTransaction` is used by both), neither of which is a
+planned expense or income — an envelope for it just clutters the Main Categories tab and, since the
+default `includeBalanceCorrection` transaction filter excludes categoryFk `"0"` from every budget's
+spend query, would silently always show 0 spent regardless of real activity. `_isEnvelopeEligible` in
+`mainCategoryBudgets.dart` excludes it from both the auto-creation loop and the `mainCategoryPks` set
+that drives `isMainCategoryBudget`; the reconcile also deletes a stray auto-created envelope
+(`budgetPk == "0"`) left over from before this exclusion existed. Checking the pk rather than the name
+is what makes this hold for a backup restored from a non-English original-Cashew install — every other
+default category name is translated, but this one is generated with a hardcoded pk regardless of
+locale. A hand-made budget that happens to target only category `"0"` is left alone; it simply stops
+being treated as a main-category envelope and shows up under Custom instead.
+
+**An envelope's income/expense flag tracks its category's, not a one-time copy.** `budgetForMainCategory`
+still copies `income: category.income` at creation, but the reconcile now also corrects an *existing*
+envelope whose `income` has drifted from its category — which happens when a category's type is edited
+after its envelope already exists, or when reconciliation adopts a pre-existing hand-made budget whose
+income flag disagreed with the category. Left uncorrected, the envelope stays permanently mis-sorted
+between the Main Categories tab's Income and Expense sections, and its "actual spent" query is silently
+wrong, since that query filters by the budget's own income flag, not the category's.
+
 ---
 
 ## 5. Percent-of-income entry
@@ -189,6 +216,14 @@ and `boxShadowGeneral` reaches 28px (blur 20 + spread 8), so a `SliverToBoxAdapt
 vertical padding slices the selector's shadow into a visible hard edge. The Scheduled page avoids this
 by accident — its taller search button gives the row slack.
 
+The Main Categories tab also shows the same `HomePagePlannedVsActual` card (§9) used on the home page,
+directly under the tab selector — the same widget, reused as-is rather than a page-specific variant, so
+its "Actual" tile still opens `TransactionsSearchPage` and its "Planned" tile still opens
+`BudgetsListPage` (a harmless re-push of the current page when already here). Wrapped in a
+`SliverPadding` using `getHorizontalPaddingConstrained(context)` on each side, matching the tab
+selector's own outer inset — the widget's internal `start`/`end: 13` padding then lines its edges up
+with the selector above it.
+
 ---
 
 ## 8. What the earlier design proposed, and why it is gone
@@ -203,21 +238,25 @@ For anyone reading the git history or the original request. All of this is **sup
 | `BudgetPeriodSnapshots` table to freeze percentage history (§C9) | Moot — percentages are never stored. |
 | Planned-income cache threaded into `budgetAmountToPrimaryCurrency` (§C2) | Not needed; the function is untouched. Its 9 call sites still need no edits, for a different reason. |
 | Zero-planned-income empty state on every percent budget card (§C6) | Reduced to a one-time popup at entry; §5. |
-| A "Planned vs. Actual" home-page section (`x` and `y`) | **Not implemented.** Still wanted — see §9. |
+| A "Planned vs. Actual" home-page section (`x` and `y`) | Implemented same day — see §9. |
 
 ---
 
-## 9. Not implemented
+## 9. Planned vs. Actual summary
 
-- **Planned vs. Actual home-page summary.** `x` = Σ planned income − Σ planned expenses, `y` = actual
-  income − actual expenses for the month. Both halves are cheap from here: `x` is already computable
-  from `PlannedBudgetTotals`, and `y` can reuse the two existing
-  `watchTotalWithCountOfWallet(isIncome: true/false, followCustomPeriodCycle: true, …)` calls in
-  `app/lib/pages/homePage/homePageAllSpendingSummary.dart`. Register it as a `homePageOrder` string key
-  plus a section entry and a `show…` setting — **not** as a `HomePageWidgetDisplay` member, which
-  drives the wallet-details page, not the home page. `fixHomePageOrder`
-  (`app/lib/struct/settings.dart`) reconciles saved order against defaults, so existing users pick up
-  a new key automatically.
+`app/lib/pages/homePage/homePagePlannedVsActual.dart` (`HomePagePlannedVsActual`). Two side-by-side
+tiles: **Planned** = `PlannedBudgetTotals.totalPlannedIncome − totalPlannedExpenses` (§3, shared cache);
+**Actual** = actual income − actual expenses for the current calendar month, via two
+`database.watchTotalWithCountOfWallet(isIncome: true/false, onlyIncomeAndExpense: true,
+forcedDateTimeRange: thisMonth)` calls — a fixed calendar-month range rather than
+`followCustomPeriodCycle`, deliberately, to match what the envelopes it summarises default to.
+Registered as a `homePageOrder`/`homePageOrderFullScreen` string key (`"plannedVsActual"`) plus
+`showPlannedVsActual(FullScreen)` settings and an `EditHomePage` entry — not a `HomePageWidgetDisplay`
+member, which drives the wallet-details page, not the home page. `fixHomePageOrder`
+(`app/lib/struct/settings.dart`) reconciles saved order against defaults, so existing users pick up the
+new key automatically. Tapping **Planned** opens the Budgets page; tapping **Actual** opens
+`TransactionsSearchPage` filtered to the current month. Reused verbatim on the Budgets page's Main
+Categories tab — see §7.
 
 ## 10. Known gaps
 
@@ -225,7 +264,10 @@ Deliberate, and each is a small change if the owner wants it closed:
 
 - **Renaming a category does not rename its envelope budget.** Creation copies the name once; there is
   no ongoing sync. Auto-updating it would silently overwrite a budget the owner had renamed on
-  purpose, and without stored state there is no way to tell the two cases apart.
+  purpose, and without stored state there is no way to tell the two cases apart. (The `income` flag is
+  the one field that *is* kept in sync, not just copied once — see §4 — because there the two states
+  aren't ambiguous: unlike a name, a budget's income/expense flag has no legitimate reason to diverge
+  from its category's.)
 - **A hand-deleted category budget comes back on the next launch.** Correct for an envelope system
   where every category has one, but it means "delete" is not a way to hide an envelope. The original
   design's §8.7 "guard direct deletion of an auto-budget" was never built.
@@ -247,7 +289,10 @@ Deliberate, and each is a small change if the owner wants it closed:
 | `app/lib/pages/addCategoryPage.dart` | Reconcile hook after creating a category |
 | `app/lib/pages/addBudgetPage.dart` | "% of planned income" button, popup, `applyAmount` |
 | `app/lib/widgets/budgetContainer.dart` | `BudgetSharePercentLabel` |
-| `app/lib/pages/budgetsListPage.dart` | Main Categories / Custom tabs |
+| `app/lib/pages/budgetsListPage.dart` | Main Categories / Custom tabs; Planned vs. Actual card on Main Categories |
+| `app/lib/pages/homePage/homePagePlannedVsActual.dart` | **New.** Planned vs. Actual home-page card (§9) |
+| `app/lib/pages/homePage/homePage.dart`, `app/lib/pages/editHomePage.dart` | Register the `plannedVsActual` home section |
+| `app/lib/struct/defaultPreferences.dart` | `showPlannedVsActual(FullScreen)` defaults, `homePageOrder` entries |
 | `app/assets/translations/generated/en.json` | 7 new English keys |
 
 ---
@@ -262,11 +307,19 @@ Owner-run, per "Testing & verification workflow" in `CLAUDE.md`.
       untouched and appearing under **Custom**.
 - [ ] Creating a main category creates its envelope immediately; deleting the category removes it.
 - [ ] Creating a *sub*category creates no envelope.
+- [ ] The wallet/balance-correction category ("Balance Correction" / whatever it's called in the
+      restored backup's language) never gets an envelope — not on the Main Categories tab, not counted
+      in planned totals — including on a backup restored from a non-English original-Cashew install.
+- [ ] Editing a category's Income/Expense type after its envelope already exists moves that envelope to
+      the other section of the Main Categories tab, and its "actual spent" starts reflecting real
+      transactions again.
 - [ ] Set income targets, then "Set as % of planned income" on an expense budget: the amount field
       shows the resolved number, and saving stores that number.
 - [ ] With no income budgets, the button explains itself rather than writing 0.
 - [ ] Share labels across the Main Categories tab sum to ~100%.
 - [ ] The tab selector's shadow is not clipped, at both narrow and double-column widths.
+- [ ] The Planned vs. Actual card appears identically on the home page and on the Budgets page's Main
+      Categories tab, and both tiles on both copies navigate correctly.
 - [ ] **Sync:** create the same category on two devices while both are offline, then sync — exactly
       one envelope survives, and planned totals do not double.
 - [ ] **Local-first:** all of the above works with the server unreachable.

@@ -2,6 +2,7 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
+import 'package:cashew_selfhosted/pages/homePage/homePagePlannedVsActual.dart';
 import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/budgetContainer.dart';
@@ -119,6 +120,13 @@ class BudgetsListPageState extends State<BudgetsListPage> {
           ),
         ),
         if (selectedTabIndex == 0) ...[
+          SliverPadding(
+            padding: EdgeInsetsDirectional.only(
+              start: getHorizontalPaddingConstrained(context),
+              end: getHorizontalPaddingConstrained(context),
+            ),
+            sliver: SliverToBoxAdapter(child: HomePagePlannedVsActual()),
+          ),
           _mainCategorySection(context, wantIncome: false, titleKey: "expense"),
           _mainCategorySection(context, wantIncome: true, titleKey: "income"),
         ] else
