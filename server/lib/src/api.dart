@@ -8,6 +8,7 @@ import 'package:server/src/admin/admin_routes.dart';
 import 'package:server/src/auth/auth_middleware.dart';
 import 'package:server/src/auth/auth_routes.dart';
 import 'package:server/src/auth/auth_service.dart';
+import 'package:server/src/attachments/attachment_routes.dart';
 import 'package:server/src/backup/backup_routes.dart';
 import 'package:server/src/sync/sync_routes.dart';
 import 'package:server/src/sync/sync_stream_routes.dart';
@@ -57,6 +58,12 @@ Router buildApiRouter(AuthService authService, Database db, String dataDir,
   router.mount(
     '/backup',
     const Pipeline().addMiddleware(authMiddleware).addHandler(buildBackupRouter(dataDir).call),
+  );
+  router.mount(
+    '/attachments',
+    const Pipeline()
+        .addMiddleware(authMiddleware)
+        .addHandler(buildAttachmentRouter(dataDir).call),
   );
   router.mount(
     '/admin',

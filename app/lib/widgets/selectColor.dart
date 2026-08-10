@@ -3,7 +3,6 @@ import 'dart:math';
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/colorPicker.dart';
@@ -486,10 +485,12 @@ class _ColorIconCustomState extends State<ColorIconCustom> {
     );
     return Tooltip(
       message: "custom-color".tr(),
-      child: LockedFeature(
-        actionAfter: () async {
+      child: Tappable(
+        onTap: () async {
           await openBottomSheet(context, colorPickerPopup);
         },
+        borderRadius: 0,
+        color: Colors.transparent,
         child: Container(
           margin: widget.margin ??
               EdgeInsetsDirectional.only(start: 8, end: 8, top: 8, bottom: 8),

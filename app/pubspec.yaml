@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString -- note that a
 # pre-release suffix is not valid there for App Store submission. Irrelevant
 # while this fork only ships web and sideloaded APKs.
-version: 1.0.0-beta.11+11
+version: 1.0.0-beta.12+12
 
 environment:
   sdk: ">= 3.0.0"
@@ -46,8 +46,6 @@ dependencies:
   web_socket_channel: ^2.4.0
   math_expressions: ^2.5.0
   share_plus: ^10.0.0
-  google_sign_in: ^6.2.1
-  googleapis: ^13.1.0
   universal_html: ^2.2.4
   flutter_charset_detector: ^1.0.2
   file_picker:
@@ -74,12 +72,6 @@ dependencies:
   animated_fractionally_sized_box: ^2.0.1
   flutter_local_notifications: ^17.2.1+1
   system_theme: ^3.0.0
-  firebase_core: ^3.2.0
-  firebase_auth: ^5.1.2
-  cloud_firestore: ^5.1.0
-  firebase_core_web: ^2.17.3
-  firebase_auth_web: ^5.12.4
-  recaptcha_enterprise_flutter: ^18.5.1
   sliver_tools: ^0.2.12
   reorderable_grid_view:
     git:
@@ -90,7 +82,6 @@ dependencies:
   flutter_lazy_indexed_stack: ^0.0.6 
   app_settings: ^5.1.1
   provider: ^6.1.2
-  in_app_review: ^2.0.9 
   flutter_timezone: ^1.0.8
   device_preview: ^1.1.0 
   scrollable_positioned_list: ^0.3.8
@@ -99,7 +90,6 @@ dependencies:
   quick_actions: ^1.0.7
   # feature_discovery: ^0.14.1
   gradient_borders: ^1.0.1
-  in_app_purchase: ^3.2.0
   visibility_detector: ^0.4.0+2
   confetti: ^0.7.0
   image_picker: ^1.1.2

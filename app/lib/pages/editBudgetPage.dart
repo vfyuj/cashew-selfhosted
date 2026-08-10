@@ -5,7 +5,6 @@ import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editCategoriesPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/shareBudget.dart';
 import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';

@@ -7,7 +7,24 @@ FROM ghcr.io/cirruslabs/flutter:3.19.6 AS web-build
 WORKDIR /web
 COPY app/ .
 RUN flutter pub get
-RUN flutter build web --release
+# Two flags, both about not calling Google at launch. See
+# specs/03-stage-1-kill-google.md.
+#
+# --web-renderer html: the default "auto" renderer picks CanvasKit on desktop
+# browsers, and CanvasKit downloads its Roboto fallback from fonts.gstatic.com
+# during startup. There is no way to switch that off while using CanvasKit, so
+# the renderer choice is the fix. Mobile browsers already got the HTML renderer
+# under "auto", so this only changes desktop web. If desktop rendering ever
+# looks wrong (the blur/"animated goo" effects are the likely candidates),
+# dropping this flag restores the old behaviour at the cost of one Google
+# request per launch.
+#
+# FLUTTER_WEB_CANVASKIT_URL: belt and braces for anyone who removes the flag
+# above -- it points the engine at the CanvasKit copy Flutter already writes
+# into build/web/canvaskit/, instead of fetching it from www.gstatic.com.
+RUN flutter build web --release \
+      --web-renderer html \
+      --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/
 
 # Pre-compress everything worth compressing, keeping the original beside it
 # (-k) for clients that don't accept gzip. server/lib/src/web_handler.dart

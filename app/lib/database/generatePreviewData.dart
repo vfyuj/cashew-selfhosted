@@ -33,7 +33,7 @@ Future deletePreviewData({bool resetOnboard = false}) async {
     List<String> transactionPks = transactionsToDelete
         .map((transaction) => transaction.transactionPk)
         .toList();
-    await database.deleteTransactions(transactionPks, updateSharedEntry: false);
+    await database.deleteTransactions(transactionPks);
   } catch (e) {
     print(e.toString());
   }
@@ -123,7 +123,6 @@ Future generatePreviewData() async {
   DateTime tripStart = DateTime.now().subtract(Duration(days: 7));
   DateTime tripEnd = DateTime.now().add(Duration(days: 14));
   await database.createOrUpdateBudget(
-    updateSharedEntry: false,
     Budget(
       budgetPk: "10",
       name: "Vacation",
@@ -182,7 +181,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       objectiveFk: "10",
@@ -206,7 +204,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       objectiveFk: "11",
@@ -230,7 +227,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       objectiveFk: "11",
@@ -254,7 +250,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -278,7 +273,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
         methodAdded: MethodAdded.preview,
@@ -302,7 +296,6 @@ Future generatePreviewData() async {
         sharedReferenceBudgetPk: "10"),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -327,7 +320,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -352,7 +344,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -377,7 +368,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -402,7 +392,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -428,7 +417,6 @@ Future generatePreviewData() async {
   );
   int monthlySpendingDayStart = DateTime.now().day <= 10 ? 15 : 2;
   await database.createOrUpdateBudget(
-    updateSharedEntry: false,
     Budget(
         budgetPk: "11",
         name: "Monthly Spending",
@@ -459,7 +447,6 @@ Future generatePreviewData() async {
         archived: false),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -483,7 +470,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -507,7 +493,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -531,7 +516,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -556,7 +540,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -581,7 +564,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -606,7 +588,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -631,7 +612,6 @@ Future generatePreviewData() async {
     ),
   );
   await database.createOrUpdateTransaction(
-    updateSharedEntry: false,
     insert: true,
     Transaction(
       methodAdded: MethodAdded.preview,
@@ -703,7 +683,6 @@ Future generatePreviewData() async {
     List<int> moreCommonCategories = [1, 2, 3, 4, 5];
     List<int> moreCommonCommonCategories = [1, 2, 4];
     await database.createOrUpdateTransaction(
-      updateSharedEntry: false,
       insert: true,
       Transaction(
         methodAdded: MethodAdded.preview,
@@ -734,7 +713,6 @@ Future generatePreviewData() async {
     List<int> moreCommonCommonCategories = [1, 2, 4];
     loadingProgressKey.currentState?.setProgressPercentage(i / 300);
     await database.createOrUpdateTransaction(
-      updateSharedEntry: false,
       insert: true,
       Transaction(
         methodAdded: MethodAdded.preview,
@@ -765,7 +743,6 @@ Future generatePreviewData() async {
   for (int i = 90; i < 320; i = i + 25 + Random().nextInt(10)) {
     loadingIndeterminateKey.currentState?.setVisibility(true);
     await database.createOrUpdateTransaction(
-      updateSharedEntry: false,
       insert: true,
       Transaction(
         methodAdded: MethodAdded.preview,

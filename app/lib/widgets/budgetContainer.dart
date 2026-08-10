@@ -1,5 +1,4 @@
 import 'package:cashew_selfhosted/database/tables.dart';
-import 'package:cashew_selfhosted/pages/sharedBudgetSettings.dart';
 import 'package:cashew_selfhosted/pages/transactionFilters.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/defaultPreferences.dart';
@@ -1266,9 +1265,6 @@ class _BudgetSpenderSummaryState extends State<BudgetSpenderSummary> {
                         });
                       }
                     }
-                  },
-                  onLongPress: () {
-                    memberPopup(context, spender.member);
                   },
                   color: Colors.transparent,
                   child: AnimatedContainer(

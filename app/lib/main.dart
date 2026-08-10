@@ -1,6 +1,6 @@
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/accountsPage.dart';
-import 'package:cashew_selfhosted/pages/autoTransactionsPageEmail.dart';
+import 'package:cashew_selfhosted/pages/autoTransactionsPageNotifications.dart';
 import 'package:cashew_selfhosted/pages/serverSetupWizardPage.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/iconObjects.dart';
@@ -45,11 +45,6 @@ bool allowDangerousDebugFlags = kDebugMode;
 void main() async {
   captureLogs(() async {
     WidgetsFlutterBinding.ensureInitialized();
-    // No Firebase.initializeApp() here on purpose -- on web it fetches the
-    // Firebase JS SDK from Google's CDN and blocks until it arrives, which
-    // would make launch require a network and reveal every user to Google.
-    // The opt-in features that need it initialize it themselves, on first use:
-    // ensureFirebaseInitialized() in struct/firebaseAuthGlobal.dart.
     await EasyLocalization.ensureInitialized();
     sharedPreferences = await SharedPreferences.getInstance();
     // Local-only reads, never block on network -- see specs/01-local-first-invariant.md.
@@ -141,7 +136,6 @@ class App extends StatelessWidget {
                 )),
               ],
             ),
-            EnableSignInWithGoogleFlyIn(),
             // Above the Row, so it covers the sidebar too -- but still a
             // sibling of it, so navigatorKey and snackbarKey stay mounted
             // underneath and the app's navigation helpers keep working.

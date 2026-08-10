@@ -18,7 +18,6 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="google-signin-client_id" content="267621253497-1na8q1lt56qg9177dskkrkdds5jjiqrn.apps.googleusercontent.com">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -40,16 +39,8 @@
   <meta name="description" content="A budget and financial tracking application designed for you" />
 
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://cashewapp.web.app/assets/preview.png" />
   <meta property="og:title" content="Cashew Selfhosted" />
   <meta property="og:description" content="A budget and financial tracking application designed for you" />
-  <meta property="og:image" content="https://cashewapp.web.app/assets/preview.png" />
-
-  <meta property="twitter:card" content="summary_large_image" />
-  <meta property="twitter:url" content="https://cashewapp.web.app/assets/preview.png" />
-  <meta property="twitter:title" content="Cashew Selfhosted" />
-  <meta property="twitter:description" content="A budget and financial tracking application designed for you" />
-  <meta property="twitter:image" content="https://cashewapp.web.app/assets/preview.png" />
 
   <script>
     // The value below is injected by flutter build, do not touch.
@@ -67,23 +58,11 @@
     }
   </style>
   <!--
-    Upstream hand-loaded the Firebase JS SDK here, from Google's CDN, and
-    initialized a second JS-side app against upstream's own Firebase project.
-    Removed: it was three blocking requests to www.gstatic.com on every page
-    load, for an app instance nothing in this fork ever read.
-
-    Nothing needs to replace it. The `firebase_core_web` plugin injects the
-    SDK it wants at runtime by itself, and it explicitly asks that manual
-    <script> tags for the SDK be removed -- having both is a version conflict
-    it warns about, not a belt-and-braces.
-
-    The Dart-side Firebase/Google dependency is a separate matter: it is still
-    genuinely used by the opt-in Gmail receipt scanning, Drive attachment and
-    shared-budget paths inherited from upstream. It no longer runs at launch
-    though -- `Firebase.initializeApp` injects those same gstatic scripts, so
-    it was moved out of main() and behind ensureFirebaseInitialized(), called
-    on first use by the opt-in paths only. A plain launch of this app makes no
-    request to Google. See specs/03-stage-1-kill-google.md.
+    Upstream hand-loaded the Firebase JS SDK here from Google's CDN. That is
+    gone, along with every other Google dependency in this fork -- there is no
+    firebase_core_web plugin left to inject scripts either, so nothing needs to
+    replace it. This page loads only same-origin assets.
+    See specs/03-stage-1-kill-google.md.
   -->
   <script defer src="sql-wasm.js"></script>
   <div id="loading">

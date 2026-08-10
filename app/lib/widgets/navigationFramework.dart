@@ -11,7 +11,7 @@ import 'package:cashew_selfhosted/pages/addCategoryPage.dart';
 import 'package:cashew_selfhosted/pages/addObjectivePage.dart';
 import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/pages/addWalletPage.dart';
-import 'package:cashew_selfhosted/pages/autoTransactionsPageEmail.dart';
+import 'package:cashew_selfhosted/pages/autoTransactionsPageNotifications.dart';
 import 'package:cashew_selfhosted/pages/budgetsListPage.dart';
 import 'package:cashew_selfhosted/pages/editAssociatedTitlesPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
@@ -21,7 +21,6 @@ import 'package:cashew_selfhosted/pages/homePage/homePage.dart';
 import 'package:cashew_selfhosted/pages/notificationsPage.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
 import 'package:cashew_selfhosted/pages/onBoardingPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/pages/subscriptionsPage.dart';
 import 'package:cashew_selfhosted/pages/transactionsListPage.dart';
@@ -36,7 +35,6 @@ import 'package:cashew_selfhosted/struct/navBarIconsData.dart';
 import 'package:cashew_selfhosted/struct/quickActions.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/shareBudget.dart';
 import 'package:cashew_selfhosted/struct/syncClient.dart';
 import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/bottomNavBar.dart';
@@ -54,7 +52,6 @@ import 'package:cashew_selfhosted/widgets/openContainerNavigation.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/openSnackbar.dart';
 import 'package:cashew_selfhosted/widgets/outlinedButtonStacked.dart';
-import 'package:cashew_selfhosted/widgets/ratingPopup.dart';
 import 'package:cashew_selfhosted/widgets/selectAmount.dart';
 import 'package:cashew_selfhosted/widgets/selectChips.dart';
 import 'package:cashew_selfhosted/widgets/selectedTransactionsAppBar.dart';
@@ -73,7 +70,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_lazy_indexed_stack/flutter_lazy_indexed_stack.dart';
-import 'package:googleapis/drive/v3.dart';
 import 'package:provider/provider.dart';
 // import 'package:feature_discovery/feature_discovery.dart';
 
@@ -297,7 +293,6 @@ GlobalKey<ObjectivesListPageState> objectivesListPageStateKey = GlobalKey();
 GlobalKey<UpcomingOverdueTransactionsState>
     upcomingOverdueTransactionsStateKey = GlobalKey();
 GlobalKey<CreditDebtTransactionsState> creditDebtTransactionsKey = GlobalKey();
-GlobalKey<ProductsState> purchasesStateKey = GlobalKey();
 GlobalKey<AccountsPageState> accountsPageStateKey = GlobalKey();
 GlobalKey<AccountLoginButtonState> settingsAccountLoginButtonKey =
     GlobalKey();
@@ -324,15 +319,6 @@ Future<bool> runAllCloudFunctions(BuildContext context,
     // itself is untouched and still reachable from the "manage synced
     // devices" screen for manual use.
     await runLiveSyncCycle();
-    if (appStateSettings["emailScanningPullToRefresh"] ||
-        entireAppLoaded == false) {
-      loadingIndeterminateKey.currentState?.setVisibility(true);
-      await parseEmailsInBackground(context, forceParse: true);
-    }
-    loadingIndeterminateKey.currentState?.setVisibility(true);
-    await syncPendingQueueOnServer(); //sync before download
-    loadingIndeterminateKey.currentState?.setVisibility(true);
-    await getCloudBudgets();
     loadingIndeterminateKey.currentState?.setVisibility(true);
     await createBackupInBackground(context);
     loadingIndeterminateKey.currentState?.setVisibility(true);
@@ -426,25 +412,19 @@ class PageNavigationFrameworkState extends State<PageNavigationFramework> {
       await initializeNotificationsPlatform();
 
       bool isChangelogShown = showChangelog(context);
-      bool isRatingPopupShown = false;
-      if (isChangelogShown == false) {
-        isRatingPopupShown = openRatingPopupCheck(context);
-      }
 
       await setDailyNotifications(context);
       await initializeDefaultDatabase();
       runNotificationPayLoads(context);
       runQuickActionsPayLoads(context);
       initializeLocalizedMonthNames();
-      initializeStoreAndPurchases(
-          context: context, popRouteWithPurchase: false);
 
       if (entireAppLoaded == false) {
         await runAllCloudFunctions(context);
       }
 
       // Do this after cloud functions attempt (i.e. if user is not signed in we can show it)
-      if (isRatingPopupShown == false && isChangelogShown == false) {
+      if (isChangelogShown == false) {
         openBackupReminderPopupCheck(context);
       }
 

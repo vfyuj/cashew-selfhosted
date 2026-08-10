@@ -16,7 +16,6 @@ import 'package:cashew_selfhosted/widgets/navigationSidebar.dart';
 import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
-import 'package:cashew_selfhosted/widgets/ratingPopup.dart';
 import 'package:cashew_selfhosted/widgets/showChangelog.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
 import 'package:cashew_selfhosted/widgets/textWidgets.dart';
@@ -232,13 +231,6 @@ class AboutPageState extends State<AboutPage> {
       AboutInfoBox(
         title: "Flutter",
         link: "https://flutter.dev/",
-        padding: fullScreenLayout
-            ? EdgeInsetsDirectional.symmetric(horizontal: 7.5, vertical: 5)
-            : null,
-      ),
-      AboutInfoBox(
-        title: "Google Cloud APIs",
-        link: "https://cloud.google.com/",
         padding: fullScreenLayout
             ? EdgeInsetsDirectional.symmetric(horizontal: 7.5, vertical: 5)
             : null,
@@ -884,17 +876,6 @@ class AboutLinks extends StatelessWidget {
                   ? Icons.live_help_outlined
                   : Icons.live_help_rounded,
               text: "guide-and-faq".tr(),
-            ),
-            const HorizontalBreak(padding: EdgeInsetsDirectional.zero),
-            _buildTappable(
-              context: context,
-              isExternalLink: false,
-              onTap: () =>
-                  openBottomSheet(context, RatingPopup(), fullSnap: true),
-              icon: appStateSettings["outlinedIcons"]
-                  ? Icons.rate_review_outlined
-                  : Icons.rate_review_rounded,
-              text: "feedback".tr(),
             ),
             const HorizontalBreak(padding: EdgeInsetsDirectional.zero),
             _buildTappable(

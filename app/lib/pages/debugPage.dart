@@ -16,7 +16,6 @@ import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/openSnackbar.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
 import 'package:cashew_selfhosted/database/generatePreviewData.dart';
-import 'package:cashew_selfhosted/widgets/ratingPopup.dart';
 import 'package:cashew_selfhosted/widgets/settingsContainers.dart';
 import 'package:cashew_selfhosted/widgets/textInput.dart';
 import 'package:cashew_selfhosted/widgets/textWidgets.dart';
@@ -303,62 +302,6 @@ class DebugPage extends StatelessWidget {
               ? Icons.format_color_text_outlined
               : Icons.format_color_text_rounded,
         ),
-        DangerousDebugFlag(
-          child: SettingsContainerSwitch(
-            onSwitched: (value) async {
-              updateSettings("emailScanning", value,
-                  updateGlobalState: false, pagesNeedingRefresh: [3]);
-            },
-            title: "Enable Email Scanning",
-            description: "Not verified by Google. Still in testing.",
-            initialValue: appStateSettings["emailScanning"] == true,
-            icon: appStateSettings["outlinedIcons"]
-                ? Icons.mark_email_unread_outlined
-                : Icons.mark_email_unread_rounded,
-          ),
-        ),
-        DangerousDebugFlag(
-          child: SettingsContainerSwitch(
-            onSwitched: (value) async {
-              updateSettings("emailScanningPullToRefresh", value,
-                  pagesNeedingRefresh: [], updateGlobalState: false);
-            },
-            title: "Email Scanning Pull to Refresh",
-            description: "May increase API usage",
-            initialValue:
-                appStateSettings["emailScanningPullToRefresh"] == true,
-            icon: appStateSettings["outlinedIcons"]
-                ? Icons.mark_email_unread_outlined
-                : Icons.mark_email_unread_rounded,
-          ),
-        ),
-        DangerousDebugFlag(
-          child: SettingsContainerSwitch(
-            onSwitched: (value) async {
-              updateSettings("sharedBudgets", value,
-                  updateGlobalState: true, pagesNeedingRefresh: [0, 1, 2, 3]);
-            },
-            title: "Enable Shared Budgets",
-            description:
-                "In testing, share budgets and transactions with other users.",
-            initialValue: appStateSettings["sharedBudgets"] == true,
-            icon: appStateSettings["outlinedIcons"]
-                ? Icons.share_outlined
-                : Icons.share_rounded,
-          ),
-        ),
-        SettingsContainerSwitch(
-          enableBorderRadius: true,
-          onSwitched: (value) {
-            updateSettings("enableGoogleLoginFlyIn", value,
-                pagesNeedingRefresh: [], updateGlobalState: false);
-          },
-          initialValue: appStateSettings["enableGoogleLoginFlyIn"] == true,
-          title: "Google Login Flyin".tr(),
-          description:
-              "Show login with Google dropdown if not logged in and full screen",
-          icon: Icons.g_mobiledata,
-        ),
         SettingsContainerSwitch(
           onSwitched: (value) async {
             updateSettings("forceAutoLogin", value, updateGlobalState: false);
@@ -416,20 +359,6 @@ class DebugPage extends StatelessWidget {
           icon: appStateSettings["outlinedIcons"]
               ? Icons.animation_outlined
               : Icons.animation_rounded,
-        ),
-        FutureBuilder<bool>(
-          future: inAppReview.isAvailable(),
-          builder: (context, snapshot) {
-            return SettingsContainer(
-              icon: Icons.store,
-              title: "Test store review integration",
-              description: "Available: " + snapshot.data.toString(),
-              onTap: () async {
-                if (await inAppReview.isAvailable())
-                  inAppReview.requestReview();
-              },
-            );
-          },
         ),
         SettingsContainerSwitch(
           onSwitched: (value) async {

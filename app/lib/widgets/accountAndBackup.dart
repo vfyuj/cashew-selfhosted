@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/database/generatePreviewData.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
-import 'package:cashew_selfhosted/firebase_options.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/main.dart';
 import 'package:cashew_selfhosted/pages/aboutPage.dart';
@@ -12,7 +11,6 @@ import 'package:cashew_selfhosted/struct/liveSyncClient.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/webdavClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/shareBudget.dart';
 import 'package:cashew_selfhosted/struct/syncClient.dart';
 import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
@@ -35,9 +33,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:googleapis/drive/v3.dart' as drive;
-import 'package:googleapis/gmail/v1.dart' as gMail;
-import 'package:google_sign_in/google_sign_in.dart' as signIn;
 import 'package:http/http.dart' as http;
 import 'package:shimmer/shimmer.dart';
 import 'package:universal_html/html.dart' as html;
@@ -62,166 +57,10 @@ Future<bool> checkConnection() async {
   return isConnected;
 }
 
-class GoogleAuthClient extends http.BaseClient {
-  final Map<String, String> _headers;
-  final http.Client _client = new http.Client();
-  GoogleAuthClient(this._headers);
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
-    return _client.send(request..headers.addAll(_headers));
-  }
-}
-
-signIn.GoogleSignIn? googleSignIn;
-signIn.GoogleSignInAccount? googleUser;
-
-Future<bool> signInGoogle(
-    {BuildContext? context,
-    bool? waitForCompletion,
-    bool? gMailPermissions,
-    bool? drivePermissionsAttachments,
-    bool? silentSignIn,
-    Function()? next}) async {
-  // bool isConnected = false;
-  if (await checkLockedFeatureIfInDemoMode(context) == false) return false;
-  if (appStateSettings["emailScanning"] == false) gMailPermissions = false;
-
-  try {
-    if (gMailPermissions == true &&
-        googleUser != null &&
-        !(await testIfHasGmailAccess())) {
-      await signOutGoogle();
-      googleSignIn = null;
-      settingsPageStateKey.currentState?.refreshState();
-    } else if (googleUser == null) {
-      googleSignIn = null;
-      settingsPageStateKey.currentState?.refreshState();
-    }
-    //Check connection
-    // isConnected = await checkConnection().timeout(Duration(milliseconds: 2500),
-    //     onTimeout: () {
-    //   throw ("There was an error checking your connection");
-    // });
-    // if (isConnected == false) {
-    //   if (context != null) {
-    //     openSnackbar(context, "Could not connect to network",
-    //         backgroundColor: lightenPastel(Theme.of(context).colorScheme.error,
-    //             amount: 0.6));
-    //   }
-    //   return false;
-    // }
-
-    if (waitForCompletion == true && context != null) openLoadingPopup(context);
-    if (googleUser == null) {
-      List<String> scopes = [
-        // See https://github.com/flutter/flutter/issues/155490 and https://github.com/flutter/flutter/issues/155429
-        // Once an account is logged in with these scopes, they are not needed
-        // So we will keep these to apply for all users to prevent errors, especially on silent sign in
-        "https://www.googleapis.com/auth/userinfo.profile",
-        "https://www.googleapis.com/auth/userinfo.email",
-        ...(drivePermissionsAttachments == true
-            ? [drive.DriveApi.driveFileScope]
-            : []),
-        ...(gMailPermissions == true
-            ? [
-                gMail.GmailApi.gmailReadonlyScope,
-                gMail.GmailApi
-                    .gmailModifyScope //We do this so the emails can be marked read
-              ]
-            : [])
-      ];
-      googleSignIn = getPlatform() == PlatformOS.isIOS
-          ? signIn.GoogleSignIn(
-              clientId: DefaultFirebaseOptions.currentPlatform.iosClientId,
-              scopes: scopes)
-          : signIn.GoogleSignIn.standard(scopes: scopes);
-      // googleSignIn?.currentUser?.clearAuthCache();
-
-      final signIn.GoogleSignInAccount? account = silentSignIn == true
-          ?
-          // kIsWeb
-          //     ? await googleSignIn?.signInSilently()
-          // Google Sign-in silent on web no longer gives access to the scopes
-          // https://pub.dev/packages/google_sign_in_web#differences-between-google-identity-services-sdk-and-google-sign-in-for-web-sdk
-          // await googleSignIn?.signInSilently().then((value) async {
-          //     return await googleSignIn?.signIn();
-          //   })
-          // Currently we do not use silent sign in anymore, as it does not allow any access
-          // to GDrive or other tools, so there is no point to get the username/email form silent
-          kIsWeb
-              ? await googleSignIn?.signIn()
-              : await googleSignIn?.signInSilently()
-          : await googleSignIn?.signIn();
-
-      if (account != null) {
-        // print("ACCOUNT");
-        // print(account);
-        googleUser = account;
-      } else {
-        throw ("Login failed");
-      }
-    }
-    if (waitForCompletion == true && context != null) popRoute(context);
-    if (next != null) next();
-    return true;
-  } catch (e) {
-    print(e);
-    if (waitForCompletion == true && context != null) popRoute(context);
-    openSnackbar(
-      SnackbarMessage(
-        title: "sign-in-error".tr(),
-        description: "sign-in-error-description".tr(),
-        icon: appStateSettings["outlinedIcons"]
-            ? Icons.error_outlined
-            : Icons.error_rounded,
-        timeout: Duration(milliseconds: 3400),
-        onTap: () => signInGoogle(
-          context: context,
-          drivePermissionsAttachments: drivePermissionsAttachments,
-          gMailPermissions: gMailPermissions,
-          next: next,
-          silentSignIn: false,
-          waitForCompletion: waitForCompletion,
-        ),
-      ),
-    );
-    googleUser = null;
-    throw ("Error signing in");
-  }
-}
-
 void refreshUIAfterLoginChange() {
   sidebarStateKey.currentState?.refreshState();
   accountsPageStateKey.currentState?.refreshState();
   settingsAccountLoginButtonKey.currentState?.refreshState();
-}
-
-Future<bool> testIfHasGmailAccess() async {
-  print("TESTING GMAIL");
-  try {
-    final authHeaders = await googleUser!.authHeaders;
-    final authenticateClient = GoogleAuthClient(authHeaders);
-    gMail.GmailApi gmailApi = gMail.GmailApi(authenticateClient);
-    gMail.ListMessagesResponse results = await gmailApi.users.messages
-        .list(googleUser!.id.toString(), maxResults: 1);
-  } catch (e) {
-    print(e.toString());
-    print("NO GMAIL");
-    return false;
-  }
-  return true;
-}
-
-Future<bool> signOutGoogle() async {
-  await googleSignIn?.signOut();
-  googleUser = null;
-  print("Signedout");
-  return true;
-}
-
-Future<bool> refreshGoogleSignIn() async {
-  await signOutGoogle();
-  await signInGoogle(silentSignIn: kIsWeb ? false : true);
-  return true;
 }
 
 /// If already signed in, runs the post-login sync/backup sequence. If not,
@@ -248,10 +87,6 @@ Future<bool> syncAfterLogin(BuildContext context) async {
   loadingIndeterminateKey.currentState?.setVisibility(true);
   try {
     await syncData(context);
-    loadingIndeterminateKey.currentState?.setVisibility(true);
-    await syncPendingQueueOnServer();
-    loadingIndeterminateKey.currentState?.setVisibility(true);
-    await getCloudBudgets();
     loadingIndeterminateKey.currentState?.setVisibility(true);
     await createBackupInBackground(context);
     loadingIndeterminateKey.currentState?.setVisibility(false);

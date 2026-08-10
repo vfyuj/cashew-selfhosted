@@ -117,11 +117,12 @@ Router buildAdminRouter(AuthService authService, String dataDir) {
     } on UserNotFoundException {
       return _error(404, 'user not found');
     }
-    // Sessions cascade via the foreign key; stored files do not, so clear both
-    // namespaces explicitly. Done after the delete succeeds so a refused
+    // Sessions cascade via the foreign key; stored files do not, so clear every
+    // namespace explicitly. Done after the delete succeeds so a refused
     // deletion never destroys data.
     UserFileStore(dataDir, 'sync', userId).deleteAll();
     UserFileStore(dataDir, 'backup', userId).deleteAll();
+    UserFileStore(dataDir, 'attachments', userId).deleteAll();
     return Response.ok('');
   });
 

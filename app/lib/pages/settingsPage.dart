@@ -9,7 +9,6 @@ import 'package:cashew_selfhosted/pages/editHomePage.dart';
 import 'package:cashew_selfhosted/pages/editObjectivesPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageNetWorth.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
-import 'package:cashew_selfhosted/pages/premiumPage.dart';
 import 'package:cashew_selfhosted/pages/transactionsListPage.dart';
 import 'package:cashew_selfhosted/pages/upcomingOverdueTransactionsPage.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
@@ -21,7 +20,7 @@ import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
 import 'package:cashew_selfhosted/widgets/exportDB.dart';
 import 'package:cashew_selfhosted/widgets/importCSV.dart';
 import 'package:cashew_selfhosted/widgets/exportCSV.dart';
-import 'package:cashew_selfhosted/pages/autoTransactionsPageEmail.dart';
+import 'package:cashew_selfhosted/pages/autoTransactionsPageNotifications.dart';
 import 'package:cashew_selfhosted/pages/activityPage.dart';
 import 'package:cashew_selfhosted/pages/editAssociatedTitlesPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
@@ -37,7 +36,6 @@ import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/radioItems.dart';
-import 'package:cashew_selfhosted/widgets/ratingPopup.dart';
 import 'package:cashew_selfhosted/widgets/restartApp.dart';
 import 'package:cashew_selfhosted/widgets/selectAmount.dart';
 import 'package:cashew_selfhosted/widgets/selectColor.dart';
@@ -114,10 +112,6 @@ class MoreActionsPageState extends State<MoreActionsPage> {
           ),
         ],
         listWidgets: [
-          Padding(
-            padding: const EdgeInsetsDirectional.only(bottom: 8.0),
-            child: PremiumBanner(),
-          ),
           MorePages()
         ],
       );
@@ -196,22 +190,6 @@ class MorePages extends StatelessWidget {
                   title: "about-app".tr(namedArgs: {"app": globalAppName}),
                   icon: navBarIconsData["about"]!.iconData,
                   isOutlined: true,
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsetsDirectional.symmetric(
-                      vertical: 5, horizontal: 4),
-                  child: SettingsContainer(
-                    onTap: () {
-                      openBottomSheet(context, RatingPopup(), fullSnap: true);
-                    },
-                    title: "feedback".tr(),
-                    icon: appStateSettings["outlinedIcons"]
-                        ? Icons.rate_review_outlined
-                        : Icons.rate_review_rounded,
-                    isOutlined: true,
-                  ),
                 ),
               ),
             ],
@@ -568,16 +546,6 @@ class SettingsPageContent extends StatelessWidget {
         //   title: "Auto Transactions",
         //   icon: appStateSettings["outlinedIcons"] ? Icons.auto_fix_high_outlined : Icons.auto_fix_high_rounded,
         // ),
-
-        appStateSettings["emailScanning"]
-            ? SettingsContainerOpenPage(
-                openPage: AutoTransactionsPageEmail(),
-                title: "auto-email-transactions".tr(),
-                icon: appStateSettings["outlinedIcons"]
-                    ? Icons.mark_email_unread_outlined
-                    : Icons.mark_email_unread_rounded,
-              )
-            : SizedBox.shrink(),
 
         appStateSettings["notificationScanningDebug"] &&
                 getPlatform(ignoreEmulation: true) == PlatformOS.isAndroid
