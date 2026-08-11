@@ -5,6 +5,7 @@ import 'package:cashew_selfhosted/pages/addWalletPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetLimitsPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
+import 'package:cashew_selfhosted/struct/budgetPeriodAmounts.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
@@ -280,8 +281,9 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
   }
 
   Future addBudget() async {
-    loadingIndeterminateKey.currentState?.setVisibility(true);
     Budget createdBudget = await createBudget();
+    if (await confirmClearingAmountHistory(createdBudget) == false) return;
+    loadingIndeterminateKey.currentState?.setVisibility(true);
     print("Added budget");
     await database.createOrUpdateBudget(
         insert: widget.budget == null, createdBudget);
@@ -290,13 +292,42 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
     popRoute(context);
   }
 
+  // Changing a budget's cycle discards the per-period amounts it has recorded,
+  // because the stored period boundaries stop lining up with real ones (see
+  // struct/budgetPeriodAmounts.dart). It is the one edit here that destroys
+  // data, so it asks first. Returns false to abandon the save.
+  //
+  // Raw English, not .tr() keys - see BL-003.
+  Future<bool> confirmClearingAmountHistory(Budget createdBudget) async {
+    if (widget.budget == null) return true;
+    final Budget previous =
+        await database.getBudgetInstance(widget.budget!.budgetPk);
+    if (amountHistoryWouldBeCleared(
+            previous: previous, updated: createdBudget) ==
+        false) return true;
+    final dynamic result = await openPopup(
+      context,
+      title: "Clear this budget's history?",
+      description:
+          "Changing how often this budget repeats also clears the amounts it recorded for past periods, because they no longer line up with the new periods. Those periods will go back to showing the current amount.",
+      icon: appStateSettings["outlinedIcons"]
+          ? Icons.warning_outlined
+          : Icons.warning_rounded,
+      onSubmitLabel: "Change anyway",
+      onSubmit: () => popRoute(context, true),
+      onCancelLabel: "Cancel",
+      onCancel: () => popRoute(context, false),
+    );
+    return result == true;
+  }
+
   Future<Budget> createBudget() async {
     Budget? currentInstance;
     if (widget.budget != null) {
       currentInstance =
           await database.getBudgetInstance(widget.budget!.budgetPk);
     }
-    return await Budget(
+    final Budget budget = Budget(
       budgetPk: widget.budget != null ? widget.budget!.budgetPk : "-1",
       name: selectedTitle ?? "",
       amount: selectedAmount ?? 0,
@@ -344,6 +375,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
       income: selectedIncome,
       walletFks: selectedWalletFks,
     );
+    // Records the outgoing amount against the periods it applied to, so
+    // changing the target here does not rewrite what finished periods are
+    // measured against.
+    return withUpdatedAmountHistory(previous: currentInstance, updated: budget);
   }
 
   Budget? budgetInitial;
@@ -843,6 +878,28 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
           //           ),
           //         ),
           // ),
+          // Raw English, not a .tr() key - see BL-003.
+          SliverToBoxAdapter(
+            child: widget.budget == null ||
+                    mapRecurrence(selectedRecurrence) ==
+                        BudgetReoccurence.custom
+                ? SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 24,
+                      end: 24,
+                      bottom: 15,
+                    ),
+                    child: TextFont(
+                      text:
+                          "Periods that have already ended keep the amount they were set to at the time.",
+                      fontSize: 14,
+                      textColor: getColor(context, "textLight"),
+                      maxLines: 3,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+          ),
           SliverToBoxAdapter(
             child: selectedIncome
                 ? SizedBox.shrink()

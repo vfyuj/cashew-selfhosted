@@ -42,6 +42,11 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.0.0-beta.22
+    Changing a budget's amount now applies from the current period onward only. Periods that have already ended keep the amount they were set to at the time, so your budget history stops rewriting itself every time you adjust a target.
+    This covers every main category budget and every custom budget. Spending goals set for individual categories inside a budget still use one amount for all periods.
+    Changing a budget's cycle - how often it repeats, how long a period is, or when it starts - clears its saved history, because the old period boundaries no longer line up. Cashew asks before doing that.
+
     < 1.0.0-beta.20
     The Home and Budgets pages now show Monthly Cash Flow instead of Planned vs. Actual: income and expenses as two separate, readable figures instead of one net number nobody could reconstruct on sight.
     Settings is reorganized into grouped cards and now follows your Material You accent colour, with a colour swatch on the Accent Color row so you can see what's set without opening the picker.

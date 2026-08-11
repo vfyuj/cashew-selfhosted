@@ -222,7 +222,8 @@ class _BudgetPageContentState extends State<_BudgetPageContent> {
   @override
   Widget build(BuildContext context) {
     double budgetAmount = budgetAmountToPrimaryCurrency(
-        Provider.of<AllWallets>(context, listen: true), widget.budget);
+        Provider.of<AllWallets>(context, listen: true), widget.budget,
+        forDate: dateForRange);
     DateTimeRange budgetRange = getBudgetDate(widget.budget, dateForRange);
     String pageId = budgetRange.start.millisecondsSinceEpoch.toString() +
         widget.budget.name +
@@ -297,6 +298,7 @@ class _BudgetPageContentState extends State<_BudgetPageContent> {
               return TotalSpent(
                 budget: widget.budget,
                 totalSpent: totalSpent,
+                forDate: budgetRange.start,
               );
             } else {
               return SizedBox.shrink();
@@ -1119,7 +1121,8 @@ class _BudgetLineGraphState extends State<BudgetLineGraph> {
   @override
   Widget build(BuildContext context) {
     double budgetAmount = budgetAmountToPrimaryCurrency(
-        Provider.of<AllWallets>(context, listen: true), widget.budget);
+        Provider.of<AllWallets>(context, listen: true), widget.budget,
+        forDate: widget.budgetRange.start);
 
     return StreamBuilder<List<List<Transaction>>>(
       stream: mergedStreamsPastSpendingTotals,
@@ -1276,10 +1279,14 @@ class TotalSpent extends StatefulWidget {
     super.key,
     required this.totalSpent,
     required this.budget,
+    required this.forDate,
   });
 
   final double totalSpent;
   final Budget budget;
+  // The period being displayed, so a finished period shows the target it had
+  // at the time rather than the budget's current amount.
+  final DateTime forDate;
 
   @override
   State<TotalSpent> createState() => _TotalSpentState();
@@ -1299,7 +1306,8 @@ class _TotalSpentState extends State<TotalSpent> {
   @override
   Widget build(BuildContext context) {
     double budgetAmount = budgetAmountToPrimaryCurrency(
-        Provider.of<AllWallets>(context, listen: true), widget.budget);
+        Provider.of<AllWallets>(context, listen: true), widget.budget,
+        forDate: widget.forDate);
 
     return GestureDetector(
       onTap: () {

@@ -537,14 +537,30 @@ class Budgets extends Table {
       .map(const StringListInColumnConverter())();
   // Attributes to configure sharing of transactions:
   // Retained only to keep this schema byte-identical to upstream Cashew's so
-  // its backups stay importable (see CLAUDE.md). Nothing writes it: the
-  // Firestore-backed shared budgets it belonged to were removed with the rest
-  // of the Google integration.
+  // its backups stay importable (see CLAUDE.md). Nothing writes them: the
+  // Firestore-backed shared budgets they belonged to were removed with the rest
+  // of the Google integration. The one exception is sharedAllMembersEver -
+  // see its own note below.
   TextColumn get sharedKey => text().nullable()();
   IntColumn get sharedOwnerMember => intEnum<SharedOwnerMember>().nullable()();
   DateTimeColumn get sharedDateUpdated => dateTime().nullable()();
   TextColumn get sharedMembers =>
       text().map(const StringListInColumnConverter()).nullable()();
+  // WARNING: this column's name lies. It no longer holds members.
+  //
+  // It holds the budget's per-period amount history - what its target was from
+  // each period onward - so that changing a budget's amount does not rewrite
+  // what already-finished periods are measured against. The name is upstream's
+  // and cannot change without breaking the schema invariant above, which is the
+  // whole reason a dead column was borrowed instead of a new one added.
+  //
+  // Read and write it ONLY through struct/budgetPeriodAmounts.dart. Entries are
+  // `<periodStartEpochMillis>=<amount>` and anything not matching that exact
+  // shape is ignored, which is what lets an original-Cashew backup's real
+  // member IDs arrive here harmlessly.
+  //
+  // Full rationale, including how upstream Cashew behaves if it ever reads this
+  // back: specs/backlog/BL-006-per-period-budget-amounts.md.
   TextColumn get sharedAllMembersEver =>
       text().map(const StringListInColumnConverter()).nullable()();
   BoolColumn get isAbsoluteSpendingLimit =>
