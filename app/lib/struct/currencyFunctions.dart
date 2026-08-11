@@ -1,3 +1,4 @@
+import 'package:cashew_selfhosted/struct/budgetPeriodAmounts.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'dart:convert';
 import 'package:cashew_selfhosted/database/tables.dart';
@@ -129,8 +130,17 @@ double getCurrencyExchangeRate(
   }
 }
 
-double budgetAmountToPrimaryCurrency(AllWallets allWallets, Budget budget) {
-  return budget.amount *
+// Pass [forDate] when rendering a specific budget period, so a period that has
+// already finished keeps the target it was measured against at the time rather
+// than picking up whatever the budget is set to now. Omitting it reads the
+// current amount, which is the right answer for anything about "now" (planned
+// totals, goal entry) and a safe default everywhere else.
+double budgetAmountToPrimaryCurrency(AllWallets allWallets, Budget budget,
+    {DateTime? forDate}) {
+  final double amount = forDate == null
+      ? budget.amount
+      : budgetAmountForPeriod(budget, forDate);
+  return amount *
       (amountRatioToPrimaryCurrencyGivenPk(allWallets, budget.walletFk));
 }
 

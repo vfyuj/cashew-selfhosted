@@ -42,6 +42,11 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.0.0-beta.19
+    Changing a budget's amount now applies from the current period onward only. Periods that have already ended keep the amount they were set to at the time, so your budget history stops rewriting itself every time you adjust a target.
+    This covers every main category budget and every custom budget. Spending goals set for individual categories inside a budget still use one amount for all periods.
+    Changing a budget's cycle - how often it repeats, how long a period is, or when it starts - clears its saved history, because the old period boundaries no longer line up. Cashew asks before doing that.
+
     < 1.0.0-beta.12
     Every remaining Google dependency is gone. The app no longer contacts Google at all, on any screen, at any point.
     Receipt attachments now upload to your own server instead of Google Drive. Attachments you added before this update keep their old Drive links and still open, but only new ones get the in-app preview.
