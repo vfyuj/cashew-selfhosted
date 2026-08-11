@@ -16,21 +16,17 @@ docker compose up --build -d
 
 The build compiles the Flutter web app from source inside Docker (needs to download the Flutter SDK image the first time), so the first `--build` will take noticeably longer than a Dart-only build — that's expected, and it also means any redeploy rebuilds the web UI even if you only changed server code. Re-running `docker compose up --build -d` after a `git pull` is the entire redeploy process; there's no separate manual build-and-copy step.
 
-### If the home server is a Raspberry Pi: build somewhere else and push a ready docker file
+### If the home server is a Raspberry Pi: pull a published image instead of building
 
 `flutter build web --release` wants roughly 3–4 GB of RAM. On a Pi 4 that either thrashes swap for a very long time or gets OOM-killed part-way through, and on a Pi with less than 4 GB it will not finish at all. This is a *build*-time problem only — the compiled server idles in well under 100 MB, which is why `docker-compose.yml` caps the container at 512 MB.
 
-So build the image on your laptop and push it, rather than building on the Pi:
-
-```bash
-docker buildx build --platform linux/arm64 -t ghcr.io/vfyuj/cashew-selfhosted:latest --push .
-```
-
-Then on the Pi, point `docker-compose.yml` at that image instead of building — swap `build: .` for `image: ghcr.io/vfyuj/cashew-selfhosted:latest` — and redeploy with:
+So don't build on the Pi. Every tagged release publishes a ready arm64 image (see `specs/09-releases.md`). Point `docker-compose.yml` at it instead of building — swap `build: .` for `image: ghcr.io/vfyuj/cashew-selfhosted:latest` — and deploy with:
 
 ```bash
 docker compose pull && docker compose up -d
 ```
+
+Pin the version instead of `latest` if you'd rather choose when to move: `ghcr.io/vfyuj/cashew-selfhosted:1.0.0-beta.22`. `docker pull` needs no credentials as long as the GHCR package is public — packages start **private**, so make it public once, under the repository's Packages page, or the Pi will get a 401.
 
 Check `/health` afterwards exactly as above; the version number is still how you confirm the new build actually landed.
 

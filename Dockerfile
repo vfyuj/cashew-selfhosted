@@ -3,6 +3,13 @@
 # port, and the browser only ever sees one origin -- no reverse-proxy path
 # splitting, no CORS. Two build stages because the API and the web UI use
 # different toolchains, not because they end up in different containers.
+# Deliberately no `--platform=$BUILDPLATFORM` on this stage, tempting as it is:
+# the web build's output is arch-neutral, so pinning it to the build host would
+# avoid emulating it in a cross build. But $BUILDPLATFORM only exists under
+# BuildKit, and the legacy builder fails to parse the line at all -- which would
+# break `docker compose up --build` on any host whose Docker lacks buildx, and
+# that command is the operator's whole deploy loop. release.yml builds each
+# architecture on its own native runner instead, so nothing is emulated anyway.
 FROM ghcr.io/cirruslabs/flutter:3.19.6 AS web-build
 WORKDIR /web
 COPY app/ .

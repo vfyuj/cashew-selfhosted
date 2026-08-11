@@ -2,12 +2,19 @@ buildscript {
     ext.kotlin_version = '1.9.0'
     repositories {
         google()
-        jcenter()
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.3.1'
+        // AGP 8.x is required, not merely preferred: Android 15's android.jar
+        // encodes its resource table in a form the aapt2 bundled with AGP 7.x
+        // cannot parse ("RES_TABLE_TYPE_TYPE entry offsets overlap actual entry
+        // data"), which broke `flutter build apk --release` outright while
+        // debug builds passed -- verifyReleaseResources is a release-only task.
+        // compileSdk 35 is not optional either: sqlite3_flutter_libs 0.5.42
+        // declares it, and this is the AGP version that plugin itself builds
+        // against.
+        classpath 'com.android.tools.build:gradle:8.7.3'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
@@ -15,8 +22,46 @@ buildscript {
 allprojects {
     repositories {
         google()
-        jcenter()
         mavenCentral()
+    }
+}
+
+// system_theme 3.0.0 predates AGP 8 and declares its package only in its
+// AndroidManifest.xml, which AGP 8 ignores -- configuration fails without a
+// namespace. Upstream added one in 3.2.0, but that pulls system_theme_web
+// >=0.0.3, which needs web ^1.0.0 while Flutter 3.19.6 pins web 0.5.1. So the
+// upgrade is blocked until the Flutter SDK itself moves, and the value below is
+// injected instead. It matches the plugin's own manifest package and Kotlin
+// package. Delete this once Flutter is upgraded and system_theme can go
+// to >=3.2.0.
+//
+// Registered via gradle.beforeProject rather than a subprojects/afterEvaluate
+// block because the evaluationDependsOn(':app') below evaluates :app -- and
+// with it the plugin projects -- part-way through the subprojects iteration, so
+// a hook registered there lands too late for projects already evaluated.
+gradle.beforeProject { project ->
+    if (project.name == 'system_theme') {
+        project.plugins.withId('com.android.library') {
+            project.android.namespace = 'com.bruno.system_theme'
+        }
+    }
+
+    // Kotlin 1.9 defaults its jvmTarget to whatever JDK runs Gradle (17), while
+    // AGP leaves Java compilation at 1.8 in modules that don't say otherwise.
+    // AGP 8 fails the build when the two disagree; AGP 7 tolerated it, which is
+    // why this only surfaced on the upgrade. A single fixed value doesn't work
+    // -- plugins disagree, e.g. share_plus compiles Java at 17 and
+    // flutter_charset_detector at 1.8 -- so each module's Kotlin follows that
+    // same module's Java setting.
+    // Read inside configureEach, not in afterEvaluate: AGP finalizes
+    // compileOptions after our afterEvaluate would run, and touching it early
+    // fails with "targetCompatibility is not yet finalized". configureEach
+    // defers until the task is actually realized, by which point it is set.
+    project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        def androidExt = project.extensions.findByName('android')
+        if (androidExt != null) {
+            kotlinOptions.jvmTarget = androidExt.compileOptions.targetCompatibility.toString()
+        }
     }
 }
 
