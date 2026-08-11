@@ -32,7 +32,11 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    compileSdkVersion 34
+    compileSdk 35
+    // AGP 8 reads the application id from here, not from a `package` attribute
+    // in AndroidManifest.xml (which it now rejects). Must stay in sync with
+    // applicationId below and with the Kotlin package under src/main/kotlin.
+    namespace 'com.selfhosted.cashew'
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'

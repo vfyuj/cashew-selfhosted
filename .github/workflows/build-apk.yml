@@ -25,15 +25,13 @@ jobs:
           channel: "stable"
           cache: true
       - run: flutter pub get
-      # --debug, not --release: the sqlite3_flutter_libs plugin's own
-      # android/build.gradle requires compileSdk 35, and this Flutter/AGP
-      # toolchain's aapt2 can't parse the Android 35 platform jar during the
-      # release-only verifyReleaseResources task (fails identically on a
-      # clean runner and on a local machine — not an environment quirk).
-      # Debug mode skips that task entirely and is the last build mode
-      # actually verified end-to-end (see specs/03-stage-1-kill-google.md).
-      # A real release/signed APK build is a separate, pre-existing gap,
-      # tracked as its own problem rather than papered over here.
+      # --debug, not --release, and no longer because release builds are broken
+      # — they aren't, since the AGP 8 upgrade (see specs/09-releases.md). This
+      # workflow runs on pull requests, including from forks, where the signing
+      # secrets are deliberately unavailable; a release build here would fall
+      # back to the Android debug key and produce something indistinguishable
+      # from this at twice the build time. The signed artifact people actually
+      # install comes from release.yml, on a tag.
       - run: flutter build apk --debug
       - uses: actions/upload-artifact@v4
         with:

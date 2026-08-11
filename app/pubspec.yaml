@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString -- note that a
 # pre-release suffix is not valid there for App Store submission. Irrelevant
 # while this fork only ships web and sideloaded APKs.
-version: 1.0.0-beta.22+22
+version: 1.0.0+22
 
 environment:
   sdk: ">= 3.0.0"
@@ -47,7 +47,10 @@ dependencies:
   math_expressions: ^2.5.0
   share_plus: ^10.0.0
   universal_html: ^2.2.4
-  flutter_charset_detector: ^1.0.2
+  # >=2.1.0 is the first release whose Android module declares a `namespace`,
+  # which AGP 8 requires. Only CharsetDetector.autoDecode is used, and that
+  # call is unchanged across the major bump.
+  flutter_charset_detector: ^2.1.0
   file_picker:
     git:
       # This fork implements https://github.com/miguelpruivo/flutter_file_picker/issues/1404

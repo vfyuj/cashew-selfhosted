@@ -31,7 +31,12 @@
 .pub/
 /build/
 local.properties
-pubspec.lock
+# pubspec.lock is deliberately NOT ignored, unlike upstream. This is an
+# application, not a library: Dart's own guidance is that applications commit
+# their lockfile. Without it every CI run, Docker build and tagged release
+# re-resolves from constraints, so a transitive package publishing a new
+# version can change a build with no commit in this repository -- which makes a
+# release unreproducible by construction.
 
 # Web related
 ./firebase

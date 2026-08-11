@@ -1,0 +1,256 @@
+name: Release
+
+# Deliberately tag-driven, not push-driven: `ci.yml` and `build-apk.yml` already
+# cover every push, and publishing a container image and a signed APK is a
+# decision, not a side effect of merging. Cut one with:
+#
+#   git tag v1.0.0-beta.22 && git push origin v1.0.0-beta.22
+#
+# The tag must match `version:` in app/pubspec.yaml -- enforced below, because
+# the pre-commit hook bumps that number on every commit and tagging the commit
+# next to the one you meant is otherwise silent.
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  verify-version:
+    name: Tag matches pubspec version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          set -euo pipefail
+          pubspec="$(grep -E '^version:' app/pubspec.yaml | awk '{print $2}')"
+          # pubspec carries `1.0.0-beta.22+22`; the tag drops the build suffix.
+          version="${pubspec%%+*}"
+          tag="${GITHUB_REF_NAME#v}"
+          echo "pubspec=$pubspec tag=$GITHUB_REF_NAME"
+          if [ "$version" != "$tag" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app/pubspec.yaml ($pubspec). Tag the commit whose version you meant to ship."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  apk:
+    name: Signed release APK
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # AGP 8 requires JDK 17. The runner's default has moved before; pinning it
+      # keeps a release build from silently depending on the image's default.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.6"
+          channel: "stable"
+          cache: true
+
+      # A missing secret must stop the release. app/android/app/build.gradle
+      # falls back to the Android *debug* key when key.properties is absent, so
+      # without this check a misconfigured repo would publish a debug-signed
+      # APK that looks fine and can never be upgraded by a properly signed one.
+      - name: Require signing secrets
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          missing=""
+          [ -n "$KEYSTORE" ]       || missing="$missing ANDROID_KEYSTORE_BASE64"
+          [ -n "$STORE_PASSWORD" ] || missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -n "$KEY_PASSWORD" ]   || missing="$missing ANDROID_KEY_PASSWORD"
+          [ -n "$KEY_ALIAS" ]      || missing="$missing ANDROID_KEY_ALIAS"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — see specs/09-releases.md"
+            exit 1
+          fi
+
+      - name: Write keystore and key.properties
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          echo "$KEYSTORE" | base64 --decode > app/android/app/keystore.jks
+          # storeFile is resolved relative to app/android/app by build.gradle's
+          # `file(...)`. Both files are gitignored; they exist only on the runner.
+          cat > app/android/key.properties <<EOF
+          storeFile=keystore.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - run: flutter pub get
+        working-directory: app
+
+      - run: flutter build apk --release
+        working-directory: app
+
+      # Proves the signing config was actually picked up. A debug-signed APK
+      # reports CN=Android Debug here, which is the exact failure this release
+      # process exists to prevent, so treat it as fatal rather than cosmetic.
+      - name: Verify the APK is not debug-signed
+        run: |
+          set -euo pipefail
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          certs=$("$apksigner" verify --print-certs app/build/app/outputs/flutter-apk/app-release.apk)
+          echo "$certs"
+          if echo "$certs" | grep -q "CN=Android Debug"; then
+            echo "::error::APK is signed with the Android debug key — signing config was not applied."
+            exit 1
+          fi
+
+      - name: Name the APK after the version
+        run: |
+          mv app/build/app/outputs/flutter-apk/app-release.apk \
+             "cashew-selfhosted-${{ needs.verify-version.outputs.version }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: cashew-selfhosted-*.apk
+          retention-days: 7
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f app/android/key.properties app/android/app/keystore.jks
+
+  # linux/arm64 is the architecture that matters -- the deployment target is a
+  # Raspberry Pi, which cannot build this image itself (flutter build web wants
+  # 3-4 GB of RAM). amd64 comes along so an x86 host can pull the same tag.
+  #
+  # Each architecture builds on a runner of that architecture rather than under
+  # QEMU on one runner. Emulating a dart2js compile is pathologically slow, and
+  # the usual escape hatch -- pinning the arch-neutral web stage to
+  # $BUILDPLATFORM -- would make the Dockerfile unbuildable by the legacy Docker
+  # builder, breaking the operator's `docker compose up --build`. Native runners
+  # keep the Dockerfile portable and skip the emulation entirely. Free for
+  # public repositories, which this is.
+  #
+  # Neither job tags anything: each pushes an untagged image by digest, and the
+  # merge job below assembles those digests into one multi-arch tag. Tagging in
+  # both jobs would just leave whichever finished last as the winner.
+  image:
+    name: Image (${{ matrix.platform }})
+    needs: verify-version
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+
+      # The digest is carried as a filename. The `sha256:` prefix is stripped
+      # here and added back when the manifest is assembled, so leaving it on
+      # would produce `...@sha256:sha256:...` and fail there instead of here.
+      # PLATFORM_KEY exists only because artifact names cannot contain the
+      # slash in a platform string.
+      - name: Export digest
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          digest='${{ steps.build.outputs.digest }}'
+          touch "/tmp/digests/${digest#sha256:}"
+          echo "PLATFORM_KEY=${{ matrix.platform }}" | tr '/' '-' >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ env.PLATFORM_KEY }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  merge:
+    name: Assemble multi-arch tag
+    needs: [verify-version, image]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create manifest list
+        run: |
+          set -euo pipefail
+          version='${{ needs.verify-version.outputs.version }}'
+          docker buildx imagetools create \
+            -t "$IMAGE_NAME:$version" \
+            -t "$IMAGE_NAME:latest" \
+            $(cd /tmp/digests && printf "$IMAGE_NAME@sha256:%s " *)
+          docker buildx imagetools inspect "$IMAGE_NAME:$version"
+
+  publish:
+    name: GitHub Release
+    needs: [verify-version, apk, merge]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-apk
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: cashew-selfhosted-*.apk
+          generate_release_notes: true
+          # Every 1.0.0-beta.N is a pre-release by definition; only the eventual
+          # 1.0.0 is not. See specs/07-versioning.md.
+          prerelease: ${{ contains(needs.verify-version.outputs.version, '-beta.') }}
+          body: |
+            Self-hosted deployment:
+
+            ```
+            docker pull ${{ env.IMAGE_NAME }}:${{ needs.verify-version.outputs.version }}
+            ```
+
+            The APK below is sideloadable and signed with this project's release
+            key. See `DEPLOYMENT.md` for the server runbook.

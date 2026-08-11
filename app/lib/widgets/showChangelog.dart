@@ -42,6 +42,12 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.0.0
+    Cashew Selfhosted reaches 1.0.0. It's the Cashew you know, running entirely on your own server - no Google account, nothing leaving your network. A backup exported from the original Cashew still imports here, unchanged.
+    Your devices stay constantly synced while online. Change something on your phone and your laptop catches up on its own.
+    The Home and Budgets pages show Monthly Cash Flow: what you expect to come in and what you've planned to spend, side by side, so you can see whether the month fits before you're in it.
+    The app still works completely offline.
+
     < 1.0.0-beta.22
     Changing a budget's amount now applies from the current period onward only. Periods that have already ended keep the amount they were set to at the time, so your budget history stops rewriting itself every time you adjust a target.
     This covers every main category budget and every custom budget. Spending goals set for individual categories inside a budget still use one amount for all periods.

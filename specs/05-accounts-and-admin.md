@@ -25,7 +25,7 @@ Revises Stage 1's provisioning story. Read `01-local-first-invariant.md` first �
 ### Not done
 - [ ] Owner acceptance pass — see "Acceptance criteria" below. Needs a real deployed server.
 - [ ] Translations are **English only**. The other 46 languages fall back to English until the maintainer's CSV pipeline is re-run.
-- [x] `flutter build apk --debug` re-run 2026-08-10 via CI and succeeds. `--release` does not — see the SDK-35/aapt2 gap logged in `specs/02-stage-0-foundations.md` Task 1, unrelated to these changes.
+- [x] `flutter build apk --debug` re-run 2026-08-10 via CI and succeeds. `--release` also succeeds as of 2026-08-11, once the SDK-35/aapt2 gap was fixed by the AGP 8 upgrade — see `specs/09-releases.md`.
 
 ## The bootstrap model
 
