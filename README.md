@@ -124,8 +124,10 @@ docker pull ghcr.io/vfyuj/cashew-selfhosted:1.0.0
 docker run -d --name cashew-selfhosted -p 8080:8080 -v cashew-data:/data -e DATA_DIR=/data --restart unless-stopped ghcr.io/vfyuj/cashew-selfhosted:1.0.0
 ```
 
-Then open `http://localhost:8080`. `-e DATA_DIR=/data` is not optional — without it the server
-writes inside the container and your data disappears on the next upgrade.
+Then open `http://localhost:8080`. `-e DATA_DIR=/data` matters on `1.0.0` specifically: that image
+defaults to a path inside the container rather than the volume, so without the flag your data
+disappears the next time you pull and recreate. Later releases set it themselves, where the flag is
+redundant but harmless.
 
 ### First run — claim the administrator account promptly
 

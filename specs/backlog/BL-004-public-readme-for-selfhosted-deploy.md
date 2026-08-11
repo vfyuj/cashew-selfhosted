@@ -14,8 +14,13 @@ Two things §4 did not anticipate, both owner-directed:
   consistent if either is reworded.
 - **The quickstart is `docker pull` + `docker run`, not the build-from-source path.** It does not
   mirror `DEPLOYMENT.md` §1 any more, so the two can drift — `DEPLOYMENT.md` stays the runbook for
-  DNS/NPM/redeploys and is linked from the header nav. The `docker run` line must carry
-  `-e DATA_DIR=/data`; see the Dockerfile footgun noted in §6.
+  DNS/NPM/redeploys and is linked from the header nav. The `docker run` line carries
+  `-e DATA_DIR=/data`, which `1.0.0` genuinely needs: that image declared `VOLUME ["/data"]` but
+  left `DATA_DIR` unset, so the server fell back to `./data` against `WORKDIR /app` and wrote to
+  the container layer instead of the volume. `docker-compose.yml` set the variable explicitly,
+  which is why only the bare-`docker run` path — the one this README introduced — was exposed. The
+  Dockerfile now sets `ENV DATA_DIR=/data` itself, so once a release ships carrying that, the flag
+  and the sentence explaining it can both come out of the README.
 
 Follow-on: [BL-003](BL-003-upstream-legacy-translations-and-docs.md) §4 can now repoint the in-app
 open-source link at this README.
