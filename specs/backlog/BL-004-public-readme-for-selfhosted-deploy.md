@@ -1,7 +1,26 @@
 # BL-004 — Public README.md for the GitHub Repo, Describing Self-Hosted Deployment
 
-**Status:** Reviewed. **Not approved for implementation.** Two framing decisions in §5 affect what
-"pretty" should mean here; content sourcing otherwise is straightforward.
+**Status:** **Done, 2026-08-11.** `README.md` exists at the repo root. Both §5 decisions were
+answered by the owner: audience is *public but personal* (no contribution guidelines, no
+maintenance-implying badges), and the screenshots are the three real ones from the v1.0.0 GitHub
+Release, referenced by their `user-attachments` URLs rather than re-committed into the repo. The
+feature list is a condensed, fork-corrected version of upstream's rather than a verbatim carry-over.
+
+Two things §4 did not anticipate, both owner-directed:
+
+- **An AI-disclosure section near the top.** The fork was written with an AI agent and the owner is
+  not a professional developer; the README says so plainly, tells readers to keep backups, and
+  invites an audit — so the "personal fork" framing is *not* "don't contribute". Keep those two
+  consistent if either is reworded.
+- **The quickstart is `docker pull` + `docker run`, not the build-from-source path.** It does not
+  mirror `DEPLOYMENT.md` §1 any more, so the two can drift — `DEPLOYMENT.md` stays the runbook for
+  DNS/NPM/redeploys and is linked from the header nav. The `docker run` line must carry
+  `-e DATA_DIR=/data`; see the Dockerfile footgun noted in §6.
+
+Follow-on: [BL-003](BL-003-upstream-legacy-translations-and-docs.md) §4 can now repoint the in-app
+open-source link at this README.
+
+Original request below, kept for context.
 
 **Origin:** owner-submitted, 2026-08-09.
 
