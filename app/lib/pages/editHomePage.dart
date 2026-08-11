@@ -137,9 +137,9 @@ class _EditHomePageState extends State<EditHomePage> {
           ),
           "plannedVsActual": EditHomePageItem(
             icon: appStateSettings["outlinedIcons"]
-                ? Icons.percent_outlined
-                : Icons.percent_rounded,
-            name: "planned-vs-actual".tr(),
+                ? Icons.swap_vert_outlined
+                : Icons.swap_vert_rounded,
+            name: "monthly-cash-flow".tr(),
             isEnabled:
                 isHomeScreenSectionEnabled(context, "showPlannedVsActual"),
             onSwitched: (value) {

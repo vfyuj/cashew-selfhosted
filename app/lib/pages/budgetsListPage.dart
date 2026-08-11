@@ -120,13 +120,12 @@ class BudgetsListPageState extends State<BudgetsListPage> {
           ),
         ),
         if (selectedTabIndex == 0) ...[
-          SliverPadding(
-            padding: EdgeInsetsDirectional.only(
-              start: getHorizontalPaddingConstrained(context),
-              end: getHorizontalPaddingConstrained(context),
-            ),
-            sliver: SliverToBoxAdapter(child: HomePagePlannedVsActual()),
-          ),
+          // Deliberately not constrained the way the selector above it is: tied
+          // to the selector's narrow column the pair turns square on a wide
+          // window, which reads badly against a flat tab bar. Left full width it
+          // follows the screen, matching the envelope sections below and the
+          // home page, where the widget's own 13px padding is all it gets.
+          SliverToBoxAdapter(child: HomePagePlannedVsActual()),
           _mainCategorySection(context, wantIncome: false, titleKey: "expense"),
           _mainCategorySection(context, wantIncome: true, titleKey: "income"),
         ] else

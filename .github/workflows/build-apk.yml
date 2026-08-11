@@ -1,0 +1,42 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.19.6"
+          channel: "stable"
+          cache: true
+      - run: flutter pub get
+      # --debug, not --release: the sqlite3_flutter_libs plugin's own
+      # android/build.gradle requires compileSdk 35, and this Flutter/AGP
+      # toolchain's aapt2 can't parse the Android 35 platform jar during the
+      # release-only verifyReleaseResources task (fails identically on a
+      # clean runner and on a local machine — not an environment quirk).
+      # Debug mode skips that task entirely and is the last build mode
+      # actually verified end-to-end (see specs/03-stage-1-kill-google.md).
+      # A real release/signed APK build is a separate, pre-existing gap,
+      # tracked as its own problem rather than papered over here.
+      - run: flutter build apk --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cashew-selfhosted-${{ github.sha }}
+          path: app/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30

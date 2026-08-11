@@ -39,6 +39,7 @@ The owner has time to test and wants to do it themselves — do not spend agent 
 - `specs/` — source of truth for what to build. Written for AI agents: precise contracts, explicit non-goals, testable acceptance criteria. Update specs when a decision changes; don't let code and specs drift.
 - `app/` — the Flutter fork (created in Stage 0, package `cashew_selfhosted` / applicationId `com.selfhosted.cashew`; fork name is finalized as "Cashew Selfhosted", so these are no longer placeholders).
 - `server/` — the Dart backend (created in Stage 0; auth/sync/backup endpoints added in Stage 1).
+- `.github/workflows/` — CI (`ci.yml`: `flutter`/`dart analyze` + tests for both `app/` and `server/`, plus a Dockerfile build check) and `build-apk.yml` (builds a debug-mode, sideloadable APK on every push/PR as a downloadable artifact). Debug, not release: `flutter build apk --release` currently fails on a real SDK-35/aapt2 incompatibility, unrelated to this fork's own code — see the Task 1 note in `specs/02-stage-0-foundations.md`.
 
 ## Hard invariant: upstream database compatibility
 
@@ -54,7 +55,7 @@ The **server's** database (`users`, `sessions`, `sync_records`, `sync_state`) is
 
 ## Status
 
-Accounts work landed 2026-08-09 on branch `accounts-setup-wizard-and-admin` (not yet merged): first-run setup wizard where the first user becomes instance administrator, in-app account management (name/email/password), admin user provisioning, and password-manager autofill. Full detail and acceptance criteria in `specs/05-accounts-and-admin.md`. Stage 4 (shared household data, per-user views, private transactions) is now designed but **not implemented** — `specs/06-shared-household-data.md`.
+Accounts work landed 2026-08-09 and merged to `main` via PR #8: first-run setup wizard where the first user becomes instance administrator, in-app account management (name/email/password), admin user provisioning, and password-manager autofill. Full detail and acceptance criteria in `specs/05-accounts-and-admin.md`. Stage 4 (shared household data, per-user views, private transactions) is now designed but **not implemented** — `specs/06-shared-household-data.md`.
 
 **De-Googled completely, 2026-08-10.** The fork no longer depends on Google at build time or run time. Firebase/Firestore, Google Sign-In, `googleapis`, Play Billing and Play Review are gone from `pubspec.yaml`, and `pubspec.lock` resolves no package matching `google|firebase|firestore|gms|play` — that grep is the cheapest regression check. Shared budgets (Firestore), Gmail receipt scanning, the feedback/rating popups and the Play Billing paywall were deleted; attachments were **replaced** with server-side storage (`/attachments`, a third `UserFileStore` namespace next to sync and backup). A Google request that wasn't in the dependency list at all — CanvasKit, fetched from gstatic by Flutter's default web renderer — was found by grepping the built `main.dart.js` for external hosts and fixed in the `Dockerfile`. The upstream schema invariant still passes: every `shared*` column stays, nothing writes them. Full detail in `specs/03-stage-1-kill-google.md`; the one deleted feature with no replacement is tracked in `specs/backlog/BL-005-imap-receipt-scanning.md`.
 
