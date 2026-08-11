@@ -19,6 +19,15 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
+      # Pinned for the same reason as release.yml: AGP 8.7.3 rejects a JDK it
+      # doesn't recognise, failing with nothing but the version number as the
+      # error ("> 25.0.2"). Relying on the runner's default Java means a change
+      # to the runner image breaks the build with a message that explains
+      # nothing.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.19.6"

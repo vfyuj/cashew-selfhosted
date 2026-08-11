@@ -44,6 +44,25 @@ Both root-`build.gradle` hooks run from `gradle.beforeProject`, not `subprojects
 
 Verified locally: `flutter build apk --release` succeeds, producing an ~83 MB universal APK.
 
+### Two things the upgrade broke that only showed up later
+
+**Heap.** `org.gradle.jvmargs` was `-Xmx1536M`, inherited from the upstream template. Under AGP 8 the Jetifier transform on the *debug* Flutter engine jar exceeds it and dies with `Java heap space`. Release builds are unaffected, because the release engine jar is smaller — so a local `--release` build passed while CI, which builds debug, failed. Raised to `-Xmx4G`. Turning off `android.enableJetifier` would remove the transform altogether and is probably safe on an all-AndroidX dependency set, but that changes how every dependency is processed and was not worth bundling into a release change.
+
+**JDK.** AGP 8.7.3 cannot parse a Java version it predates, and fails with the version number as the entire error message:
+
+```
+Failed to apply plugin class 'FlutterPlugin'.
+   > 25.0.2
+```
+
+Both workflows now pin JDK 17 with `actions/setup-java`, rather than trusting the runner default. Locally the trap is worse: **Flutter prefers the JDK bundled with Android Studio over `JAVA_HOME`**, so exporting `JAVA_HOME` does nothing. Point it at a supported JDK explicitly:
+
+```bash
+flutter config --jdk-dir=/opt/homebrew/opt/openjdk@17
+```
+
+A running Gradle daemon keeps the JVM it started with, so this can lie dormant until something restarts the daemon.
+
 ## Signing
 
 `app/android/app/build.gradle` reads `app/android/key.properties` when present and **falls back to the Android debug key when it isn't**. That fallback is why the release workflow refuses to run without the four signing secrets, and why it re-verifies the finished APK and fails on `CN=Android Debug`. A debug-signed release looks completely normal and installs fine — the damage only shows up at the *next* release, when Android refuses to install a differently-signed APK over it.
