@@ -76,6 +76,15 @@ COPY --from=web-build /web/build/web /app/web
 WORKDIR /app
 ENV PORT=8080
 ENV WEB_DIR=/app/web
+# Must match the VOLUME below. Both binaries default DATA_DIR to './data'
+# (server.dart, create_user.dart), which against WORKDIR /app resolves to
+# /app/data -- inside the container's writable layer, not the volume. That
+# default is right for local `dart run` and wrong for every image, so it is
+# overridden here rather than in the code. docker-compose.yml also sets it
+# explicitly, which is why the compose path was never affected; a bare
+# `docker run -v cashew-data:/data` had no such backstop, and wrote a
+# database that vanished on the next pull-and-recreate.
+ENV DATA_DIR=/data
 EXPOSE 8080
 VOLUME ["/data"]
 ENTRYPOINT ["/app/bin/server"]
