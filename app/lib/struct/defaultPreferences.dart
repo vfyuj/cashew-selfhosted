@@ -32,6 +32,11 @@ Future<Map<String, dynamic>> getDefaultPreferences() async {
     "showFAQAndHelpLink": true,
     "showExtraInfoText": true,
     "selectedWalletPk": "0",
+    // Accounts this person has hidden from their own home page, layered on top
+    // of each wallet's shared homePageWidgetDisplay pinning. Follows the person
+    // between their devices when they share a household -- see
+    // struct/perUserViewSettings.dart.
+    "hiddenWalletPks": [],
     "selectedSubscriptionType": 0,
     "accentColor": toHexString(Color(0xFF1B447A)),
     "accentSystemColor": await systemColorByDefault(),

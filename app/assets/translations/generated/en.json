@@ -1254,6 +1254,8 @@
   "manage-users": "Manage users",
   "add-user": "Add user",
   "add-user-description": "Creates an account on your server and gives you a temporary password to pass on. They can change it once they sign in.",
+  "hidden-from-your-home-page": "Hidden from your home page",
+  "hidden-from-your-home-page-description": "Accounts you don't want on your own home page. This only changes what you see, on all of your devices — everyone else keeps theirs as it is, and the account stays usable everywhere else.",
   "over-allocated": "More budgeted than planned",
   "over-allocated-description": "The budgets inside {category} add up to {allocated}, but {category} is planned at {budgeted}.",
   "over-allocated-description-multiple": "{count} main categories have more budgeted inside them than they are planned for.",

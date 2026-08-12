@@ -13,6 +13,7 @@ import 'package:drift/isolate.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/defaultPreferences.dart';
+import 'package:cashew_selfhosted/struct/perUserViewSettings.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:flutter/material.dart';
@@ -77,14 +78,25 @@ Future<bool> initializeSettings() async {
 
     if (isDatabaseCorrupted == false) {
       try {
+        // A restore would otherwise carry the other household members' view
+        // preferences too -- the backup holds their rows, and the bump below
+        // would then stamp those as newest and push them, rearranging
+        // everyone's home page because one person restored a backup. Dropped
+        // before the bump so there is nothing to stamp.
+        await database.dropOtherMembersViewSettings(currentViewSettingsRowPk);
+      } catch (e) {
+        print("Error clearing other members' view settings after restore " +
+            e.toString());
+      }
+      try {
         // Restored data keeps its original dateTimeModified, which can
         // predate what peers think they've already synced with this
         // device -- without this, the restore would silently never reach
         // them. See bumpAllModifiedTimestampsForResync().
         await database.bumpAllModifiedTimestampsForResync();
       } catch (e) {
-        print(
-            "Error bumping timestamps for resync after restore " + e.toString());
+        print("Error bumping timestamps for resync after restore " +
+            e.toString());
       }
     }
   }
@@ -191,6 +203,22 @@ Future<bool> updateSettings(
   appStateSettings[setting] = value;
   await sharedPreferences.setString(
       'userSettings', json.encode(appStateSettings));
+
+  // A handful of settings describe how this person wants their own screens
+  // arranged, and follow them to their other devices rather than staying on
+  // whichever one they happened to change it on. Mirrored into their row here,
+  // centrally, so a new call site cannot forget to. No-ops on a solo account
+  // and when the stored value already matches, so this costs nothing on the
+  // overwhelming majority of settings writes. See struct/perUserViewSettings.
+  if (syncedViewSettingKeys.contains(setting)) {
+    try {
+      await storeViewSettings();
+    } catch (e) {
+      // A settings write must never fail because a screen preference could
+      // not be recorded for the other device.
+      print("Could not store view settings for $setting: $e");
+    }
+  }
 
   if (updateGlobalState == true) {
     // Only refresh global state if the value is different

@@ -7,7 +7,9 @@ import 'package:cashew_selfhosted/pages/addWalletPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editWalletsPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/perUserViewSettings.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/widgets/textWidgets.dart';
 import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
 import 'package:cashew_selfhosted/widgets/settingsContainers.dart';
 import 'package:cashew_selfhosted/widgets/util/keepAliveClientMixin.dart';
@@ -193,6 +195,56 @@ class EditHomePagePinnedWalletsPopup extends StatelessWidget {
                     ),
                   );
                 },
+              ),
+            // Pinning above writes to the wallet row, so it is the household's
+            // shared decision about which accounts belong on the home page.
+            // This is the personal layer on top: accounts one member does not
+            // want on *their* home page, following them between their own
+            // devices without touching what anyone else sees. Only offered
+            // when there is somebody else to differ from.
+            if (perUserViewSettingsApply && allWalletsPks.length > 0)
+              HorizontalBreakAbove(
+                enabled: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(
+                          start: 20, end: 20, top: 13, bottom: 5),
+                      child: TextFont(
+                        text: "hidden-from-your-home-page".tr(),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(
+                          start: 20, end: 20, bottom: 8),
+                      child: TextFont(
+                        text: "hidden-from-your-home-page-description".tr(),
+                        fontSize: 13,
+                        maxLines: 4,
+                        textColor: getColor(context, "textLight"),
+                      ),
+                    ),
+                    SelectItems(
+                      syncWithInitial: true,
+                      checkboxCustomIconSelected: Icons.visibility_off_rounded,
+                      checkboxCustomIconUnselected: Icons.visibility_outlined,
+                      items: allWalletsPks,
+                      displayFilter: (walletPk) =>
+                          walletsIndexedByPk[walletPk]?.name,
+                      initialItems: hiddenWalletPks.toList(),
+                      onChangedSingleItem: (String walletPk) async {
+                        await setWalletHiddenForCurrentUser(
+                          walletPk,
+                          !isWalletHiddenForCurrentUser(walletPk),
+                        );
+                        if (onAnySelected != null) onAnySelected!();
+                      },
+                    ),
+                  ],
+                ),
               ),
             if (allWalletsPks.length > 0 && includeFramework == true)
               AddButton(

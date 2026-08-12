@@ -110,7 +110,8 @@ void main() {
     test('survives a full push -> pull round trip', () {
       final restored = Budget.fromJson(
           jsonDecode(jsonEncode(budget.toJson())) as Map<String, dynamic>);
-      expect(restored.budgetTransactionFilters, budget.budgetTransactionFilters);
+      expect(
+          restored.budgetTransactionFilters, budget.budgetTransactionFilters);
       expect(restored.walletFks, budget.walletFks);
       expect(restored.categoryFks, budget.categoryFks);
       expect(restored.sharedMembers, budget.sharedMembers);
@@ -188,11 +189,35 @@ void main() {
         archived: false,
         walletFk: '0',
       ),
+      // A household member's view preferences. The only synced table whose
+      // timestamp column isn't called dateTimeModified, and the only one whose
+      // primary key is an int rather than a string.
+      AppSetting(
+        settingsPk: 7,
+        settingsJSON: '{"hiddenWalletPks":["0"]}',
+        dateUpdated: DateTime.now(),
+      ),
     ];
 
     for (final row in rows) {
       expect(() => jsonEncode(row.toJson()), returnsNormally,
           reason: '${row.runtimeType}.toJson() is not JSON-encodable');
     }
+  });
+
+  test('a per-user settings row survives a full push -> pull round trip', () {
+    final setting = AppSetting(
+      settingsPk: 7,
+      settingsJSON: '{"hiddenWalletPks":["0","2"],"selectedWalletPk":"2"}',
+      dateUpdated: DateTime.fromMillisecondsSinceEpoch(1786150106000),
+    );
+
+    final restored = AppSetting.fromJson(
+        jsonDecode(jsonEncode(setting.toJson())) as Map<String, dynamic>);
+
+    expect(restored.settingsPk, 7);
+    expect(restored.settingsJSON, setting.settingsJSON);
+    expect(restored.dateUpdated, setting.dateUpdated);
+    expect(restored.toJson(), setting.toJson());
   });
 }
