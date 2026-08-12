@@ -42,6 +42,9 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.0.1
+    Fixes a crash opening the Budgets tab on iPhone after a database import, caused by iOS Safari getting a different, less stable renderer than every other device.
+
     < 1.0.0
     Cashew Selfhosted reaches 1.0.0. It's the Cashew you know, running entirely on your own server - no Google account, nothing leaving your network. A backup exported from the original Cashew still imports here, unchanged.
     Your devices stay constantly synced while online. Change something on your phone and your laptop catches up on its own.
