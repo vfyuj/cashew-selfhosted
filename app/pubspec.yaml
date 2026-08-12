@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString -- note that a
 # pre-release suffix is not valid there for App Store submission. Irrelevant
 # while this fork only ships web and sideloaded APKs.
-version: 1.0.1+25
+version: 1.0.2+29
 
 environment:
   sdk: ">= 3.0.0"
@@ -190,6 +190,23 @@ flutter:
           weight: 700
     # Inter is the font family fallback
     - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    # Not a font we use -- this entry exists purely to stop CanvasKit fetching
+    # Roboto from fonts.gstatic.com at every launch, which is the last live
+    # Google request in the fork and now hits every client (the web build is
+    # pinned to canvaskit, see Dockerfile). The engine's rule is exact and
+    # unrelated to how many families we ship: canvaskit/fonts.dart downloads
+    # _robotoUrl unless the FontManifest declares a family named literally
+    # "Roboto" (`if (family.name == 'Roboto') loadedRoboto = true`). It is only
+    # ever a last-resort fallback, used when text asks for a font that isn't
+    # registered, so pointing it at Inter -- already this app's declared
+    # fallback family, and a near-Roboto grotesque -- keeps the bytes local and
+    # the rendering consistent. Removing this re-adds a blocking gstatic
+    # request on first paint; verify with the network panel, not by reading.
+    - family: Roboto
       fonts:
         - asset: assets/fonts/Inter-Regular.ttf
         - asset: assets/fonts/Inter-Bold.ttf

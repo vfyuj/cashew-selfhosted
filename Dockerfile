@@ -14,15 +14,26 @@ FROM ghcr.io/cirruslabs/flutter:3.19.6 AS web-build
 WORKDIR /web
 COPY app/ .
 RUN flutter pub get
-# Default ("auto") renderer, deliberately: --web-renderer html was tried and
-# reverted because the owner disliked how it rendered. See
-# specs/03-stage-1-kill-google.md.
+# CanvasKit everywhere, pinned -- do not go back to the default "auto".
+#
+# "auto" does not mean "pick the best one"; it means `useCanvasKit = isDesktop`
+# (flutter_web_sdk/lib/_engine/engine/renderer.dart in the pinned 3.19.6 SDK).
+# A phone browser is not desktop, so auto quietly served **the html renderer to
+# every phone** while desktop got CanvasKit -- two different rendering engines
+# for the same deploy, and only the desktop one was ever looked at. That is the
+# renderer specs/03-stage-1-kill-google.md records the owner rejecting on looks;
+# iPhone Safari had been getting it all along, and got a repeatable WebContent
+# crash on the budgets tab with it. Pinning canvaskit makes the phone render
+# exactly what the desktop does.
 #
 # FLUTTER_WEB_CANVASKIT_URL points the engine at the CanvasKit copy Flutter
 # already writes into build/web/canvaskit/. Without it the CanvasKit renderer
 # fetches canvaskit.js -- several MB -- from www.gstatic.com on every launch.
-# That was the large, blocking Google request, and it stays fixed here.
+# That was the large, blocking Google request, and it stays fixed here. It
+# matters more now than it did under auto: every client takes this path, not
+# just desktop ones.
 RUN flutter build web --release \
+      --web-renderer canvaskit \
       --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/
 
 # Pre-compress everything worth compressing, keeping the original beside it
@@ -65,6 +76,15 @@ COPY --from=web-build /web/build/web /app/web
 WORKDIR /app
 ENV PORT=8080
 ENV WEB_DIR=/app/web
+# Must match the VOLUME below. Both binaries default DATA_DIR to './data'
+# (server.dart, create_user.dart), which against WORKDIR /app resolves to
+# /app/data -- inside the container's writable layer, not the volume. That
+# default is right for local `dart run` and wrong for every image, so it is
+# overridden here rather than in the code. docker-compose.yml also sets it
+# explicitly, which is why the compose path was never affected; a bare
+# `docker run -v cashew-data:/data` had no such backstop, and wrote a
+# database that vanished on the next pull-and-recreate.
+ENV DATA_DIR=/data
 EXPOSE 8080
 VOLUME ["/data"]
 ENTRYPOINT ["/app/bin/server"]
