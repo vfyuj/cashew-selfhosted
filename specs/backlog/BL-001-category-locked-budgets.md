@@ -11,12 +11,10 @@ envelope's income/expense flag now tracks its category's instead of going stale 
 describes what was built. The earlier schema-based design is summarised in §8 for context — it is
 superseded, not deferred.
 
-**Local-first check:** ✅ no conflict with `specs/01-local-first-invariant.md`. Everything here is
-local Drift reads/writes and local computation. Nothing gates on auth or connectivity.
-
-**Upstream-compatibility check:** ✅ `app/lib/database/tables.dart` is untouched. `schemaVersionGlobal`
-is still 46 and the 10 tables are byte-identical to upstream's, so the hard invariant in `CLAUDE.md`
-holds and original-Cashew backups still import.
+Everything here is local Drift reads/writes with no schema change — `app/lib/database/tables.dart` is
+untouched, `schemaVersionGlobal` is still 46 — so it costs nothing against either
+`specs/01-local-first-invariant.md` or `CLAUDE.md`'s upstream compatibility goal; see §2 for why that
+was the load-bearing constraint on the whole design.
 
 ---
 

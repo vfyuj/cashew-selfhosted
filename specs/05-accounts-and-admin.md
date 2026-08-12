@@ -1,6 +1,6 @@
 # Accounts and instance administration
 
-Revises Stage 1's provisioning story. Read `01-local-first-invariant.md` first — the wizard this adds is the *first* thing a new user sees, which makes that invariant easier to break here than anywhere else in the app.
+Revises Stage 1's provisioning story. Read `01-local-first-invariant.md` first — the wizard this adds is the *first* thing a new user sees, and skipping it must reach a fully usable app with no server configured.
 
 ## Status (last updated 2026-08-09)
 
@@ -34,11 +34,9 @@ The first person to reach a fresh instance creates the administrator account. Se
 - `GET /auth/setup-state` → `{"needsSetup": <the instance has zero users>}`. Unauthenticated, because there is nobody to authenticate as yet.
 - `POST /auth/setup` → creates the first user with `is_admin = 1` and returns a session. **409 once any user exists.** The count check and the insert share one transaction, so two simultaneous requests cannot both believe they are first.
 
-### The accepted risk, stated plainly
+### The accepted risk
 
-Between `docker compose up` and the moment the owner registers, anyone who reaches the domain can claim the administrator account. This was an explicit decision, not an oversight: it is the same exposure Immich and Nextcloud accept, and the alternatives (a time-limited setup window, or a setup code printed to the container logs) were weighed and rejected as not worth the friction for a household deployment.
-
-**Operational consequence, which belongs in the deployment docs:** register immediately after the first `docker compose up`, before or right after pointing DNS at it. `GET /auth/setup-state` is the check — if it says `needsSetup: false` and you didn't create that account, someone else did.
+Anyone who reaches the domain before the owner registers can claim the administrator account. Explicit decision, not an oversight — the same exposure Immich and Nextcloud accept, weighed against a time-limited window or a setup code printed to the logs and found not worth the added friction for a household deployment. The operational side (register right after `docker compose up`, how to check `GET /auth/setup-state`) is covered once in `DEPLOYMENT.md`; it's a one-time, self-evident step for whoever runs the container and doesn't need restating here.
 
 ## Roles
 
@@ -72,9 +70,9 @@ Two consequences that are design constraints, not bugs:
 - Snackbars posted while the wizard is up render *behind* it. **The wizard uses inline error text only.**
 - `InitialPageRouteNavigator` renders an empty placeholder while the wizard is up, so `OnBoardingPage` does not mount underneath: its `initState` grabs focus and returns `KeyEventResult.handled` for every key, which would fight the wizard's text fields on the first frame.
 
-### Local-first compliance
+### Staying local-first
 
-Non-negotiable, per `01-local-first-invariant.md`. A wizard before onboarding is the single most likely place for this project to accidentally make the app require a server.
+The wizard runs before onboarding, which makes it the easiest place in the app to accidentally require a server. How each rule from `01-local-first-invariant.md` is upheld here:
 
 | Requirement | Mechanism |
 |---|---|

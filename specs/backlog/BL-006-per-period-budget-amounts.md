@@ -5,12 +5,9 @@
 **Origin:** owner question (2026-08-10) — *"Can I adjust monthly budgets each month? Will it overwrite
 the budget limits for previous months?"* The answer was yes to both, and the second yes was the bug.
 
-**Local-first check:** ✅ no conflict with `specs/01-local-first-invariant.md`. Local Drift reads and
-writes and local computation only. Nothing gates on auth or connectivity.
-
-**Upstream-compatibility check:** ✅ `schemaVersionGlobal` is still 46, the 10 tables are unchanged,
-and the `CLAUDE.md` diff still prints nothing. No migration, no `schema_versions.dart` regeneration,
-no `drift_schemas/` file. See §3 for the full reasoning, which was the deciding constraint.
+Local Drift reads/writes only, no new column or table — `schemaVersionGlobal` is still 46 and the
+`CLAUDE.md` compatibility diff still prints nothing. Backwards compatibility with upstream was in fact
+the owner's stated criterion for this whole feature; §3 has the full reasoning.
 
 ---
 

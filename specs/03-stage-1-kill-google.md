@@ -55,7 +55,7 @@ The lesson worth keeping: that paragraph was written from a plausible mechanism,
 
 **Left in place deliberately**: outbound help links to upstream's site (`cashewapp.web.app`, which is Firebase Hosting) in the About/FAQ rows. Nothing is fetched unless a user taps them, and they are upstream attribution for a GPL fork. Note the linked *privacy policy* is upstream's and describes Google data handling that no longer applies here — worth replacing when the owner has one to point at.
 
-**Schema untouched.** Every `shared*` column (`sharedKey`, `sharedOwnerMember`, `sharedMembers`, `sharedAllMembersEver`, `sharedStatus`, `sharedDateUpdated`, `sharedReferenceBudgetPk`, `transactionOwnerEmail`, ...) stays exactly as upstream defines it, per CLAUDE.md's hard invariant — an original-Cashew backup must stay importable. Nothing writes them now. The `updateSharedEntry` parameter that threaded through 60+ database call sites *was* removed, since with Firestore gone it controlled nothing; the compiler verified every site.
+**Schema untouched.** Every `shared*` column (`sharedKey`, `sharedOwnerMember`, `sharedMembers`, `sharedAllMembersEver`, `sharedStatus`, `sharedDateUpdated`, `sharedReferenceBudgetPk`, `transactionOwnerEmail`, ...) stays exactly as upstream defines it — see CLAUDE.md's upstream compatibility goal, which this keeps free. Nothing writes them now. The `updateSharedEntry` parameter that threaded through 60+ database call sites *was* removed, since with Firestore gone it controlled nothing; the compiler verified every site.
 
 ### Remaining for this stage
 - [ ] Manual migration procedure (last Google backup → verify → switch → restore → verify) — inherently a manual user action, not code. See "Migration" section below.

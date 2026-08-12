@@ -8,8 +8,8 @@ not scheduled** — nothing in this folder is approved for implementation until 
 
 ## Ground rules for anything in this folder
 
-1. The local-first invariant (`specs/01-local-first-invariant.md`) applies here exactly as it does to
-   the stage docs. A feature that only works when signed in is wrong.
+1. Local data (`specs/01-local-first-invariant.md`) works the same with no server configured. A
+   feature that only works when signed in needs a specific reason.
 2. Anything touching a Drift table also touches this fork's sync path. Upstream ships whole SQLite
    files; **this fork also ships row-level JSON deltas** (`app/lib/struct/liveSyncClient.dart`), so a
    schema change that upstream could make safely can break sync here. See BL-001 §2, which avoided

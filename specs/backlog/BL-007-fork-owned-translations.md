@@ -7,12 +7,9 @@ upstream Cashew, and replace it with the ability to fix a translation directly i
 over English-original / current-translation pairs, editable in place. Closes the open question in
 [BL-003](BL-003-upstream-legacy-translations-and-docs.md) §2A.
 
-**Local-first check:** ✅ no conflict with `specs/01-local-first-invariant.md`. Overrides are read from
-`sharedPreferences` before `runApp` and applied entirely on-device; nothing here makes a network call,
-gates on auth, or touches sync.
-
-**Upstream-compatibility check:** ✅ N/A — nothing here touches the app's Drift schema. Translations are
-UI-layer assets (`easy_localization`), unrelated to the 10 tables the invariant protects.
+Overrides are read from `sharedPreferences` before `runApp` and applied entirely on-device — no
+network call, no gate on auth, no schema change; translations are a UI-layer asset
+(`easy_localization`), unrelated to the 10 Drift tables.
 
 ---
 

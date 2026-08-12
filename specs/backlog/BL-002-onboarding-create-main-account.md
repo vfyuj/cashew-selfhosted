@@ -11,11 +11,10 @@ envelope budgets BL-001 auto-creates, one per main category. A first cut of this
 against a checkout that predated BL-001 landing and created a standalone catch-all budget instead;
 that was wrong once envelopes existed — see §2.
 
-**Local-first / sync check:** ✅ no conflict. The onboarding steps write to Drift the same way the
-rest of the app does (wallets, categories, budgets), so they sync like any other local write. The one
-new network call — the "does this account already have data" probe in §3 — is best-effort, bounded to
-8 seconds, and its failure path is "run onboarding", so nothing here gates local usage. No Drift
-table changed; the upstream schema invariant in `CLAUDE.md` still passes.
+The onboarding steps write to Drift the same way the rest of the app does (wallets, categories,
+budgets); no schema change. The one new network call — the "does this account already have data"
+probe in §3 — is best-effort, bounded to 8 seconds, and fails towards "just run onboarding," so it
+never gates local usage.
 
 ---
 
