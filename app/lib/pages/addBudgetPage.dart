@@ -6,6 +6,9 @@ import 'package:cashew_selfhosted/pages/editBudgetLimitsPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/struct/budgetPeriodAmounts.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
+import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
+import 'package:cashew_selfhosted/struct/subCategoryBudgetAllocation.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
@@ -26,6 +29,7 @@ import 'package:cashew_selfhosted/widgets/radioItems.dart';
 import 'package:cashew_selfhosted/widgets/saveBottomButton.dart';
 import 'package:cashew_selfhosted/widgets/selectAmount.dart';
 import 'package:cashew_selfhosted/widgets/selectCategory.dart';
+import 'package:cashew_selfhosted/widgets/selectCategoryWithSubCategories.dart';
 import 'package:cashew_selfhosted/widgets/selectColor.dart';
 import 'package:cashew_selfhosted/widgets/settingsContainers.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
@@ -128,6 +132,16 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
   FocusNode _titleFocusNode = FocusNode();
   bool increaseBudgetWarningShown = false;
   List<String>? selectedWalletFks = null;
+
+  /// Which household member this budget belongs to, or null for the whole
+  /// household. New budgets start out personal; see struct/budgetVisibility.
+  int? selectedOwnerUserId = defaultOwnerForNewBudget;
+
+  /// Main-category envelopes are the household's shared plan and the
+  /// over-allocation check measures against them, so they are never personal
+  /// and the switch is not offered for them. Resolved once, asynchronously,
+  /// because deciding it needs the set of main category pks.
+  bool isEnvelopeBudget = false;
   String selectedWalletPk = appStateSettings["selectedWalletPk"];
 
   // BudgetsCompanion budget = BudgetsCompanion();
@@ -289,7 +303,59 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
         insert: widget.budget == null, createdBudget);
     loadingIndeterminateKey.currentState?.setVisibility(false);
     savingHapticFeedback();
+    // Checked after the write, not from BudgetDetails' amount-dismissed
+    // callback: that fires while the new amount is still only on screen, so
+    // the sum would be measured against the previous saved value.
+    await _warnIfMainCategoryOverAllocated(createdBudget);
     popRoute(context);
+  }
+
+  // If this budget targets one subcategory, re-measure that subcategory's
+  // parent: the household may now have committed more inside the parent
+  // category than the parent's envelope holds. Offers to raise the envelope to
+  // match, which is the whole point - keeping the main category's number
+  // honest rather than just reporting that it isn't.
+  Future<void> _warnIfMainCategoryOverAllocated(Budget saved) async {
+    final List<String>? categoryFks = saved.categoryFks;
+    if (categoryFks == null || categoryFks.isEmpty) return;
+    if (!mounted) return;
+
+    final PlannedBudgetTotals totals = await getPlannedBudgetTotals();
+    // Null unless every category this budget targets is a subcategory of the
+    // same parent -- so a main-category envelope, or a budget spanning two
+    // categories, checks nothing.
+    final String? mainCategoryPk =
+        totals.soleParentOfSubCategories(categoryFks);
+    if (mainCategoryPk == null || !mounted) return;
+
+    final AllWallets allWallets =
+        Provider.of<AllWallets>(context, listen: false);
+    final SubCategoryAllocation? allocation =
+        allocationForMainCategory(totals, allWallets, mainCategoryPk);
+    if (allocation == null || !allocation.isOver || !mounted) return;
+
+    final dynamic raise = await openPopup(
+      context,
+      title: "over-allocated".tr(),
+      description: "over-allocated-description".tr(namedArgs: {
+            "category": allocation.envelope.name,
+            "allocated": convertToMoney(allWallets, allocation.allocated),
+            "budgeted": convertToMoney(allWallets, allocation.envelopeAmount),
+          }) +
+          (allocation.hasHidden
+              ? " " + "over-allocated-includes-hidden".tr()
+              : ""),
+      icon: appStateSettings["outlinedIcons"]
+          ? Icons.warning_outlined
+          : Icons.warning_rounded,
+      onSubmitLabel: "raise-budget-to-fit".tr(),
+      onSubmit: () => popRoute(context, true),
+      onCancelLabel: "keep".tr(),
+      onCancel: () => popRoute(context, false),
+    );
+    if (raise == true) {
+      await raiseEnvelopeToFitAllocation(allocation, allWallets);
+    }
   }
 
   // Changing a budget's cycle discards the per-period amounts it has recorded,
@@ -354,8 +420,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
           widget.budget != null ? currentInstance!.sharedOwnerMember : null,
       sharedDateUpdated:
           widget.budget != null ? currentInstance!.sharedDateUpdated : null,
-      sharedMembers:
-          widget.budget != null ? currentInstance!.sharedMembers : null,
+      // Owned via struct/budgetVisibility.dart -- this column no longer holds
+      // members. Set below by withBudgetOwner rather than here, so there is
+      // exactly one place that encodes it.
+      sharedMembers: null,
       sharedAllMembersEver:
           widget.budget != null ? currentInstance!.sharedAllMembersEver : null,
       budgetTransactionFilters: widget.budget?.addedTransactionsOnly == true ||
@@ -378,7 +446,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
     // Records the outgoing amount against the periods it applied to, so
     // changing the target here does not rewrite what finished periods are
     // measured against.
-    return withUpdatedAmountHistory(previous: currentInstance, updated: budget);
+    return withUpdatedAmountHistory(
+      previous: currentInstance,
+      updated: withBudgetOwner(budget, selectedOwnerUserId),
+    );
   }
 
   Budget? budgetInitial;
@@ -431,6 +502,16 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
         setAddedTransactionsOnly(true);
         setSelectedShared(false);
       }
+      if (widget.budget != null) {
+        final Set<String> mainCategoryPks =
+            (await database.getAllCategories(includeSubCategories: false))
+                .map((TransactionCategory category) => category.categoryPk)
+                .toSet();
+        final List<String> categoryFks = widget.budget!.categoryFks ?? const [];
+        isEnvelopeBudget = categoryFks.length == 1 &&
+            mainCategoryPks.contains(categoryFks.first);
+        if (isEnvelopeBudget) selectedOwnerUserId = null;
+      }
       setState(() {});
     });
 
@@ -470,6 +551,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
 
       selectedCategoryPks = widget.budget!.categoryFks;
       selectedCategoryPksExclude = widget.budget!.categoryFksExclude;
+      // Whoever already owns it keeps owning it -- editing somebody's budget
+      // must not quietly reassign it, and editing a shared one must not
+      // quietly make it personal.
+      selectedOwnerUserId = budgetOwner(widget.budget!);
       //Set to false because we can't save until we made some changes
       setState(() {
         canAddBudget = false;
@@ -900,6 +985,34 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                     ),
                   ),
           ),
+          // Only shown to an account that actually shares its data, and never
+          // for a main-category envelope: those are the household's shared
+          // plan, and the over-allocation check measures subcategory budgets
+          // against them.
+          SliverToBoxAdapter(
+            child: !budgetVisibilityApplies || isEnvelopeBudget
+                ? SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 13,
+                      end: 13,
+                      bottom: 15,
+                    ),
+                    child: SettingsContainerSwitch(
+                      title: "share-budget-with-household".tr(),
+                      description:
+                          "share-budget-with-household-description".tr(),
+                      initialValue: selectedOwnerUserId == null,
+                      onSwitched: (bool shared) {
+                        selectedOwnerUserId =
+                            shared ? null : currentBudgetViewerId;
+                        determineBottomButton();
+                      },
+                      enableBorderRadius: true,
+                      isOutlined: true,
+                    ),
+                  ),
+          ),
           SliverToBoxAdapter(
             child: selectedIncome
                 ? SizedBox.shrink()
@@ -1280,10 +1393,15 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                   child: AnimatedExpanded(
                     expand: !(selectedShared == true ||
                         selectedAddedTransactionsOnly),
-                    child: SelectCategory(
-                      horizontalList: true,
-                      selectedCategories: selectedCategoryPks,
-                      setSelectedCategories: (categories) {
+                    // Unlike the exclude picker below, this one can go down to
+                    // individual subcategories -- see
+                    // widgets/selectCategoryWithSubCategories.dart. A budget
+                    // targeting subcategories needs no schema or query change;
+                    // categoryFks is already matched against both a
+                    // transaction's category and its subcategory.
+                    child: SelectCategoryWithSubCategories(
+                      selectedCategoryPks: selectedCategoryPks,
+                      setSelectedCategoryPks: (categories) {
                         checkPopupBalanceCorrectionSelectedWarning(
                             context, categories);
                         setSelectedCategories(categories);

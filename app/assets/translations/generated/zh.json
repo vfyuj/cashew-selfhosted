@@ -1185,5 +1185,21 @@
   "create-account": "创建账户",
   "currency-label": "货币标签",
   "currency-label-description": "在其他账户的金额旁显示货币",
-  "remain": "剩余"
+  "remain": "剩余",
+  "load-backup-warning-household": "这将替换你当前的所有数据；而且这个预算是共享的，所以也会替换所有共享人在所有设备上的数据。",
+  "hidden-from-your-home-page": "从你的主页隐藏",
+  "hidden-from-your-home-page-description": "你不想在自己主页上看到的账户。这只会改变你看到的内容，并在你的所有设备上生效；其他人的主页保持不变，账户在其他地方仍可正常使用。",
+  "over-allocated": "预算超出计划",
+  "over-allocated-description": "「{category}」内的预算合计为 {allocated}，但「{category}」的计划为 {budgeted}。",
+  "over-allocated-description-multiple": "有 {count} 个主类别内部的预算超过了它们自身的计划。",
+  "over-allocated-includes-hidden": "其中包含未向你显示的预算。",
+  "raise-budget-to-fit": "调高",
+  "raise-budget-to-fit-description": "将该类别的计划从 {budgeted} 调高到 {allocated}，以容纳其中所有预算？已结束的月份仍保留当时设定的金额。",
+  "keep": "保持不变",
+  "share-budget-with-household": "与家庭共享",
+  "share-budget-with-household-description": "关闭时，这个预算只属于你，其他人看不到，但它仍会计入所属主类别的总额。开启时，共享该预算的所有人都能看到。",
+  "personal-budget": "个人预算",
+  "share-household-data": "共享家庭预算",
+  "share-household-data-description": "该账号与你看到和编辑相同的交易、预算和账户。保持关闭则为其单独建立一份预算。此设置只能在现在、创建账号时确定。",
+  "shares-household-data": "共享此预算"
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/perUserViewSettings.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/struct/syncClient.dart' show SyncLog;
@@ -37,13 +38,26 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 const _pushCursorPrefsKeyPrefix = "liveSyncPushCursorMs:";
 const _pullCursorPrefsKeyPrefix = "liveSyncPullCursorSeq:";
 
-/// Scopes cursors per server+account, same reasoning as the existing
+/// Scopes cursors per server+account+dataset, same reasoning as the existing
 /// per-account session storage: switching servers/accounts must not reuse
 /// stale progress from a different one.
+///
+/// The dataset is in the key because the pull cursor is a sequence number and
+/// sequence numbers are only meaningful within one dataset's feed. Neither the
+/// server URL nor the email changes when an account's dataset does, so without
+/// this a cursor from the old feed would be applied to the new one and every
+/// change below it would be skipped -- silently, permanently, and with no 409
+/// to signal it, because the server has no way to know the cursor came from
+/// somewhere else.
+///
+/// Adding this changes every existing device's key once, so each does one full
+/// re-sync on upgrade. That is a no-op in both directions: pushes lose
+/// last-write-wins against identical stored timestamps, and pulls lose against
+/// identical local ones.
 String? _cursorScopeKey() {
   final session = selfHostedSession;
   if (session == null) return null;
-  return "${session.serverUrl}:${session.email}";
+  return "${session.serverUrl}:${session.email}:${cachedServerProfile?.datasetId ?? 0}";
 }
 
 Future<DateTime> _getPushCursor() async {
@@ -163,6 +177,18 @@ Future<List<Map<String, dynamic>>> _collectLocalChanges(DateTime cursor) async {
         payload: row.toJson(),
         deleted: false));
   }
+  // Per-user view preferences. getAllNewAppSettings excludes row 0, the
+  // device-local settings blob, so only rows keyed by a server user id travel.
+  // Timestamped from dateUpdated: this is the one synced table whose column
+  // isn't called dateTimeModified.
+  for (final row in await database.getAllNewAppSettings(cursor)) {
+    changes.add(_asChange(
+        table: UpdateLogType.AppSetting.name,
+        pk: row.settingsPk.toString(),
+        modifiedAt: row.dateUpdated,
+        payload: row.toJson(),
+        deleted: false));
+  }
   for (final row in await database.getAllNewDeleteLogs(cursor)) {
     changes.add(_asChange(
         table: row.type.name,
@@ -184,7 +210,8 @@ SyncLog? _syncLogFromChange(Map<String, dynamic> change) {
   final table = change['table'] as String;
   final pk = change['pk'] as String;
   final deleted = change['deleted'] as bool;
-  final modifiedAt = DateTime.fromMillisecondsSinceEpoch(change['modifiedAt'] as int);
+  final modifiedAt =
+      DateTime.fromMillisecondsSinceEpoch(change['modifiedAt'] as int);
 
   if (deleted) {
     DeleteLogType? deleteLogType;
@@ -230,6 +257,9 @@ SyncLog? _syncLogFromChange(Map<String, dynamic> change) {
       break;
     case UpdateLogType.Objective:
       itemToUpdate = Objective.fromJson(payload);
+      break;
+    case UpdateLogType.AppSetting:
+      itemToUpdate = AppSetting.fromJson(payload);
       break;
     case UpdateLogType.Unused:
       return null;
@@ -304,7 +334,8 @@ Future<void> runLiveSyncCycle() async {
     var conflictCount = 0;
 
     for (var i = 0; i < localChanges.length; i += 200) {
-      final end = (i + 200 < localChanges.length) ? i + 200 : localChanges.length;
+      final end =
+          (i + 200 < localChanges.length) ? i + 200 : localChanges.length;
       try {
         final result = await client.pushSyncChanges(
           deviceId: clientID,
@@ -346,7 +377,8 @@ Future<void> runLiveSyncCycle() async {
         // start, and rewind the push cursor to 0 so the whole local database
         // is re-uploaded on the next cycle. Purely local bookkeeping -- no
         // data is deleted here.
-        print("Live sync: server feed was reset, rebootstrapping from seq ${e.minRetainedSeq}");
+        print(
+            "Live sync: server feed was reset, rebootstrapping from seq ${e.minRetainedSeq}");
         await _setPullCursor(e.minRetainedSeq);
         await _setPushCursor(DateTime(0));
         return;
@@ -371,8 +403,10 @@ Future<void> runLiveSyncCycle() async {
           print("Live sync: skipping unreadable change "
               "${change['table']}/${change['pk']} (seq ${change['seq']}): $e");
         }
-        final modifiedAt = DateTime.fromMillisecondsSinceEpoch(change['modifiedAt'] as int);
-        if (pulledMax == null || modifiedAt.isAfter(pulledMax)) pulledMax = modifiedAt;
+        final modifiedAt =
+            DateTime.fromMillisecondsSinceEpoch(change['modifiedAt'] as int);
+        if (pulledMax == null || modifiedAt.isAfter(pulledMax))
+          pulledMax = modifiedAt;
       }
       pullCursor = result.nextCursor;
       hasMore = result.hasMore;
@@ -385,6 +419,14 @@ Future<void> runLiveSyncCycle() async {
 
     if (logsToApply.isNotEmpty) {
       await database.processSyncLogs(logsToApply);
+      // A view preference changed on this member's other device has just
+      // landed in the database; pull it into the live settings map so the
+      // screen follows without a restart. Only reads the rows this member
+      // owns, and is a no-op on a solo account.
+      if (logsToApply.any(
+          (SyncLog log) => log.updateLogType == UpdateLogType.AppSetting)) {
+        await applyStoredViewSettings();
+      }
     }
 
     // Only advance the push cursor when the push actually succeeded. Moving it
@@ -402,7 +444,9 @@ Future<void> runLiveSyncCycle() async {
         // Clamped to cycleStartTime so a pulled row can never push the cursor
         // past a local edit made during this very cycle -- see the comment on
         // cycleStartTime above.
-        final bump = localPulledMax.isAfter(cycleStartTime) ? cycleStartTime : localPulledMax;
+        final bump = localPulledMax.isAfter(cycleStartTime)
+            ? cycleStartTime
+            : localPulledMax;
         if (bump.isAfter(newPushCursor)) newPushCursor = bump;
       }
 
@@ -531,7 +575,9 @@ const _pollIntervalMax = Duration(minutes: 15);
 /// How long to wait before the next poll: the base cadence for the current
 /// socket state, doubled per consecutive failure, capped.
 Duration _nextPollInterval() {
-  final base = _liveSyncSocketReady ? _pollIntervalWithSocket : _pollIntervalWithoutSocket;
+  final base = _liveSyncSocketReady
+      ? _pollIntervalWithSocket
+      : _pollIntervalWithoutSocket;
   if (_liveSyncFailureStreak == 0) return base;
   final backedOff = base * (1 << (_liveSyncFailureStreak.clamp(1, 5) - 1));
   return backedOff > _pollIntervalMax ? _pollIntervalMax : backedOff;
@@ -631,10 +677,12 @@ void _connectLiveSyncSocket() {
   if (session == null) return;
 
   try {
-    final wsUrl = session.serverUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/sync-stream';
+    final wsUrl =
+        session.serverUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/sync-stream';
     final channel = WebSocketChannel.connect(Uri.parse(wsUrl));
     _liveSyncSocket = channel;
-    channel.sink.add(jsonEncode({'type': 'auth', 'token': session.sessionToken}));
+    channel.sink
+        .add(jsonEncode({'type': 'auth', 'token': session.sessionToken}));
 
     channel.stream.listen(
       (message) {
@@ -681,5 +729,6 @@ void _scheduleLiveSyncReconnect() {
   _liveSyncReconnectAttempt++;
   final delaySeconds = (1 << attempt).clamp(1, 60);
   _liveSyncReconnectTimer?.cancel();
-  _liveSyncReconnectTimer = Timer(Duration(seconds: delaySeconds), _connectLiveSyncSocket);
+  _liveSyncReconnectTimer =
+      Timer(Duration(seconds: delaySeconds), _connectLiveSyncSocket);
 }

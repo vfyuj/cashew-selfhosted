@@ -14,6 +14,7 @@ import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/modified/reorderable_list.dart';
 import 'package:cashew_selfhosted/struct/navBarIconsData.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
 import 'package:cashew_selfhosted/widgets/editRowEntry.dart';
@@ -252,7 +253,8 @@ class _EditHomePageState extends State<EditHomePage> {
               String defaultLabel = "default-line-graph".tr();
               String allTimeLabel = "all-time".tr();
               String customLabel = "custom-line-graph".tr();
-              List<Budget> allBudgets = await database.getAllBudgets();
+              List<Budget> allBudgets =
+                  visibleBudgets(await database.getAllBudgets());
               openBottomSheet(
                 context,
                 PopupFramework(

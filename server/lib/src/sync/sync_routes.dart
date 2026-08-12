@@ -9,17 +9,19 @@ import '../auth/auth_middleware.dart';
 import '../storage.dart';
 import 'sync_hub.dart';
 
-/// Assigns the next per-user sequence number, creating the user's sync_state
-/// row on first use. Must be called inside the same transaction as the
+/// Assigns the next per-dataset sequence number, creating the dataset's
+/// sync_state row on first use. One sequence space is shared by every member
+/// of a household, which is what lets their devices follow one another's
+/// changes with a single cursor. Must be called inside the same transaction as the
 /// write it numbers -- sqlite3's synchronous API plus Dart's single-threaded
 /// event loop is what makes this race-free (see specs/04-stage-2-instant-sync.md).
-int _nextSeq(Database db, int userId) {
+int _nextSeq(Database db, int datasetId) {
   db.execute(
-    'INSERT OR IGNORE INTO sync_state (user_id, next_seq, min_retained_seq) VALUES (?, 1, 0)',
-    [userId],
+    'INSERT OR IGNORE INTO sync_state (dataset_id, next_seq, min_retained_seq) VALUES (?, 1, 0)',
+    [datasetId],
   );
-  final seq = db.select('SELECT next_seq FROM sync_state WHERE user_id = ?', [userId]).first['next_seq'] as int;
-  db.execute('UPDATE sync_state SET next_seq = ? WHERE user_id = ?', [seq + 1, userId]);
+  final seq = db.select('SELECT next_seq FROM sync_state WHERE dataset_id = ?', [datasetId]).first['next_seq'] as int;
+  db.execute('UPDATE sync_state SET next_seq = ? WHERE dataset_id = ?', [seq + 1, datasetId]);
   return seq;
 }
 
@@ -30,7 +32,11 @@ int _nextSeq(Database db, int userId) {
 Router buildSyncRouter(String dataDir, Database db) {
   final router = Router();
 
-  UserFileStore storeFor(Request request) => UserFileStore(dataDir, 'sync', currentUser(request).id);
+  // Scoped by dataset, not by user: the members of a household sync one set of
+  // snapshots between all of their devices. Filenames stay collision-free in
+  // the shared directory because clientID carries a millisecond suffix.
+  UserFileStore storeFor(Request request) =>
+      UserFileStore(dataDir, 'sync', currentUser(request).datasetId);
 
   router.get('/files', (Request request) {
     final files = storeFor(request).list();
@@ -74,7 +80,7 @@ Router buildSyncRouter(String dataDir, Database db) {
 
   // Stage 2 row-level change feed. See specs/04-stage-2-instant-sync.md.
   router.post('/push', (Request request) async {
-    final userId = currentUser(request).id;
+    final datasetId = currentUser(request).datasetId;
     final body = jsonDecode(await request.readAsString()) as Map<String, dynamic>;
     final deviceId = (body['deviceId'] as String?) ?? '';
     final changes = (body['changes'] as List).cast<Map<String, dynamic>>();
@@ -102,16 +108,16 @@ Router buildSyncRouter(String dataDir, Database db) {
         final payloadJson = deleted ? null : jsonEncode(change['payload']);
 
         final existing = db.select(
-          'SELECT modified_at, payload FROM sync_records WHERE user_id = ? AND table_name = ? AND pk = ?',
-          [userId, table, pk],
+          'SELECT modified_at, payload FROM sync_records WHERE dataset_id = ? AND table_name = ? AND pk = ?',
+          [datasetId, table, pk],
         );
 
         if (existing.isEmpty) {
-          final seq = _nextSeq(db, userId);
+          final seq = _nextSeq(db, datasetId);
           db.execute(
-            'INSERT INTO sync_records (user_id, table_name, pk, seq, deleted, modified_at, device_id, payload) '
+            'INSERT INTO sync_records (dataset_id, table_name, pk, seq, deleted, modified_at, device_id, payload) '
             'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [userId, table, pk, seq, deleted ? 1 : 0, modifiedAt, deviceId, payloadJson],
+            [datasetId, table, pk, seq, deleted ? 1 : 0, modifiedAt, deviceId, payloadJson],
           );
           appliedCount++;
           continue;
@@ -121,11 +127,11 @@ Router buildSyncRouter(String dataDir, Database db) {
         final storedPayload = existing.first['payload'] as String?;
 
         if (modifiedAt > storedModifiedAt) {
-          final seq = _nextSeq(db, userId);
+          final seq = _nextSeq(db, datasetId);
           db.execute(
             'UPDATE sync_records SET seq = ?, deleted = ?, modified_at = ?, device_id = ?, payload = ? '
-            'WHERE user_id = ? AND table_name = ? AND pk = ?',
-            [seq, deleted ? 1 : 0, modifiedAt, deviceId, payloadJson, userId, table, pk],
+            'WHERE dataset_id = ? AND table_name = ? AND pk = ?',
+            [seq, deleted ? 1 : 0, modifiedAt, deviceId, payloadJson, datasetId, table, pk],
           );
           appliedCount++;
         } else if (modifiedAt == storedModifiedAt) {
@@ -148,7 +154,7 @@ Router buildSyncRouter(String dataDir, Database db) {
       rethrow;
     }
 
-    if (appliedCount > 0) syncHub.notify(userId);
+    if (appliedCount > 0) syncHub.notify(datasetId);
 
     return Response.ok(
       jsonEncode({'serverTime': serverTime.millisecondsSinceEpoch, 'conflictCount': conflictCount}),
@@ -157,12 +163,12 @@ Router buildSyncRouter(String dataDir, Database db) {
   });
 
   router.get('/pull', (Request request) {
-    final userId = currentUser(request).id;
+    final datasetId = currentUser(request).datasetId;
     final since = int.tryParse(request.url.queryParameters['since'] ?? '0') ?? 0;
     final limitParam = int.tryParse(request.url.queryParameters['limit'] ?? '500') ?? 500;
     final limit = limitParam.clamp(1, 2000);
 
-    final stateRows = db.select('SELECT min_retained_seq FROM sync_state WHERE user_id = ?', [userId]);
+    final stateRows = db.select('SELECT min_retained_seq FROM sync_state WHERE dataset_id = ?', [datasetId]);
     final minRetained = stateRows.isEmpty ? 0 : stateRows.first['min_retained_seq'] as int;
     if (since < minRetained) {
       return Response(
@@ -174,8 +180,8 @@ Router buildSyncRouter(String dataDir, Database db) {
 
     final rows = db.select(
       'SELECT seq, table_name, pk, deleted, modified_at, device_id, payload FROM sync_records '
-      'WHERE user_id = ? AND seq > ? ORDER BY seq LIMIT ?',
-      [userId, since, limit + 1],
+      'WHERE dataset_id = ? AND seq > ? ORDER BY seq LIMIT ?',
+      [datasetId, since, limit + 1],
     );
     final hasMore = rows.length > limit;
     final page = hasMore ? rows.take(limit) : rows;
@@ -209,14 +215,14 @@ Router buildSyncRouter(String dataDir, Database db) {
   // Cashew's button of the same name, which exists precisely because a feed
   // can end up in a state no client can make progress against.
   router.post('/reset', (Request request) {
-    final userId = currentUser(request).id;
+    final datasetId = currentUser(request).datasetId;
 
     db.execute('BEGIN');
     try {
-      db.execute('DELETE FROM sync_records WHERE user_id = ?', [userId]);
+      db.execute('DELETE FROM sync_records WHERE dataset_id = ?', [datasetId]);
       db.execute(
-        'INSERT OR IGNORE INTO sync_state (user_id, next_seq, min_retained_seq) VALUES (?, 1, 0)',
-        [userId],
+        'INSERT OR IGNORE INTO sync_state (dataset_id, next_seq, min_retained_seq) VALUES (?, 1, 0)',
+        [datasetId],
       );
       // next_seq deliberately keeps climbing, and min_retained_seq parks on
       // top of it. Every *other* device is holding a cursor below that, so its
@@ -233,8 +239,8 @@ Router buildSyncRouter(String dataDir, Database db) {
       // `seq > since`, its own re-upload would be invisible to it.
       db.execute(
         'UPDATE sync_state SET min_retained_seq = next_seq, next_seq = next_seq + 1 '
-        'WHERE user_id = ?',
-        [userId],
+        'WHERE dataset_id = ?',
+        [datasetId],
       );
       db.execute('COMMIT');
     } catch (_) {
@@ -243,11 +249,11 @@ Router buildSyncRouter(String dataDir, Database db) {
     }
 
     final minRetained = db.select(
-        'SELECT min_retained_seq FROM sync_state WHERE user_id = ?',
-        [userId]).first['min_retained_seq'] as int;
+        'SELECT min_retained_seq FROM sync_state WHERE dataset_id = ?',
+        [datasetId]).first['min_retained_seq'] as int;
 
     // Wake peers so they discover the reset now rather than up to 45s later.
-    syncHub.notify(userId);
+    syncHub.notify(datasetId);
 
     return Response.ok(
       jsonEncode({'minRetainedSeq': minRetained}),

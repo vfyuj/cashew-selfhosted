@@ -1185,5 +1185,21 @@
   "create-account": "Konto erstellen",
   "currency-label": "Währungskennzeichen",
   "currency-label-description": "Die Währung neben Beträgen anderer Konten anzeigen",
-  "remain": "verbleiben"
+  "remain": "verbleiben",
+  "load-backup-warning-household": "Dies ersetzt alle deine aktuellen Daten — und da dieses Budget geteilt wird, auch bei allen anderen, die es nutzen, auf allen ihren Geräten.",
+  "hidden-from-your-home-page": "Auf deiner Startseite ausgeblendet",
+  "hidden-from-your-home-page-description": "Konten, die du nicht auf deiner eigenen Startseite sehen willst. Das ändert nur deine Ansicht, auf allen deinen Geräten — bei allen anderen bleibt alles wie es ist, und das Konto bleibt überall sonst nutzbar.",
+  "over-allocated": "Mehr eingeplant als vorgesehen",
+  "over-allocated-description": "Die Budgets innerhalb von {category} ergeben zusammen {allocated}, für {category} sind aber {budgeted} vorgesehen.",
+  "over-allocated-description-multiple": "In {count} Hauptkategorien ist mehr eingeplant, als für sie vorgesehen ist.",
+  "over-allocated-includes-hidden": "Darin enthalten sind Budgets, die dir nicht angezeigt werden.",
+  "raise-budget-to-fit": "Erhöhen",
+  "raise-budget-to-fit-description": "Den Plan dieser Kategorie von {budgeted} auf {allocated} erhöhen, damit alles darin Eingeplante hineinpasst? Bereits abgeschlossene Monate behalten den Betrag, der damals festgelegt war.",
+  "keep": "Beibehalten",
+  "share-budget-with-household": "Mit dem Haushalt teilen",
+  "share-budget-with-household-description": "Aus gehört dieses Budget nur dir und niemand sonst sieht es — es zählt aber weiterhin zur Summe seiner Hauptkategorie. An sehen es alle, die dieses Budget teilen.",
+  "personal-budget": "Persönliches Budget",
+  "share-household-data": "Haushaltsbudget teilen",
+  "share-household-data-description": "Dieses Konto sieht und bearbeitet dieselben Transaktionen, Budgets und Konten wie du. Lass es aus, um ihm ein eigenes, getrenntes Budget zu geben. Das lässt sich nur jetzt festlegen, während das Konto erstellt wird.",
+  "shares-household-data": "Teilt dieses Budget"
 }

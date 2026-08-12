@@ -744,10 +744,13 @@ class _BackupManagementState extends State<BackupManagement> {
           // feed can end up in a state no client can make progress against,
           // and without this the only remedy is editing the server database by
           // hand. See specs/04-stage-2-instant-sync.md.
-          // English literals rather than .tr() keys: assets/translations is
-          // regenerated from upstream Cashew's Google Sheet, which would drop
-          // any fork-local key on the next run. Same choice liveSyncClient.dart
-          // already makes for its snackbars. "reset"/"cancel" are existing
+          // English literals rather than .tr() keys. The original reason no
+          // longer holds -- assets/translations was regenerated from upstream
+          // Cashew's Google Sheet back then, which would have dropped any
+          // fork-local key, but BL-007 made the translations fork-owned and
+          // that pipeline is gone. These stay English only because nobody has
+          // translated them since; new fork strings do use .tr(). Same for
+          // liveSyncClient.dart's snackbars. "reset"/"cancel" are existing
           // upstream keys, so those stay translated.
           widget.isClientSync
               ? SettingsContainer(
@@ -767,7 +770,12 @@ class _BackupManagementState extends State<BackupManagement> {
                       description:
                           "Clears the server sync database to reinitialize syncing between devices. "
                           "This device's data is then uploaded as the new baseline. "
-                          "Local data and stored backups remain intact.",
+                          "Local data and stored backups remain intact." +
+                              (cachedServerProfile?.sharesHousehold == true
+                                  ? "\n\nThis budget is shared. Every device of "
+                                      "everyone sharing it will re-sync against "
+                                      "this device's data."
+                                  : ""),
                       onSubmit: () async {
                         popRoute(context);
                         await openLoadingPopupTryCatch(() async {
@@ -910,7 +918,20 @@ class _BackupManagementState extends State<BackupManagement> {
                                     child: CodeBlock(
                                         text: (file.value.name ?? "No name")),
                                   ),
-                                  description: "load-backup-warning".tr(),
+                                  // In a shared household a restore is not a
+                                  // local action: the restored rows are
+                                  // stamped as newest and pushed, so they
+                                  // reach everyone. Deliberately only a
+                                  // warning -- forcing a Reset Sync here would
+                                  // rewind every peer's push cursor and
+                                  // re-upload exactly the rows the restore
+                                  // removed, because a restore leaves no
+                                  // tombstones behind for them.
+                                  description: cachedServerProfile
+                                              ?.sharesHousehold ==
+                                          true
+                                      ? "load-backup-warning-household".tr()
+                                      : "load-backup-warning".tr(),
                                   icon: appStateSettings["outlinedIcons"]
                                       ? Icons.warning_outlined
                                       : Icons.warning_rounded,

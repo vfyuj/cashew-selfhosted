@@ -158,6 +158,22 @@ class _AdminUsersSectionState extends State<AdminUsersSection> {
     );
   }
 
+  /// The line under an account's name: whether they share this household's
+  /// data, falling back to their email when there is nothing else to say.
+  ///
+  /// Compared against the *viewer's* dataset rather than rendered from a flag,
+  /// because "shared" is not a property of an account -- it is a relationship
+  /// between two of them.
+  String? _descriptionFor(ServerUser user) {
+    final int? mine = cachedServerProfile?.datasetId;
+    final bool sharesWithMe =
+        mine != null && mine != 0 && user.datasetId == mine;
+    if (sharesWithMe && user.id != cachedServerProfile?.id) {
+      return "shares-household-data".tr();
+    }
+    return user.name.trim().isEmpty ? null : user.email;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (cachedServerProfile?.isAdmin != true || hidden) {
@@ -203,7 +219,7 @@ class _AdminUsersSectionState extends State<AdminUsersSection> {
           for (final user in users ?? <ServerUser>[])
             SettingsContainer(
               title: user.displayName,
-              description: user.name.trim().isEmpty ? null : user.email,
+              description: _descriptionFor(user),
               icon: user.isAdmin
                   ? (appStateSettings["outlinedIcons"]
                       ? Icons.shield_outlined
@@ -331,6 +347,7 @@ class _AddUserFormState extends State<_AddUserForm> {
   final FocusNode emailFocus = FocusNode();
 
   bool submitting = false;
+  bool shareHousehold = false;
   String? errorText;
 
   @override
@@ -356,6 +373,7 @@ class _AddUserFormState extends State<_AddUserForm> {
     final (result, created) = await selfHostedCreateUser(
       email: email,
       name: nameController.text.trim(),
+      shareHousehold: shareHousehold,
     );
     if (!mounted) return;
 
@@ -407,6 +425,20 @@ class _AddUserFormState extends State<_AddUserForm> {
           textInputAction: TextInputAction.done,
           padding: EdgeInsetsDirectional.zero,
           onSubmitted: (_) => _submit(),
+        ),
+        const SizedBox(height: 10),
+        // Only offered at creation. Moving an account that already holds data
+        // into a household would merge two sets of rows that share no primary
+        // keys, duplicating every wallet, category and transaction -- so the
+        // server has no endpoint for it and this has no equivalent in the
+        // user list.
+        SettingsContainerSwitch(
+          title: "share-household-data".tr(),
+          description: "share-household-data-description".tr(),
+          initialValue: shareHousehold,
+          onSwitched: (value) => shareHousehold = value,
+          enableBorderRadius: true,
+          isOutlined: true,
         ),
         if (errorText != null)
           Padding(

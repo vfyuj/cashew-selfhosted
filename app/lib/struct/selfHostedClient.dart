@@ -118,11 +118,22 @@ class ServerProfile {
   final String name;
   final bool isAdmin;
 
+  /// Which set of synced data this account sees. Part of the sync cursor scope
+  /// key, so that moving between datasets can never replay one dataset's
+  /// sequence numbers against another's feed.
+  final int datasetId;
+
+  /// How many accounts share [datasetId], including this one. 1 means solo.
+  /// Drives the warnings on actions that reach other people's devices.
+  final int householdSize;
+
   ServerProfile({
     required this.id,
     required this.email,
     required this.name,
     required this.isAdmin,
+    this.datasetId = 0,
+    this.householdSize = 1,
   });
 
   /// Falls back rather than throwing on a missing field, so an older server
@@ -132,10 +143,23 @@ class ServerProfile {
         email: json['email'] as String? ?? "",
         name: json['name'] as String? ?? "",
         isAdmin: json['isAdmin'] == true,
+        datasetId: json['datasetId'] as int? ?? 0,
+        // Defaults to solo: a server too old to answer must not make the app
+        // warn about members who don't exist.
+        householdSize: json['householdSize'] as int? ?? 1,
       );
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'email': email, 'name': name, 'isAdmin': isAdmin};
+  /// Whether this account shares its data with anyone else.
+  bool get sharesHousehold => householdSize > 1;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'email': email,
+        'name': name,
+        'isAdmin': isAdmin,
+        'datasetId': datasetId,
+        'householdSize': householdSize,
+      };
 
   /// What to show as this person's display name, never blank.
   String get displayName => name.trim().isNotEmpty ? name.trim() : email;
@@ -148,11 +172,16 @@ class ServerUser {
   final String name;
   final bool isAdmin;
 
+  /// Which set of synced data this account sees. Accounts sharing a household
+  /// report the same one, which is how the admin list marks them.
+  final int datasetId;
+
   ServerUser({
     required this.id,
     required this.email,
     required this.name,
     required this.isAdmin,
+    this.datasetId = 0,
   });
 
   factory ServerUser.fromJson(Map<String, dynamic> json) => ServerUser(
@@ -160,6 +189,10 @@ class ServerUser {
         email: json['email'] as String? ?? "",
         name: json['name'] as String? ?? "",
         isAdmin: json['isAdmin'] == true,
+        // 0 from a server too old to send it. Zero never equals a real dataset
+        // id, so an old server reads as "nobody shares anything" rather than
+        // as "everybody shares one household".
+        datasetId: json['datasetId'] as int? ?? 0,
       );
 
   String get displayName => name.trim().isNotEmpty ? name.trim() : email;
@@ -808,13 +841,25 @@ class SelfHostedClient implements BackupTransport {
             .toList();
       });
 
-  Future<CreatedUser> createUser({required String email, required String name}) =>
+  /// With [shareHousehold] the new account joins this administrator's dataset
+  /// and sees the same transactions, budgets and wallets. Without it the
+  /// account is isolated, which is the default and what every account was
+  /// before households existed. Settable only here, at creation.
+  Future<CreatedUser> createUser({
+    required String email,
+    required String name,
+    bool shareHousehold = false,
+  }) =>
       _withRefreshRetry(() async {
         final response = await _httpClient
             .post(
               Uri.parse('${session.serverUrl}/admin/users'),
               headers: _jsonHeaders,
-              body: jsonEncode({'email': email, 'name': name}),
+              body: jsonEncode({
+                'email': email,
+                'name': name,
+                if (shareHousehold) 'shareHousehold': true,
+              }),
             )
             .timeout(const Duration(seconds: 20));
         _throwUnlessOk(response);
@@ -1024,8 +1069,10 @@ Future<List<ServerUser>?> selfHostedListUsers() async {
 Future<(ServerCallResult, CreatedUser?)> selfHostedCreateUser({
   required String email,
   required String name,
+  bool shareHousehold = false,
 }) =>
-    _guarded((client) => client.createUser(email: email, name: name));
+    _guarded((client) => client.createUser(
+        email: email, name: name, shareHousehold: shareHousehold));
 
 Future<(ServerCallResult, String?)> selfHostedResetUserPassword(int userId) =>
     _guarded((client) => client.resetUserPassword(userId));

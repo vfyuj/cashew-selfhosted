@@ -4,7 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
 /// Bump this whenever a migration is appended to [_migrations].
-const currentSchemaVersion = 2;
+const currentSchemaVersion = 4;
 
 /// Ordered schema migrations, indexed by the version they upgrade *to*.
 ///
@@ -21,6 +21,8 @@ const currentSchemaVersion = 2;
 final Map<int, void Function(Database db)> _migrations = {
   1: _migrateToV1,
   2: _migrateToV2,
+  3: _migrateToV3,
+  4: _migrateToV4,
 };
 
 /// Everything that existed before schema versioning was introduced, including
@@ -99,6 +101,132 @@ void _migrateToV2(Database db) {
     'UPDATE users SET is_admin = 1 '
     'WHERE id = (SELECT id FROM users ORDER BY id LIMIT 1)',
   );
+}
+
+/// Introduces datasets: the unit that sync storage is scoped to, so that more
+/// than one account can share one set of transactions, budgets and wallets.
+///
+/// Behaviour is unchanged by this step alone. Every existing user gets their
+/// own dataset and nothing yet reads the new tables.
+///
+/// The seed deliberately gives each dataset **the same id as its only member's
+/// user id**. That is what makes this migration free: `data/sync/<userId>` and
+/// `data/attachments/<userId>` are already the right directories once they are
+/// read as `data/<ns>/<datasetId>`, so no files move, and the values already
+/// stored in `sync_records.user_id` are already valid dataset ids, so no rows
+/// are rewritten. sqlite raises `sqlite_sequence` to the largest rowid ever
+/// inserted including explicitly supplied ones, so datasets allocated later
+/// start above the seeded block and can never collide with it.
+void _migrateToV3(Database db) {
+  db.execute('''
+    CREATE TABLE IF NOT EXISTS datasets (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT    NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL
+    );
+  ''');
+  // user_id is the primary key, not part of a composite one: a user belongs to
+  // exactly one dataset, so resolving a request's storage scope is never
+  // ambiguous and never needs a tie-break.
+  db.execute('''
+    CREATE TABLE IF NOT EXISTS dataset_members (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id)    ON DELETE CASCADE,
+      dataset_id INTEGER NOT NULL    REFERENCES datasets(id) ON DELETE CASCADE,
+      joined_at  INTEGER NOT NULL
+    );
+  ''');
+  db.execute('''
+    CREATE INDEX IF NOT EXISTS idx_dataset_members_dataset
+      ON dataset_members(dataset_id);
+  ''');
+  db.execute('''
+    INSERT OR IGNORE INTO datasets (id, name, created_at)
+      SELECT id, '', created_at FROM users;
+  ''');
+  db.execute('''
+    INSERT OR IGNORE INTO dataset_members (user_id, dataset_id, joined_at)
+      SELECT id, id, created_at FROM users;
+  ''');
+}
+
+/// Re-keys the change feed from a user to a dataset.
+///
+/// The tables are rebuilt rather than having the column renamed in place.
+/// `ALTER TABLE ... RENAME COLUMN` keeps the old foreign key, which would leave
+/// `dataset_id` pointing at `users` -- and then deleting one member of a shared
+/// household would cascade the whole household's feed away. Rebuilding also
+/// means every reader that still says `user_id` fails loudly with "no such
+/// column" instead of silently serving somebody else's rows.
+///
+/// v3's seed is what makes the copy a straight one: the existing `user_id`
+/// values are already the correct dataset ids.
+void _migrateToV4(Database db) {
+  final columns = db
+      .select('PRAGMA table_info(sync_records)')
+      .map((row) => row['name'] as String)
+      .toSet();
+  if (columns.contains('dataset_id')) return;
+
+  // PRAGMA foreign_keys is a no-op inside a transaction, so it has to be
+  // toggled out here; migrate() runs each step unwrapped, which is what makes
+  // that possible. The caller's original setting is restored rather than
+  // forced on -- tests open connections without it.
+  final foreignKeysWereOn =
+      (db.select('PRAGMA foreign_keys').first.columnAt(0) as int) == 1;
+  db.execute('PRAGMA foreign_keys=OFF');
+  db.execute('BEGIN');
+  try {
+    db.execute('''
+      CREATE TABLE sync_records_new (
+        dataset_id  INTEGER NOT NULL REFERENCES datasets(id) ON DELETE CASCADE,
+        table_name  TEXT    NOT NULL,
+        pk          TEXT    NOT NULL,
+        seq         INTEGER NOT NULL,
+        deleted     INTEGER NOT NULL DEFAULT 0,
+        modified_at INTEGER NOT NULL,
+        device_id   TEXT    NOT NULL,
+        payload     TEXT,
+        PRIMARY KEY (dataset_id, table_name, pk)
+      );
+    ''');
+    // Rows whose owner no longer exists are dropped rather than carried over.
+    // They belong to nobody and no longer have a dataset to point at; copying
+    // them would leave the table failing a foreign_key_check, which on a
+    // strict connection means the server refuses to start.
+    db.execute('''
+      INSERT INTO sync_records_new
+        SELECT user_id, table_name, pk, seq, deleted, modified_at, device_id, payload
+        FROM sync_records WHERE user_id IN (SELECT id FROM datasets);
+    ''');
+    db.execute('DROP TABLE sync_records');
+    db.execute('ALTER TABLE sync_records_new RENAME TO sync_records');
+    // Recreated after the rename so it keeps its canonical name rather than
+    // one derived from the temporary table.
+    db.execute(
+      'CREATE INDEX idx_sync_records_feed ON sync_records(dataset_id, seq)',
+    );
+
+    db.execute('''
+      CREATE TABLE sync_state_new (
+        dataset_id       INTEGER PRIMARY KEY REFERENCES datasets(id) ON DELETE CASCADE,
+        next_seq         INTEGER NOT NULL DEFAULT 1,
+        min_retained_seq INTEGER NOT NULL DEFAULT 0
+      );
+    ''');
+    db.execute('''
+      INSERT INTO sync_state_new
+        SELECT user_id, next_seq, min_retained_seq
+        FROM sync_state WHERE user_id IN (SELECT id FROM datasets);
+    ''');
+    db.execute('DROP TABLE sync_state');
+    db.execute('ALTER TABLE sync_state_new RENAME TO sync_state');
+    db.execute('COMMIT');
+  } catch (_) {
+    db.execute('ROLLBACK');
+    rethrow;
+  } finally {
+    if (foreignKeysWereOn) db.execute('PRAGMA foreign_keys=ON');
+  }
 }
 
 /// Applies every migration newer than the database's recorded version.

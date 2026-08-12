@@ -48,6 +48,16 @@ Router buildAdminRouter(AuthService authService, String dataDir) {
   /// Creates an account and returns a generated temporary password. That
   /// password is shown exactly once and never stored in plaintext -- if it is
   /// lost, the administrator issues a new one via the reset route below.
+  ///
+  /// `shareHousehold` puts the new account in the caller's dataset, so both see
+  /// the same transactions, budgets and wallets. Without it the account gets an
+  /// empty dataset of its own and is invisible to everyone else, which is what
+  /// every account was before datasets existed and remains the default.
+  ///
+  /// Only settable here, at creation. Moving an account that already holds data
+  /// into a household would merge two sets of rows that share no primary keys,
+  /// duplicating every wallet, category and transaction -- so that is not
+  /// offered rather than offered with a warning.
   router.post('/users', (Request request) async {
     final body = await _readJson(request);
     if (body == null) return _error(400, 'expected a JSON object body');
@@ -62,6 +72,9 @@ Router buildAdminRouter(AuthService authService, String dataDir) {
         temporaryPassword,
         name: name,
         isAdmin: body['isAdmin'] == true,
+        joinDatasetId: body['shareHousehold'] == true
+            ? currentUser(request).datasetId
+            : null,
       );
       return _json({
         'user': authService.requireUserById(id).toJson(),
@@ -110,6 +123,9 @@ Router buildAdminRouter(AuthService authService, String dataDir) {
       // it. Demote-then-delete from another admin account is the way.
       return _error(409, 'you cannot delete your own account');
     }
+    // Resolved before the delete: the membership row cascades away with the
+    // user, so afterwards there is no way back to which dataset they were in.
+    final int? datasetId = authService.findUserById(userId)?.datasetId;
     try {
       authService.deleteUser(userId);
     } on LastAdminException {
@@ -117,12 +133,22 @@ Router buildAdminRouter(AuthService authService, String dataDir) {
     } on UserNotFoundException {
       return _error(404, 'user not found');
     }
-    // Sessions cascade via the foreign key; stored files do not, so clear every
-    // namespace explicitly. Done after the delete succeeds so a refused
-    // deletion never destroys data.
-    UserFileStore(dataDir, 'sync', userId).deleteAll();
+    // Sessions and the dataset membership cascade via foreign keys; stored
+    // files do not. Done after the delete succeeds so a refused deletion never
+    // destroys data.
+    //
+    // Backups are per-user, so they always go with the account.
     UserFileStore(dataDir, 'backup', userId).deleteAll();
-    UserFileStore(dataDir, 'attachments', userId).deleteAll();
+    // Sync and attachments belong to the dataset, which may still have other
+    // members -- deleting one member of a household must not delete the
+    // household's data. Only once the last member is gone is any of it
+    // unreachable. Dropping the datasets row is also what cascades away
+    // sync_records and sync_state, which no longer hang off users.
+    if (datasetId != null && authService.countDatasetMembers(datasetId) == 0) {
+      authService.deleteDataset(datasetId);
+      UserFileStore(dataDir, 'sync', datasetId).deleteAll();
+      UserFileStore(dataDir, 'attachments', datasetId).deleteAll();
+    }
     return Response.ok('');
   });
 

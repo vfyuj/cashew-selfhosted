@@ -1,76 +1,191 @@
 # Shared household data (Stage 4)
 
-**Design only. Nothing here is implemented.** Written down now, while the reasoning is fresh, so this can be picked up cold later.
+**Implemented 2026-08-12.** This file described a design; it now describes what
+shipped, and where the shipped thing deliberately differs from the design.
 
-Everything up to and including `05-accounts-and-admin.md` keeps the model from `00-overview.md` principle 3: two accounts on one server are fully isolated, each person having their own private multi-device sync. This is the stage that changes that.
+Up to and including `05-accounts-and-admin.md` the fork kept `00-overview.md`
+principle 3: two accounts on one server are fully isolated, each with their own
+private multi-device sync. This is the stage that changed that.
 
-## What the owner asked for
+## What was asked for
 
-1. A second account for a family member, with access to the **same data**.
-2. Each person able to customise their own view of it — hide money accounts that aren't theirs, reorder the screen — without changing what the other sees.
-3. Some transactions kept private, so a gift for the other person doesn't show up in their app.
+A family instance where two adult accounts share one budget with full access to
+everything, and every other account is an ordinary isolated one — an
+administrator can create it and reset its password, but cannot see its
+transactions from inside the app. Explicitly *not* a parent/child hierarchy;
+two roles and nothing finer.
 
-## The easy part: storage scoping
+## The model
 
-Server-side scoping is a genuine two-line choke point:
+Two orthogonal axes. **Do not collapse them.**
 
-- `server/lib/src/sync/sync_routes.dart` — `UserFileStore(dataDir, 'sync', currentUser(request).id)`
-- `server/lib/src/backup/backup_routes.dart` — the same shape for `'backup'`
+| | `users.is_admin` | dataset membership |
+|---|---|---|
+| controls | provisioning accounts, resetting passwords | which synced data you see |
+| household members | typically yes | same dataset |
+| everyone else | no | own dataset |
 
-`UserFileStore` already takes an arbitrary namespace and id, so pointing both at a resolved `datasetId` instead of a `userId` is close to mechanical. Add `datasets` and `dataset_members` tables (the migration runner from `05-accounts-and-admin.md` now exists to carry them), resolve the caller's dataset from their session, and the storage layer is done.
+Collapsing "administrator ⇒ shares the budget" would mean granting somebody
+administration silently merged their finances into the household's, and
+removing it detached them from the household's data.
 
-**Do not mistake this for the feature being easy.**
+Isolated accounts are literally the behaviour every account already had, so
+that half cost nothing to build. Only the sharing side is new.
 
-## The hard part: sync semantics
+**Sharing is set at account creation only.** There is no endpoint to move an
+existing account into a household, because merging two datasets means merging
+two sets of rows that share no primary keys — every wallet, category and
+transaction would be duplicated. The second member's account is created with
+the switch on and signed into on a fresh install, where the app already
+converges correctly (see "Why a fresh install just works" below).
 
-Sync is per-device whole-database SQLite snapshots, merged client-side by last-write-wins on `dateTimeModified`. Pointing two people's devices at one directory makes their snapshots merge exactly as though they were one person's devices. That will mostly appear to work, which is the danger. What it does not give you:
+## Storage scoping
 
-- **No per-row authorship.** Nothing records who wrote a row, so nothing can filter by it.
-- **No partial visibility.** It is all-or-nothing on an entire database file. There is no mechanism for "send them these rows but not those".
-- **No awareness of concurrent human edits.** `04-stage-2-instant-sync.md` already flags this: LWW is "adequate because Stage 2 is still single-owner-multi-device… Revisit if Stage 4 introduces genuinely concurrent multi-person edits." Two people editing the same budget on the same evening is the normal case here, not an edge case.
+`UserFileStore` already took an arbitrary namespace and id, so pointing it at a
+dataset was close to mechanical. What was not mechanical:
 
-### Also required
-- **`clientID` uniqueness must hold globally, not per user.** `sync-<clientID>.sqlite` filenames would now share one directory across people.
-- **Restore is sharper once shared.** A snapshot restore overwrites the whole database file. Decide explicitly what that means when the file is not solely yours.
+- **The change feed had to be re-keyed, not reinterpreted.** `sync_records` and
+  `sync_state` were rebuilt with `dataset_id` and a foreign key onto `datasets`.
+  A `RENAME COLUMN` would have kept the old foreign key pointing at `users`, and
+  then removing one member of a household would have cascaded the whole
+  household's feed away. Rebuilding also makes any reader still saying `user_id`
+  fail loudly instead of silently serving the wrong scope.
+- **The migration is free.** v3 seeds each existing user a dataset whose id
+  equals their user id, so `data/sync/<userId>` is already correct as
+  `data/<ns>/<datasetId>` and the values already in `sync_records.user_id` are
+  already valid dataset ids. No files move, no rows are rewritten.
+- **`SyncHub` is keyed by dataset.** Miss this and the other member's device
+  never wakes — it still syncs on the 45s/5min poll, so it fails slowly and
+  reads as "sync is laggy" rather than broken.
+- **Attachments follow the dataset**, and must: `attachmentUrl()` writes the
+  server URL into the transaction's note, and the note syncs, so a user-scoped
+  receipt would 404 for the other member.
+- **Backups stay per-user.** Not an oversight. `createBackup` names a file
+  `db-v<schema>-<deviceName>`, and `getCurrentDeviceName()` strips clientID's
+  millisecond suffix down to the device model, so two same-model phones in one
+  household would silently overwrite each other's backups; and
+  `deleteRecentBackups` prunes across the whole listing, so one member's
+  automatic backup would evict another's. Each member keeping their own history
+  costs nothing — they are snapshots of the same shared database, so either
+  member's restores the household. An `api_test.dart` case pins this against a
+  future "consistency" cleanup.
+- **Deleting a member no longer deletes the dataset's files** unless they were
+  its last member. Dropping the `datasets` row is now what reaps the feed,
+  since `sync_records` no longer hangs off `users`.
 
-## Per-user views (item 2) — nearly free
+`clientID` uniqueness, which the original design listed as work, turned out to
+already hold: it carries a `millisecondsSinceEpoch` suffix. The collision was
+in the *backup* filename instead, which the decision above avoids.
 
-`AppSettings` is a Drift table that `processSyncLogs` deliberately does not merge, and `appStateSettings` lives in `sharedPreferences`, not in the database at all. So per-person wallet visibility and layout order can stay local with no schema change and no sync work.
+## Privacy: on budgets, not on transactions
 
-The one trap: a snapshot restore overwrites the whole database file *including* `AppSettings`. That is already a mild footgun and becomes a sharper one when a restore is triggered by the other person. Needs an explicit carve-out.
+The original design put privacy on **transactions** and flagged its own flaw —
+hiding a transaction makes the other person's wallet balance and totals
+disagree with reality, which is worse than the problem being solved. It then
+recommended wallet-level privacy instead.
 
-## Private transactions (item 3)
+What shipped puts it on **budgets**, which is better than either. A budget is a
+target and a grouping, not an amount in a balance: hide one and every remaining
+number stays correct. It also needed no schema change, because `Budgets` has a
+dead column to borrow and `Wallets` does not.
 
-**Decided: UI-level hiding, not encryption.** The owner chose this deliberately, understanding the trade-off.
+- Custom budgets default to belonging to whoever created them. Main-category
+  envelopes are always the household's — they are the shared plan, and the
+  over-allocation check measures against them.
+- Stored in `Budgets.sharedMembers` via `app/lib/struct/budgetVisibility.dart`,
+  the same borrowed-dead-column trick and the same single-owner discipline as
+  `budgetPeriodAmounts.dart` next door.
+- `sharedMembers` rather than `sharedKey` deliberately: the two surviving bits
+  of Firestore UI that would render this are both gated on `sharedKey`, and
+  nothing writes it. Borrowing `sharedMembers` leaves those dead paths dead.
 
-State the caveat honestly wherever this surfaces to a user: the rows are physically present in the shared database on the other person's device. This hides things from the app, not from a person with a SQLite browser. It is appropriate for "don't spoil the gift", not for "protect this from someone who might go looking".
+**Everything syncs, including hidden budgets; hiding is at the UI layer only.**
+This is a deliberate call, not a shortcut. The over-allocation check below has
+to count budgets the viewer cannot see, or a household can silently
+over-commit a category. State the consequence honestly wherever it matters:
+this hides a budget from the app, not from anyone with a SQLite browser.
 
-### Open design question — settle before building
+The one place another member's budget is admitted is the manage-budgets screen,
+where it appears without its name, at half opacity, and completely inert — no
+rename, reorder, delete, open or unhide — so it can never be promoted onto this
+device's budgets page.
 
-Attaching privacy to a **transaction** breaks the other person's arithmetic: a hidden amount makes their wallet balance and totals wrong, which is worse than the problem being solved. Attaching it to a **wallet** keeps every visible total internally consistent, because the wallet is simply absent from their view.
+## Subcategory budgets sum to their main category
 
-**Recommendation: the wallet-level model.** It also composes with item 2, which is already about hiding wallets that aren't relevant to you.
+New in this stage, and the reason personal budgets sync. Budgets for a main
+category's subcategories could be created without limit and none of them
+touched the envelope they sit under, so a household could plan 1200 of spending
+inside a category budgeted at 1000 and find out at the end of the month.
 
-### Upstream compatibility — a decision this stage must make consciously
+`app/lib/struct/subCategoryBudgetAllocation.dart` measures each main category's
+subcategory budgets against its envelope and warns when they exceed it, offering
+to raise the envelope so they fit. Under-allocating is fine and never warns.
 
-Everything up to this point keeps the app's Drift schema identical to original Cashew's (`schemaVersionGlobal = 46`, same 10 tables), which is what currently makes an original-Cashew backup importable — for free, verified by the diff in `CLAUDE.md`. The actual goal was never the identical schema; it's staying import-compatible with upstream for as long as that's practical. Identical tables are just the cheapest way to get that while it costs nothing.
+- Amounts are converted to the envelope's period before summing, so a weekly
+  budget and a monthly one can be added together. Nothing in the app normalized
+  periods before this, so it is established locally rather than retrofitted onto
+  `totalPlannedExpenses`.
+- Both sides go through `budgetAmountToPrimaryCurrency`.
+- Raising the envelope goes through `withUpdatedAmountHistory`, so finished
+  periods keep the target they were set to at the time (BL-006).
+- Expenses only. Budgets spanning several categories, or none, cannot be
+  attributed to one parent and are left out rather than guessed at.
 
-This stage is the first thing that genuinely wants to spend that budget — a private/owner flag has to live on a row somewhere. Two ways to keep the real goal without keeping the schema identical:
+Because hidden budgets count, the figures will not always add up against the
+cards on screen. The copy says so when it applies.
 
-1. **Cheapest: keep privacy flags out of the synced schema entirely** — in the *unsynced* settings layer, keyed by row id. Full compatibility in both directions, at the cost of the flags not surviving a device migration or a restore. For a "don't spoil the gift" threat model, likely the better trade regardless of the point below.
-2. **If the flag has to live in the synced table:** importing an original-Cashew backup still works (Drift migrations run forward). What breaks is the reverse — a fork backup importing into stock Cashew, which has no migration for a column it doesn't know. That's a reasonable trade to accept, or it can be recovered with a small conversion step (an export path that strips or translates the fork-only column back out) rather than treated as a hard blocker. Only worth deciding if option 1 turns out not to fit.
+## Per-user views
 
-## Sequencing
+Layout preferences lived in `sharedPreferences`, so they were per *device* — a
+member's phone and laptop never agreed — and the only account-level control over
+which accounts appear on the home page was `Wallets.homePageWidgetDisplay`, a
+synced column, so hiding an account hid it for everyone.
 
-1. `datasets` + `dataset_members`, and dataset resolution in the two scoping lines. Storage only; behaviour unchanged while every dataset has exactly one member.
-2. Global `clientID` uniqueness.
-3. Invite/join flow, reusing the administration surface from `05-accounts-and-admin.md`.
-4. Decide the LWW question with real two-person usage before building anything on top of it.
-5. Per-user views (mostly already local — verify the restore carve-out).
-6. Private wallets, after the schema-compatibility decision above is made explicitly.
+Shipped as one `AppSettings` row per member, keyed by their server user id,
+carrying a short allow-list of view preferences (`app/lib/struct/perUserViewSettings.dart`).
+Row 0 keeps its existing job as the device-local settings blob and is excluded
+from the feed — that exclusion is the safety property that makes syncing this
+table acceptable at all, since row 0 holds the server URL, the signed-in email
+and the cached exchange rates.
+
+Wallet hiding is layered *on top of* `homePageWidgetDisplay` rather than
+replacing it: the household still decides which accounts are pinned where, and
+this drops some of them from one person's view. Additive, so every existing
+query keeps its meaning.
+
+**The restore carve-out is load-bearing.** A backup holds every member's rows,
+and `bumpAllModifiedTimestampsForResync` would stamp them as newest and push
+them — so one person restoring a backup would rearrange everyone's home page.
+The other members' rows are dropped before the bump.
+
+## Restore in a shared dataset — warn, do not reset
+
+A restore reaches everyone now, so the confirmation says so when
+`householdSize > 1`. It deliberately does **not** force a Reset Sync: a restore
+removes rows without creating tombstones, and a reset rewinds every peer's push
+cursor to `DateTime(0)`, so they would re-upload exactly the rows the restore
+removed. Warn, don't reset.
+
+## Sync semantics that did not change
+
+Last-write-wins on `dateTimeModified`, with no per-row authorship and no
+field-level merge. Two members editing the same budget on the same evening is
+now a normal case rather than an edge case, and one of them silently wins.
+Left alone on purpose: it wants real two-person usage to know whether it is
+actually annoying, and `04-stage-2-instant-sync.md` is the place that would
+change.
+
+## Test coverage
+
+Server tests went from 55 to 86. `/sync/push`, `/sync/pull`, `/sync/reset` and
+`SyncHub` had **no** coverage at all before this stage rewrote every statement
+in them; `server/test/sync_feed_test.dart` now covers the round trip, paging,
+last-write-wins, echo suppression, the clock clamp, and the reserved-seq gap
+that lets a resetting device see its own re-upload.
 
 ## Non-goals
 
 - Multi-tenant hosting. Unchanged from `00-overview.md`.
 - Cryptographic privacy. Explicitly rejected in favour of UI-level hiding.
-- A general permission system. Two roles, plus per-wallet visibility, is the whole model.
+- A general permission system.
+- Moving an existing account into a household, or splitting one back out.

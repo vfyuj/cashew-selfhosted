@@ -4,6 +4,7 @@ import 'package:cashew_selfhosted/pages/homePage/homePageLineGraph.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
 import 'package:cashew_selfhosted/pages/transactionFilters.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/perUserViewSettings.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/struct/syncClient.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
@@ -307,6 +308,13 @@ enum UpdateLogType {
   ScannerTemplate,
   Objective,
   Unused, // Was for the scanner template, but is now unused
+  // A household member's own view preferences -- see
+  // struct/perUserViewSettings.dart. Appended rather than inserted: the
+  // matching DeleteLogType is stored as an int index in DeleteLogs, so the
+  // order of these is part of the on-disk format. There is deliberately no
+  // DeleteLogType counterpart, because a per-user settings row is never
+  // deleted.
+  AppSetting,
 }
 
 @DataClassName('DeleteLog')
@@ -537,13 +545,26 @@ class Budgets extends Table {
       .map(const StringListInColumnConverter())();
   // Attributes to configure sharing of transactions:
   // Retained only to keep this schema byte-identical to upstream Cashew's so
-  // its backups stay importable (see CLAUDE.md). Nothing writes them: the
-  // Firestore-backed shared budgets they belonged to were removed with the rest
-  // of the Google integration. The one exception is sharedAllMembersEver -
-  // see its own note below.
+  // its backups stay importable (see CLAUDE.md). The Firestore-backed shared
+  // budgets they belonged to were removed with the rest of the Google
+  // integration. Two of them have since been given new jobs, and their names
+  // no longer describe their contents -- see sharedMembers just below and
+  // sharedAllMembersEver further down.
   TextColumn get sharedKey => text().nullable()();
   IntColumn get sharedOwnerMember => intEnum<SharedOwnerMember>().nullable()();
   DateTimeColumn get sharedDateUpdated => dateTime().nullable()();
+  // WARNING: this column's name lies. It no longer holds members.
+  //
+  // It holds at most one entry: the server user id of the household member a
+  // budget is personal to, or nothing when the budget is shared by the whole
+  // household. Personal budgets still sync -- they are filtered out when
+  // drawing the screen, so that the over-allocation check can still count
+  // budgets the viewer cannot see.
+  //
+  // Read and write it ONLY through struct/budgetVisibility.dart. Entries are a
+  // bare `<userId>` and anything not matching that exact shape reads as
+  // "shared", which is what lets an original-Cashew backup's real member IDs
+  // arrive here harmlessly.
   TextColumn get sharedMembers =>
       text().map(const StringListInColumnConverter()).nullable()();
   // WARNING: this column's name lies. It no longer holds members.
@@ -2506,11 +2527,21 @@ class FinanceDatabase extends _$FinanceDatabase {
     final totalCount = transactions.transactionPk.count();
     final totalSpent =
         transactions.amount.sum(filter: transactions.paid.equals(true));
+    // hiddenWalletPks layers this member's own choices on top of the
+    // household's shared pinning: homePageWidgetDisplay still decides which
+    // accounts belong on the home page, and this removes some of them from one
+    // person's view of it. Only applied to the home-page widget queries, so an
+    // account hidden from the home page is still fully usable everywhere else.
+    final Set<String> hiddenForThisMember =
+        homePageWidgetDisplay == null ? const {} : hiddenWalletPks;
     query = (select(wallets)
           ..where((w) => ((homePageWidgetDisplay != null
                   ? w.homePageWidgetDisplay
                       .contains(homePageWidgetDisplay.index.toString())
                   : Constant(true)) &
+              (hiddenForThisMember.isEmpty
+                  ? Constant(true)
+                  : w.walletPk.isNotIn(hiddenForThisMember.toList())) &
               (searchFor == null
                   ? Constant(true)
                   : w.name
@@ -2660,6 +2691,22 @@ class FinanceDatabase extends _$FinanceDatabase {
           ..where((tbl) =>
               tbl.dateTimeModified.isBiggerOrEqualValue(lastSynced) |
               tbl.dateTimeModified.isNull()))
+        .get();
+  }
+
+  /// Per-user view preference rows changed since [lastSynced].
+  ///
+  /// Row 0 is excluded, and that exclusion is the whole safety property of
+  /// syncing this table at all: row 0 holds the entire sharedPreferences blob
+  /// written by backupSettings(), which carries the server URL, the signed-in
+  /// email, cached exchange rates and every other device-local setting.
+  /// Shipping that between devices would be a mess at best. Only rows keyed by
+  /// a server user id -- see struct/perUserViewSettings.dart -- travel.
+  Future<List<AppSetting>> getAllNewAppSettings(DateTime lastSynced) {
+    return (select(appSettings)
+          ..where((tbl) =>
+              tbl.settingsPk.isBiggerThanValue(0) &
+              tbl.dateUpdated.isBiggerOrEqualValue(lastSynced)))
         .get();
   }
 
@@ -2819,6 +2866,39 @@ class FinanceDatabase extends _$FinanceDatabase {
   //Overwrite settings entry, it will always have id 0
   Future<int> createOrUpdateSettings(AppSetting setting) {
     return into(appSettings).insertOnConflictUpdate(setting);
+  }
+
+  /// Drops every per-user view settings row except [keepSettingsPk].
+  ///
+  /// Run after a restore. A restore replaces the whole database file, so it
+  /// also replaces every household member's view preferences with whatever
+  /// they were when that backup was taken -- and then
+  /// bumpAllModifiedTimestampsForResync stamps them as newest and pushes them,
+  /// so one person restoring a backup rearranges everyone else's home page.
+  ///
+  /// Dropping the other members' rows makes the restore stop short of their
+  /// screens: with no row to push, each of them keeps what their own devices
+  /// already have, and the row comes back the next time they change something.
+  /// Row 0 is left alone -- that is this device's own settings blob, which
+  /// initializeSettings deliberately re-adopts.
+  Future<void> dropOtherMembersViewSettings(int? keepSettingsPk) async {
+    await (delete(appSettings)
+          ..where((tbl) =>
+              tbl.settingsPk.isBiggerThanValue(0) &
+              (keepSettingsPk == null
+                  ? const Constant(true)
+                  : tbl.settingsPk.equals(keepSettingsPk).not())))
+        .go();
+  }
+
+  /// One settings row, or null when it doesn't exist yet.
+  ///
+  /// [getSettings] below is the row-0 accessor and throws when there is no
+  /// backup blob; the per-user rows in struct/perUserViewSettings.dart are
+  /// legitimately absent until that member changes something.
+  Future<AppSetting?> getSettingsRowOrNull(int settingsPk) {
+    return (select(appSettings)..where((s) => s.settingsPk.equals(settingsPk)))
+        .getSingleOrNull();
   }
 
   Future<AppSetting> getSettings() {
@@ -3762,6 +3842,23 @@ class FinanceDatabase extends _$FinanceDatabase {
           );
           batch.insert(categories, syncLog.itemToUpdate,
               mode: InsertMode.insertOrIgnore);
+        } else if (syncLog.updateLogType == UpdateLogType.AppSetting) {
+          // A household member's own view preferences, keyed by their server
+          // user id. Row 0 -- the whole-settings backup blob -- is deliberately
+          // never collected for sync, so it can never arrive here; see
+          // getAllNewAppSettings. Guarded on dateUpdated rather than
+          // dateTimeModified because that is the timestamp this table has.
+          batch.update(
+            appSettings,
+            syncLog.itemToUpdate,
+            where: (tbl) =>
+                tbl.settingsPk.equals(int.tryParse(syncLog.pk) ?? -1) &
+                tbl.dateUpdated.isSmallerThanValue(
+                  syncLog.transactionDateTime ?? DateTime.now(),
+                ),
+          );
+          batch.insert(appSettings, syncLog.itemToUpdate,
+              mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.Budget) {
           batch.update(
             budgets,
@@ -4215,7 +4312,7 @@ class FinanceDatabase extends _$FinanceDatabase {
   }
 
   Future<int> createOrUpdateBudget(Budget budget,
-      {bool insert = false}) async {
+      {DateTime? customDateTimeModified, bool insert = false}) async {
     budget = limitBudgetPeriod(budget);
 
     double maxAmount = 999999999999;
@@ -4224,7 +4321,8 @@ class FinanceDatabase extends _$FinanceDatabase {
     budget = budget.copyWith(name: budget.name.trim());
     // print(budget);
 
-    budget = budget.copyWith(dateTimeModified: Value(DateTime.now()));
+    budget = budget.copyWith(
+        dateTimeModified: Value(customDateTimeModified ?? DateTime.now()));
     BudgetsCompanion companionToInsert = budget.toCompanion(true);
 
     if (insert) {
@@ -4440,6 +4538,22 @@ class FinanceDatabase extends _$FinanceDatabase {
       };
       return indexedByPk;
     });
+  }
+
+  /// Every category, main and sub, in display order.
+  ///
+  /// watchAllCategories() lists main categories only, and
+  /// watchAllSubCategoriesIndexedByMainCategoryPk() loses the categories
+  /// themselves. Choosing a budget's subcategories needs both halves at once —
+  /// the parents to group by and the children to name — so it takes the flat
+  /// list and derives them together from one subscription.
+  Stream<List<TransactionCategory>> watchAllCategoriesAndSubCategories() {
+    return (select(categories)
+          ..orderBy([
+            (c) => OrderingTerm.asc(c.mainCategoryPk),
+            (c) => OrderingTerm.asc(c.order),
+          ]))
+        .watch();
   }
 
   Stream<Map<String, List<TransactionCategory>>>
@@ -7354,6 +7468,11 @@ class FinanceDatabase extends _$FinanceDatabase {
       associatedTitles,
       objectives,
       scannerTemplates,
+      // Only the per-user view rows are ever collected for sync (row 0 is
+      // excluded), but the trigger can't be that selective -- a write to row 0
+      // wakes a cycle that finds nothing to push. Harmless, and rare:
+      // backupSettings() only writes row 0 during a backup.
+      appSettings,
     ]));
   }
 

@@ -16,10 +16,17 @@ class PlannedBudgetTotals {
   const PlannedBudgetTotals({
     required this.budgets,
     required this.mainCategoryPks,
+    this.subCategoryParents = const <String, String>{},
   });
 
   final List<Budget> budgets;
   final Set<String> mainCategoryPks;
+
+  // subcategory pk -> the main category it belongs under. Carried here so the
+  // over-allocation check in struct/subCategoryBudgetAllocation.dart can group
+  // budgets by parent without opening its own subscription; this snapshot
+  // already holds every budget and is already cached app wide.
+  final Map<String, String> subCategoryParents;
 
   static const PlannedBudgetTotals empty = PlannedBudgetTotals(
     budgets: const [],
@@ -30,6 +37,33 @@ class PlannedBudgetTotals {
     final List<String>? categoryFks = budget.categoryFks;
     if (categoryFks == null || categoryFks.length != 1) return false;
     return mainCategoryPks.contains(categoryFks.first);
+  }
+
+  // The main category a subcategory sits under, or null if it isn't a
+  // subcategory of one that has an envelope.
+  String? mainCategoryOfSubCategory(String categoryPk) =>
+      subCategoryParents[categoryPk];
+
+  // The one main category every pk in [categoryPks] sits under, or null if
+  // they don't all share a parent.
+  //
+  // A budget can target several subcategories at once ("Gifts" and "Charity"
+  // inside Gifts & charity), and that still counts against exactly one
+  // envelope. A budget spanning two different main categories does not belong
+  // to either, and one targeting something that is not a subcategory at all
+  // belongs to none.
+  String? soleParentOfSubCategories(List<String> categoryPks) {
+    String? parent;
+    for (String categoryPk in categoryPks) {
+      final String? mainCategoryPk = subCategoryParents[categoryPk];
+      if (mainCategoryPk == null) return null;
+      if (parent == null) {
+        parent = mainCategoryPk;
+      } else if (parent != mainCategoryPk) {
+        return null;
+      }
+    }
+    return parent;
   }
 
   // Denominator of the share label on the budget card.
@@ -87,7 +121,8 @@ PlannedBudgetTotals? _latestPlannedBudgetTotals;
 
 // The most recent totals, for use as StreamBuilder initialData so a card that
 // mounts after the first emit doesn't flash without its label.
-PlannedBudgetTotals? get latestPlannedBudgetTotals => _latestPlannedBudgetTotals;
+PlannedBudgetTotals? get latestPlannedBudgetTotals =>
+    _latestPlannedBudgetTotals;
 
 // Cached app wide so every budget card on screen shares one pair of database
 // reads instead of opening its own. The underlying subscription is deliberately
@@ -210,6 +245,19 @@ Future<int> ensureMainCategoryBudgetsExist() async {
       budgetForMainCategory(category),
       // Never route an auto created budget through the shared/Firestore branch
       // of createOrUpdateBudget - it is dead in this fork.
+      //
+      // Stamped at the epoch so it always loses last-write-wins, the same
+      // reason initializeDefaultDatabase does it for the default wallet and
+      // categories. This runs before the first sync of a launch, so a device
+      // that has just signed in to an account which already has data creates
+      // its own amount: 0 envelopes for any category it shares a pk with -
+      // the default categories "1".."11" - before hearing about the real ones.
+      // Stamped "now" those zeroes would win the merge and wipe both the
+      // household's targets and the per-period history in
+      // Budgets.sharedAllMembersEver. Every real edit still stamps now via
+      // createOrUpdateBudget's default. Two devices independently creating the
+      // same envelope at the epoch is a no-op, not a conflict.
+      customDateTimeModified: DateTime(0),
     );
     createdCount++;
   }
@@ -244,13 +292,23 @@ Budget budgetForMainCategory(TransactionCategory category) {
 }
 
 Future<PlannedBudgetTotals> _totalsForBudgets(List<Budget> budgets) async {
-  final List<TransactionCategory> mainCategories =
-      await database.getAllCategories(includeSubCategories: false);
+  final List<TransactionCategory> allCategories =
+      await database.getAllCategories(includeSubCategories: true);
+  final Set<String> mainCategoryPks = {
+    for (TransactionCategory category in allCategories)
+      if (category.mainCategoryPk == null && _isEnvelopeEligible(category))
+        category.categoryPk
+  };
   final PlannedBudgetTotals totals = PlannedBudgetTotals(
     budgets: budgets,
-    mainCategoryPks: {
-      for (TransactionCategory category in mainCategories)
-        if (_isEnvelopeEligible(category)) category.categoryPk
+    mainCategoryPks: mainCategoryPks,
+    // Only parents that are themselves envelope-eligible: a subcategory of the
+    // excluded correction category has no envelope to be measured against.
+    subCategoryParents: {
+      for (TransactionCategory category in allCategories)
+        if (category.mainCategoryPk != null &&
+            mainCategoryPks.contains(category.mainCategoryPk))
+          category.categoryPk: category.mainCategoryPk!
     },
   );
   _latestPlannedBudgetTotals = totals;

@@ -2,86 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:server/src/api.dart';
-import 'package:server/src/auth/auth_service.dart';
-import 'package:server/src/database.dart';
 import 'package:server/src/web_handler.dart';
 import 'package:shelf/shelf.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
-/// Drives the real router + middleware composition against an in-memory
-/// database, so routing, auth gating and status codes are all exercised as
-/// they are in production -- no port binding, no fixtures shared between tests.
-class TestApi {
-  final Database db;
-  final AuthService authService;
-  final Handler handler;
-  final Directory dataDir;
-
-  TestApi._(this.db, this.authService, this.handler, this.dataDir);
-
-  factory TestApi.create() {
-    final db = sqlite3.openInMemory();
-    db.execute('PRAGMA foreign_keys=ON;');
-    migrate(db);
-    final authService = AuthService(db);
-    final dataDir = Directory.systemTemp.createTempSync('cashew-api-test');
-    return TestApi._(
-        db, authService, buildApiRouter(authService, db, dataDir.path).call, dataDir);
-  }
-
-  void dispose() {
-    db.dispose();
-    if (dataDir.existsSync()) dataDir.deleteSync(recursive: true);
-  }
-
-  Future<Response> send(
-    String method,
-    String path, {
-    Object? body,
-    String? token,
-  }) async {
-    return await handler(Request(
-      method,
-      Uri.parse('http://localhost$path'),
-      body: body == null ? null : jsonEncode(body),
-      headers: {
-        if (body != null) 'content-type': 'application/json',
-        if (token != null) 'authorization': 'Bearer $token',
-      },
-    ));
-  }
-
-  Future<Map<String, dynamic>> json(Response response) async =>
-      jsonDecode(await response.readAsString()) as Map<String, dynamic>;
-
-  /// Completes first-run setup and returns the administrator's session token.
-  Future<String> setupAdmin({
-    String email = 'owner@example.com',
-    String password = 'owner-password',
-  }) async {
-    final response = await send('POST', '/auth/setup',
-        body: {'email': email, 'name': 'The Owner', 'password': password});
-    // A shelf body can only be read once, so capture it before asserting on it.
-    final raw = await response.readAsString();
-    expect(response.statusCode, 200, reason: raw);
-    return (jsonDecode(raw) as Map<String, dynamic>)['sessionToken'] as String;
-  }
-
-  /// Creates a non-admin account via the admin API and signs in as them.
-  Future<({int id, String token, String password})> addMember(
-    String adminToken, {
-    String email = 'spouse@example.com',
-  }) async {
-    final created = await json(await send('POST', '/admin/users',
-        body: {'email': email, 'name': 'Spouse'}, token: adminToken));
-    final password = created['temporaryPassword'] as String;
-    final id = (created['user'] as Map<String, dynamic>)['id'] as int;
-    final login = await json(
-        await send('POST', '/auth/login', body: {'email': email, 'password': password}));
-    return (id: id, token: login['sessionToken'] as String, password: password);
-  }
-}
+import 'test_api.dart';
 
 void main() {
   late TestApi api;
@@ -485,6 +410,144 @@ void main() {
       expect(ownerList.length, 1);
       expect(ownerList.single['filename'], 'sync-a.sqlite');
       expect(memberList, isEmpty, reason: 'two accounts on one server remain isolated');
+    });
+  });
+
+  group('household sharing', () {
+    Future<Response> putFile(String path, String token, List<int> bytes) async =>
+        await api.handler(Request('PUT', Uri.parse('http://localhost$path'),
+            body: bytes, headers: {'authorization': 'Bearer $token'}));
+
+    test('an account created with shareHousehold joins the creator\'s dataset', () async {
+      final adminToken = await api.setupAdmin();
+      final shared = await api.addMember(adminToken, shareHousehold: true);
+      final isolated = await api.addMember(adminToken,
+          email: 'other@example.com', shareHousehold: false);
+
+      final me = await api.json(await api.send('GET', '/auth/me', token: adminToken));
+      expect(shared.datasetId, me['datasetId']);
+      expect(isolated.datasetId, isNot(me['datasetId']));
+      expect(me['householdSize'], 2, reason: 'the admin plus the shared member');
+    });
+
+    test('a shared member sees the household feed, an isolated one does not', () async {
+      final adminToken = await api.setupAdmin();
+      final shared = await api.addMember(adminToken, shareHousehold: true);
+      final isolated = await api.addMember(adminToken,
+          email: 'other@example.com', shareHousehold: false);
+
+      expect((await api.push(adminToken)).statusCode, 200);
+
+      expect((await api.pullAll(shared.token)).single['pk'], 'w1');
+      expect(await api.pullAll(isolated.token), isEmpty);
+    });
+
+    test('household members share one sequence space', () async {
+      final adminToken = await api.setupAdmin();
+      final shared = await api.addMember(adminToken, shareHousehold: true);
+
+      await api.push(adminToken, pk: 'w1', modifiedAt: 1000, deviceId: 'a');
+      await api.push(shared.token, pk: 'w2', modifiedAt: 2000, deviceId: 'b');
+
+      final seen = await api.pullAll(adminToken);
+      expect(seen.map((c) => c['pk']), ['w1', 'w2']);
+      expect(seen.map((c) => c['seq']), [1, 2],
+          reason: 'one monotonic feed, not two interleaved ones');
+    });
+
+    test('sync snapshots and attachments are shared, backups are not', () async {
+      final adminToken = await api.setupAdmin();
+      final shared = await api.addMember(adminToken, shareHousehold: true);
+
+      await putFile('/sync/files/sync-phone-1.sqlite', adminToken, [1]);
+      await putFile('/attachments/receipt.jpg', adminToken, [2]);
+      await putFile('/backup/db-v46-phone.sqlite', adminToken, [3]);
+
+      final syncList = jsonDecode(await (await api.send('GET', '/sync/files',
+              token: shared.token))
+          .readAsString()) as List;
+      expect(syncList.single['filename'], 'sync-phone-1.sqlite');
+
+      // Load-bearing: attachmentUrl() bakes this path into the transaction
+      // note, and the note syncs. Scoped by user it would 404 for the other.
+      expect(
+          (await api.send('GET', '/attachments/receipt.jpg', token: shared.token))
+              .statusCode,
+          200);
+
+      final backupList = jsonDecode(
+              await (await api.send('GET', '/backup/list', token: shared.token))
+                  .readAsString())
+          as List;
+      expect(backupList, isEmpty,
+          reason: 'backups stay per-user on purpose -- backup filenames drop '
+              'clientID\'s millisecond suffix, so two same-model phones in one '
+              'household would overwrite each other, and retention prunes '
+              'across the whole listing. Do not "fix" this for consistency.');
+    });
+
+    test('deleting one member leaves the household\'s data intact', () async {
+      final adminToken = await api.setupAdmin();
+      final shared = await api.addMember(adminToken, shareHousehold: true);
+      await api.push(adminToken);
+      await putFile('/sync/files/sync-phone-1.sqlite', adminToken, [1]);
+
+      expect((await api.send('DELETE', '/admin/users/${shared.id}', token: adminToken))
+          .statusCode, 200);
+
+      expect((await api.pullAll(adminToken)).single['pk'], 'w1',
+          reason: 'removing one account must not delete the household feed');
+      expect(
+          Directory('${api.dataDir.path}/sync/${shared.datasetId}').existsSync(), isTrue);
+    });
+
+    test('deleting the last member reaps the dataset and its files', () async {
+      final adminToken = await api.setupAdmin();
+      final isolated = await api.addMember(adminToken);
+      await api.push(isolated.token);
+      await putFile('/sync/files/sync-x.sqlite', isolated.token, [1]);
+      await putFile('/attachments/r.jpg', isolated.token, [2]);
+      await putFile('/backup/b.sqlite', isolated.token, [3]);
+
+      await api.send('DELETE', '/admin/users/${isolated.id}', token: adminToken);
+
+      // Dropping the datasets row is what cascades the feed away now that
+      // sync_records no longer hangs off users.
+      expect(
+          api.db.select('SELECT COUNT(*) AS c FROM sync_records '
+              'WHERE dataset_id = ?', [isolated.datasetId]).first['c'],
+          0);
+      expect(api.db.select('SELECT COUNT(*) AS c FROM datasets WHERE id = ?',
+          [isolated.datasetId]).first['c'], 0);
+      for (final ns in ['sync', 'attachments']) {
+        expect(Directory('${api.dataDir.path}/$ns/${isolated.datasetId}').existsSync(),
+            isFalse, reason: '$ns directory should be gone');
+      }
+      expect(Directory('${api.dataDir.path}/backup/${isolated.id}').existsSync(),
+          isFalse);
+    });
+
+    test('the admin listing reports each account\'s dataset', () async {
+      final adminToken = await api.setupAdmin();
+      final shared = await api.addMember(adminToken, shareHousehold: true);
+      final isolated =
+          await api.addMember(adminToken, email: 'other@example.com');
+
+      final body = await api.json(await api.send('GET', '/admin/users', token: adminToken));
+      final users = (body['users'] as List).cast<Map<String, dynamic>>();
+      final byId = {for (final u in users) u['id'] as int: u['datasetId'] as int};
+
+      expect(byId[shared.id], byId[1], reason: 'shares the administrator\'s dataset');
+      expect(byId[isolated.id], isNot(byId[1]));
+    });
+
+    test('a solo account is unaffected by any of this', () async {
+      final adminToken = await api.setupAdmin();
+      final me = await api.json(await api.send('GET', '/auth/me', token: adminToken));
+
+      expect(me['householdSize'], 1);
+      await api.push(adminToken);
+      expect((await api.pullAll(adminToken)).single['pk'], 'w1');
     });
   });
 }

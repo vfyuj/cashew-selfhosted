@@ -1185,5 +1185,21 @@
   "create-account": "Criar Conta",
   "currency-label": "Rótulo de Moeda",
   "currency-label-description": "Mostrar a moeda ao lado dos valores de outras contas",
-  "remain": "restantes"
+  "remain": "restantes",
+  "load-backup-warning-household": "Isso substituirá todos os seus dados atuais — e, como este orçamento é compartilhado, também os de todos que o compartilham, em todos os aparelhos.",
+  "hidden-from-your-home-page": "Oculto do seu início",
+  "hidden-from-your-home-page-description": "Contas que você não quer ver no seu próprio início. Isso muda apenas o que você vê, em todos os seus aparelhos — os outros mantêm o deles como está, e a conta continua utilizável em todo o resto.",
+  "over-allocated": "Mais orçado do que o previsto",
+  "over-allocated-description": "Os orçamentos dentro de {category} somam {allocated}, mas {category} está previsto em {budgeted}.",
+  "over-allocated-description-multiple": "{count} categorias principais têm mais orçado dentro delas do que o previsto para elas.",
+  "over-allocated-includes-hidden": "Isso inclui orçamentos que não são mostrados a você.",
+  "raise-budget-to-fit": "Aumentar",
+  "raise-budget-to-fit-description": "Aumentar o previsto desta categoria de {budgeted} para {allocated} para que tudo o que está orçado dentro dela caiba? Meses já encerrados mantêm o valor definido na época.",
+  "keep": "Manter",
+  "share-budget-with-household": "Compartilhar com a casa",
+  "share-budget-with-household-description": "Desligado, este orçamento é só seu e mais ninguém o vê — mas ele continua contando para o total da sua categoria principal. Ligado, todos que compartilham este orçamento o veem.",
+  "personal-budget": "Orçamento pessoal",
+  "share-household-data": "Compartilhar o orçamento da casa",
+  "share-household-data-description": "Esta conta vê e edita as mesmas transações, orçamentos e contas que você. Deixe desligado para dar a ela um orçamento próprio e separado. Isso só pode ser definido agora, enquanto a conta está sendo criada.",
+  "shares-household-data": "Compartilha este orçamento"
 }
