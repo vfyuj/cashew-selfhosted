@@ -134,7 +134,7 @@ Make a folder for the instance and go into it. Everything — the app's database
 attachments — stays inside this one folder, so it's the only thing you ever need to back up or move:
 
 ```bash
-mkdir -p ~/cashew && cd ~/cashew
+mkdir -p cashew && cd cashew
 ```
 
 Download the two templates:
@@ -175,14 +175,8 @@ docker compose pull && docker compose up -d
 If you'd rather build from source than pull a published image, clone the repository and use the
 `docker-compose.yml` at its root instead — see [DEPLOYMENT.md](DEPLOYMENT.md).
 
-### First run — claim the administrator account promptly
+‼️ **The first person to open a fresh instance creates its administrator account.**
 
-The first person to open a fresh instance creates its administrator account.
-
-This means there's a window between the container starting and you registering in which anyone who
-can reach the server could claim it. **Bring the container up and register before you point public
-DNS at it.** `curl localhost:8080/auth/setup-state` returns `{"needsSetup":true}` while nobody has
-registered.
 
 ### Android
 
