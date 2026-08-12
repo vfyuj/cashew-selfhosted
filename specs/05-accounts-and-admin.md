@@ -40,12 +40,14 @@ Anyone who reaches the domain before the owner registers can claim the administr
 
 ## Roles
 
-Two levels, not a permission system: `is_admin` or not. Anything finer waits for `06-shared-household-data.md`, where it would actually have something to protect.
+Two levels, not a permission system: `is_admin` or not.
+
+**Since `06-shared-household-data.md`, this is one of two independent axes.** `is_admin` says who may provision accounts and reset passwords. Dataset membership says whose transactions and budgets you see. They are deliberately not connected: collapsing them would mean granting somebody administration silently merged their finances into the household's, and demoting them detached their data. An account can be either, both or neither.
 
 Guards that must not regress:
 - The last administrator cannot be demoted or deleted. Without this the instance becomes permanently unadministrable, including the ability to grant admin.
 - An administrator cannot delete their own account — it would drop them out of the only session that could undo it. Another administrator can.
-- Deleting a user removes their `sync/<id>` and `backup/<id>` directories. Sessions cascade via the foreign key; files do not, and a later user allocated the same numeric id would otherwise inherit them.
+- Deleting a user removes their `backup/<userId>` directory, and their dataset's `sync/` and `attachments/` directories **only when they were its last member**. Sessions and the dataset membership cascade via foreign keys; files do not, and a later user allocated the same numeric id would otherwise inherit them. Dropping the `datasets` row is what now reaps the change feed, which no longer hangs off `users` — see `06-shared-household-data.md`.
 
 ## Passwords
 

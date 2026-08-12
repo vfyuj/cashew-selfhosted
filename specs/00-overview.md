@@ -15,7 +15,7 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 
 1. **Local data first.** Sync and auth are an optional layer over the local Drift database, never a gate on it — see `01-local-first-invariant.md`. Matters most for local testing and for devices reconnecting after time offline; it's not a mandate to engineer "offline" as a feature in itself.
 2. **No Google/Firebase anywhere** in the auth, sync, or backup path.
-3. **Single-owner-per-account** until Stage 4. No shared/merged household data yet — each person has their own private multi-device sync, same as today's one-Google-account-per-person model.
+3. **Data belongs to a dataset, not to an account.** Superseded Stage 4's original wording, which said single-owner-per-account. Since `06-shared-household-data.md` shipped, an account can share a dataset with another account, and everything — sync files, the change feed, attachments — is scoped to the dataset rather than the user. An account created without the sharing switch gets a dataset of its own and behaves exactly as before, which is still the default. Backups are the one deliberate exception and stay per-user; that file says why.
 4. **Reuse, don't rewrite, the local conflict-resolution logic.** Upstream's `SyncLog` model, `processSyncLogs` (last-write-wins by `dateTimeModified`), and `DeleteLog` tombstone table are sound and transport-agnostic. Only the transport (how bytes move between devices) and auth (how a device is authorized) are being replaced.
 5. **GPL-3.0 compliance.** Keep LICENSE and copyright notices. Source stays available (public repo). Fork identity (name/icon/package id) must be distinct from upstream before any distribution beyond the owner's own devices.
 6. **Single-tenant per deployment.** This is software a family self-hosts for themselves, not a multi-tenant SaaS. Each deployment serves one household's accounts. (Stage 4's "multi-user" means multiple people within one household's server, not multiple unrelated households sharing infrastructure.)
@@ -41,7 +41,7 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 2. `03-stage-1-kill-google.md` — self-hosted auth + repointed snapshot sync/backup. First real release.
 3. `04-stage-2-instant-sync.md` — incremental sync on top of Stage 1's snapshot-diff, triggered by the same user actions as today (not real-time push — see that file for why).
 4. `05-accounts-and-admin.md` — first-run setup wizard, account management, instance administration. Revises Stage 1's auth section.
-5. `06-shared-household-data.md` — Stage 4. **Design only, nothing implemented.** Shared dataset, per-user views, private transactions.
+5. `06-shared-household-data.md` — Stage 4. **Implemented.** Shared dataset, personal budgets, subcategory-vs-envelope allocation checks, per-user views.
 6. Stage 3 (public-fork readiness) is intentionally **not yet written** — it depends on decisions we'll make while executing the earlier stages, and writing it now risks locking in guesses.
 
 `07-versioning.md` sits outside the stage sequence: it's the fork's release-numbering contract (`1.0.0-beta.<n>`, auto-bumped per commit, shown in the sidebar), which every stage from here on ships under. `08-release-notes-style.md` sits alongside it: not numbering mechanics but the editorial guideline for what to actually write in a changelog section (curate, don't narrate everything; scale effort to the release; call out breaking changes plainly).

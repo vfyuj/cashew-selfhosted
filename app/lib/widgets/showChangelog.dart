@@ -42,6 +42,12 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.0.3
+    Two accounts can now share one budget. When an administrator adds an account, a switch decides whether it shares the household's transactions, budgets and accounts, or gets a separate budget of its own. Accounts added without it stay completely separate, exactly as before.
+    Budgets you create are yours by default and don't show up for anyone else. A switch on each budget shares it with the household. Main category budgets are always shared.
+    The Budgets page warns you when the budgets inside a main category add up to more than that category is planned for, and offers to raise the plan to match. It counts everyone's budgets, including the ones you can't see, so the number is the real one.
+    You can hide accounts from your own home page without changing anyone else's, and that choice follows you to your other devices.
+
     < 1.0.2
     Translations no longer depend on anything outside this app. You can now fix any piece of text yourself: Settings, Language, Edit translations. Search for it, type the fix, and it applies immediately - no restart.
     Russian has been rewritten from scratch to match this app, not the original Cashew it was translated from.
