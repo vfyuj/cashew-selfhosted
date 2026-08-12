@@ -124,9 +124,9 @@ Backups go to your own server by default, or to Nextcloud/WebDAV if you'd rather
   - [Install Docker Compose](https://docs.docker.com/compose/install/) — if you installed Engine
     without the plugin
 - Roughly 500 MB of disk for the image, plus whatever your data grows to (a few MB for most people).
-- `amd64` or `arm64` — both are published, so a Raspberry Pi 4 or 5 works. Nothing is compiled on
-  your machine, which is deliberate: building the web UI needs 3–4 GB of RAM and will not finish on
-  most Pis, while the server it produces idles under 100 MB.
+- `amd64` or `arm64` — both are published, so either works. Nothing is compiled on
+  your machine, which is deliberate: building the web UI needs 3–4 GB of RAM and will not finish
+  without it, while the server it produces idles under 100 MB.
 
 ### Server
 

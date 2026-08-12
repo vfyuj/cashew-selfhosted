@@ -5,7 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'package:test/test.dart';
 
 /// The limiter exists so an unauthenticated caller can't queue unbounded
-/// bcrypt work on a Raspberry Pi's single event loop. Time is injected
+/// bcrypt work on the server's single event loop. Time is injected
 /// throughout rather than slept through, so these stay instant and
 /// deterministic.
 void main() {

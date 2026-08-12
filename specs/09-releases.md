@@ -8,7 +8,7 @@ Note `1.0.2` was developed but never tagged, so the next release carries both it
 
 `07-versioning.md` covers how a build is *numbered*. This covers how one is *published*: a signed Android APK and a container image the deployment target can actually pull.
 
-Before this, neither existed. `build-apk.yml` produced a debug APK as a 30-day CI artifact, and the container image was never published anywhere — `DEPLOYMENT.md` told the operator to run `docker buildx build --push` by hand from a laptop, because the Raspberry Pi cannot build the image itself (`flutter build web` wants 3–4 GB of RAM). Both gaps had the same shape: the artifact people install was produced ad hoc, by hand, from an unrecorded commit.
+Before this, neither existed. `build-apk.yml` produced a debug APK as a 30-day CI artifact, and the container image was never published anywhere — `DEPLOYMENT.md` told the operator to run `docker buildx build --push` by hand from a laptop, because a home server short on memory cannot build the image itself (`flutter build web` wants 3–4 GB of RAM). Both gaps had the same shape: the artifact people install was produced ad hoc, by hand, from an unrecorded commit.
 
 ## What a release is
 
@@ -86,7 +86,7 @@ keytool -genkey -v -keystore keystore.jks -keyalg RSA -keysize 2048 -validity 10
 
 ## The image
 
-Multi-arch, `linux/amd64` + `linux/arm64`. arm64 is the one that matters — it is what the Pi runs and cannot build for itself.
+Multi-arch, `linux/amd64` + `linux/arm64`, so the image runs wherever the server happens to be without anything being compiled on it. Publishing both costs one extra parallel job and removes a whole class of "wrong architecture" problem; drop one if it stops earning that.
 
 Each architecture is built on a runner of that architecture (`ubuntu-latest` and `ubuntu-24.04-arm`, free for public repositories), pushed untagged by digest, and the two digests are then assembled into a single tagged manifest list. Nothing is emulated.
 
@@ -110,8 +110,7 @@ failed to parse platform : "" is an invalid OS component
 - [x] `flutter build apk --release` succeeds locally.
 - [x] `flutter analyze` reports no errors and `flutter test` passes after the plugin upgrades.
 - [x] `flutter build web` still succeeds, so the container image is unaffected.
-- [x] Owner: generate the keystore, back it up, add the four secrets. (All four are set on the repository. Whether the keystore itself is backed up somewhere outside this repo is the owner's to confirm — nothing here can check that, and it is the one step with no second chance.)
+- [x] Owner: generate the keystore, back it up, add the four secrets. Confirmed 2026-08-12 — the keystore is stored and backed up, and all four secrets are set.
 - [x] Owner: push a tag and confirm the workflow produces a Release with an APK plus a `:<version>` image on GHCR.
-- [ ] Owner: confirm the published APK installs on a phone and reports the expected version on the About row. (Every release asset so far shows 0 downloads, so this has probably not happened yet.)
-- [x] Owner: make the GHCR package public, then confirm `docker pull` works from the Pi without credentials. (Public — an unauthenticated manifest fetch returns 200.)
-- [ ] Owner: confirm the arm64 image actually starts on the Pi and answers `/health`.
+- [x] Owner: confirm the published APK installs on a phone and works. Confirmed 2026-08-12.
+- [x] Owner: make the GHCR package public, then confirm `docker pull` works without credentials. (Public — an unauthenticated manifest fetch returns 200.)
