@@ -1,5 +1,6 @@
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editCategoriesPage.dart';
@@ -206,6 +207,14 @@ class _EditBudgetPageState extends State<EditBudgetPage> {
                   },
                   itemBuilder: (context, index) {
                     Budget budget = snapshot.data![index];
+                    // Another member's personal budget is listed here and
+                    // nowhere else in the app: it exists, it counts towards
+                    // its main category's allocation, and this is the one
+                    // place that admits it. Shown without its name, and
+                    // completely inert -- there is deliberately no way to
+                    // rename, reorder, delete, open or unhide it, so it can
+                    // never be promoted onto this device's budgets page.
+                    final bool othersBudget = isOtherMembersBudget(budget);
                     DateTimeRange budgetRange =
                         getBudgetDate(budget, DateTime.now());
                     Color accentColor = dynamicPastel(
@@ -220,35 +229,48 @@ class _EditBudgetPageState extends State<EditBudgetPage> {
                       children: [
                         EditRowEntry(
                           key: ValueKey(budget.budgetPk),
-                          extraIcon: budget.archived
-                              ? appStateSettings["outlinedIcons"]
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_off_rounded
-                              : appStateSettings["outlinedIcons"]
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_rounded,
-                          onExtra: () async {
-                            Budget updatedBudget = budget.copyWith(
-                              archived: !budget.archived,
-                              pinned: budget.archived,
-                            );
-                            await database.createOrUpdateBudget(updatedBudget);
-                          },
-                          opacity: budget.archived ? 0.5 : 1,
-                          canReorder: searchValue == "" &&
+                          extraIcon: othersBudget
+                              ? null
+                              : budget.archived
+                                  ? appStateSettings["outlinedIcons"]
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_off_rounded
+                                  : appStateSettings["outlinedIcons"]
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_rounded,
+                          onExtra: othersBudget
+                              ? null
+                              : () async {
+                                  Budget updatedBudget = budget.copyWith(
+                                    archived: !budget.archived,
+                                    pinned: budget.archived,
+                                  );
+                                  await database
+                                      .createOrUpdateBudget(updatedBudget);
+                                },
+                          opacity: budget.archived || othersBudget ? 0.5 : 1,
+                          disableActions: othersBudget,
+                          canDelete: !othersBudget,
+                          // Tapping opens openPage unless onTap is given, so
+                          // this is what keeps the edit page unreachable.
+                          onTap: othersBudget ? () {} : null,
+                          canReorder: !othersBudget &&
+                              searchValue == "" &&
                               (snapshot.data ?? []).length != 1,
                           currentReorder:
                               currentReorder != -1 && currentReorder != index,
                           accentColor: accentColor,
-                          onDelete: () async {
-                            return (await deleteBudgetPopup(
-                                  context,
-                                  budget: budget,
-                                  routesToPopAfterDelete:
-                                      RoutesToPopAfterDelete.None,
-                                )) ==
-                                DeletePopupAction.Delete;
-                          },
+                          onDelete: othersBudget
+                              ? null
+                              : () async {
+                                  return (await deleteBudgetPopup(
+                                        context,
+                                        budget: budget,
+                                        routesToPopAfterDelete:
+                                            RoutesToPopAfterDelete.None,
+                                      )) ==
+                                      DeletePopupAction.Delete;
+                                },
                           openPage: AddBudgetPage(
                             budget: budget,
                             routesToPopAfterDelete: RoutesToPopAfterDelete.One,
@@ -257,7 +279,9 @@ class _EditBudgetPageState extends State<EditBudgetPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               TextFont(
-                                text: budget.name,
+                                text: othersBudget
+                                    ? "personal-budget".tr()
+                                    : budget.name,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 21,
                               ),

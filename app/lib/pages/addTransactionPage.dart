@@ -9,6 +9,7 @@ import 'package:cashew_selfhosted/pages/editAssociatedTitlesPage.dart';
 import 'package:cashew_selfhosted/pages/editWalletsPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/pages/transactionsListPage.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/navBarIconsData.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
@@ -3079,7 +3080,7 @@ class _SelectAddedBudgetState extends State<SelectAddedBudget> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Budget>>(
-      stream: database.watchAllAddableBudgets(),
+      stream: visibleBudgetsStream(database.watchAllAddableBudgets()),
       builder: (context, snapshot) {
         if (snapshot.hasData) {
           if (snapshot.data!.length <= 0) return Container();
@@ -3296,7 +3297,7 @@ class _SelectExcludeBudgetState extends State<SelectExcludeBudget> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Budget>>(
-      stream: database.watchAllNonAddableBudgets(),
+      stream: visibleBudgetsStream(database.watchAllNonAddableBudgets()),
       builder: (context, snapshot) {
         if (snapshot.hasData) {
           if (snapshot.data!.length <= 0)

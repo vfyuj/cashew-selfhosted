@@ -2,6 +2,7 @@ import "package:cashew_selfhosted/database/tables.dart";
 import "package:cashew_selfhosted/functions.dart";
 import "package:cashew_selfhosted/pages/addTransactionPage.dart";
 import "package:cashew_selfhosted/pages/budgetPage.dart";
+import "package:cashew_selfhosted/struct/budgetVisibility.dart";
 import "package:cashew_selfhosted/struct/databaseGlobal.dart";
 import "package:cashew_selfhosted/struct/settings.dart";
 import "package:cashew_selfhosted/struct/throttler.dart";
@@ -64,7 +65,7 @@ void runQuickActionsPayLoads(context) async {
       }
     }
   });
-  List<Budget> budgets = await database.getAllBudgets();
+  List<Budget> budgets = visibleBudgets(await database.getAllBudgets());
   quickActions.setShortcutItems(<ShortcutItem>[
     ShortcutItem(
       type: "addTransaction",

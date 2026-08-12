@@ -6,6 +6,7 @@ import 'package:cashew_selfhosted/pages/editBudgetLimitsPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/struct/budgetPeriodAmounts.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
@@ -128,6 +129,16 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
   FocusNode _titleFocusNode = FocusNode();
   bool increaseBudgetWarningShown = false;
   List<String>? selectedWalletFks = null;
+
+  /// Which household member this budget belongs to, or null for the whole
+  /// household. New budgets start out personal; see struct/budgetVisibility.
+  int? selectedOwnerUserId = defaultOwnerForNewBudget;
+
+  /// Main-category envelopes are the household's shared plan and the
+  /// over-allocation check measures against them, so they are never personal
+  /// and the switch is not offered for them. Resolved once, asynchronously,
+  /// because deciding it needs the set of main category pks.
+  bool isEnvelopeBudget = false;
   String selectedWalletPk = appStateSettings["selectedWalletPk"];
 
   // BudgetsCompanion budget = BudgetsCompanion();
@@ -354,8 +365,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
           widget.budget != null ? currentInstance!.sharedOwnerMember : null,
       sharedDateUpdated:
           widget.budget != null ? currentInstance!.sharedDateUpdated : null,
-      sharedMembers:
-          widget.budget != null ? currentInstance!.sharedMembers : null,
+      // Owned via struct/budgetVisibility.dart -- this column no longer holds
+      // members. Set below by withBudgetOwner rather than here, so there is
+      // exactly one place that encodes it.
+      sharedMembers: null,
       sharedAllMembersEver:
           widget.budget != null ? currentInstance!.sharedAllMembersEver : null,
       budgetTransactionFilters: widget.budget?.addedTransactionsOnly == true ||
@@ -378,7 +391,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
     // Records the outgoing amount against the periods it applied to, so
     // changing the target here does not rewrite what finished periods are
     // measured against.
-    return withUpdatedAmountHistory(previous: currentInstance, updated: budget);
+    return withUpdatedAmountHistory(
+      previous: currentInstance,
+      updated: withBudgetOwner(budget, selectedOwnerUserId),
+    );
   }
 
   Budget? budgetInitial;
@@ -431,6 +447,16 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
         setAddedTransactionsOnly(true);
         setSelectedShared(false);
       }
+      if (widget.budget != null) {
+        final Set<String> mainCategoryPks = (await database.getAllCategories(
+                includeSubCategories: false))
+            .map((TransactionCategory category) => category.categoryPk)
+            .toSet();
+        final List<String> categoryFks = widget.budget!.categoryFks ?? const [];
+        isEnvelopeBudget = categoryFks.length == 1 &&
+            mainCategoryPks.contains(categoryFks.first);
+        if (isEnvelopeBudget) selectedOwnerUserId = null;
+      }
       setState(() {});
     });
 
@@ -470,6 +496,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
 
       selectedCategoryPks = widget.budget!.categoryFks;
       selectedCategoryPksExclude = widget.budget!.categoryFksExclude;
+      // Whoever already owns it keeps owning it -- editing somebody's budget
+      // must not quietly reassign it, and editing a shared one must not
+      // quietly make it personal.
+      selectedOwnerUserId = budgetOwner(widget.budget!);
       //Set to false because we can't save until we made some changes
       setState(() {
         canAddBudget = false;
@@ -897,6 +927,34 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                       textColor: getColor(context, "textLight"),
                       maxLines: 3,
                       textAlign: TextAlign.center,
+                    ),
+                  ),
+          ),
+          // Only shown to an account that actually shares its data, and never
+          // for a main-category envelope: those are the household's shared
+          // plan, and the over-allocation check measures subcategory budgets
+          // against them.
+          SliverToBoxAdapter(
+            child: !budgetVisibilityApplies || isEnvelopeBudget
+                ? SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 13,
+                      end: 13,
+                      bottom: 15,
+                    ),
+                    child: SettingsContainerSwitch(
+                      title: "share-budget-with-household".tr(),
+                      description:
+                          "share-budget-with-household-description".tr(),
+                      initialValue: selectedOwnerUserId == null,
+                      onSwitched: (bool shared) {
+                        selectedOwnerUserId =
+                            shared ? null : currentBudgetViewerId;
+                        determineBottomButton();
+                      },
+                      enableBorderRadius: true,
+                      isOutlined: true,
                     ),
                   ),
           ),

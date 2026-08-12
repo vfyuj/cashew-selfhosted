@@ -6,6 +6,7 @@ import 'package:cashew_selfhosted/pages/addWalletPage.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/languageMap.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/categoryIcon.dart';
@@ -459,9 +460,8 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
               fontSize: signed ? 16 : 15,
               fontWeight: signed ? FontWeight.bold : FontWeight.normal,
               maxLines: 2,
-              textColor: signed
-                  ? null
-                  : getColor(context, "black").withOpacity(0.6),
+              textColor:
+                  signed ? null : getColor(context, "black").withOpacity(0.6),
             ),
           ),
           SizedBox(width: 8),
@@ -494,7 +494,8 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
       stream: database.watchAllCategories(),
       builder: (context, categoriesSnapshot) {
         return StreamBuilder<List<Budget>>(
-          stream: database.watchAllBudgets(hideArchived: true),
+          stream: visibleBudgetsStream(
+              database.watchAllBudgets(hideArchived: true)),
           builder: (context, budgetsSnapshot) {
             final AllWallets allWallets = Provider.of<AllWallets>(context);
             final List<Budget> budgets = budgetsSnapshot.data ?? [];
@@ -552,7 +553,8 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
 
             return constrainedColumn([
               ...rows,
-              if (footerBuilder != null) footerBuilder(listedTotal, plannedIncome),
+              if (footerBuilder != null)
+                footerBuilder(listedTotal, plannedIncome),
             ]);
           },
         );

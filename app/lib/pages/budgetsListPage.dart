@@ -3,6 +3,7 @@ import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePagePlannedVsActual.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/budgetContainer.dart';
@@ -153,14 +154,15 @@ class BudgetsListPageState extends State<BudgetsListPage> {
         if (totals == null) return SliverToBoxAdapter();
         final List<Budget> budgets = totals.budgets
             .where((Budget budget) =>
-                budget.income == wantIncome && totals.isMainCategoryBudget(budget))
+                budget.income == wantIncome &&
+                totals.isMainCategoryBudget(budget))
             .toList();
         if (budgets.isEmpty) return SliverToBoxAdapter();
         return SliverStickyLabelDivider(
           info: titleKey.tr(),
           sliver: SliverPadding(
-            padding: EdgeInsetsDirectional.symmetric(
-                vertical: 7, horizontal: 13),
+            padding:
+                EdgeInsetsDirectional.symmetric(vertical: 7, horizontal: 13),
             sliver: _budgetsGrid(context, budgets, showAddButton: false),
           ),
         );
@@ -177,13 +179,18 @@ class BudgetsListPageState extends State<BudgetsListPage> {
       builder: (context, snapshot) {
         final PlannedBudgetTotals? totals = snapshot.data;
         if (totals == null) return SliverToBoxAdapter();
-        final List<Budget> budgets = totals.budgets
-            .where((Budget budget) => totals.isMainCategoryBudget(budget) == false)
-            .toList();
+        // visibleBudgets drops the other household members' personal budgets.
+        // Filtering here, at the point of drawing, rather than in the query --
+        // totals.budgets still holds every budget, which is what lets the
+        // over-allocation check count allocations the viewer cannot see.
+        final List<Budget> budgets = visibleBudgets(totals.budgets
+            .where(
+                (Budget budget) => totals.isMainCategoryBudget(budget) == false)
+            .toList());
         if (budgets.isEmpty) {
           return SliverPadding(
-            padding: EdgeInsetsDirectional.symmetric(
-                vertical: 7, horizontal: 13),
+            padding:
+                EdgeInsetsDirectional.symmetric(vertical: 7, horizontal: 13),
             sliver: SliverToBoxAdapter(
               child: AddButton(
                 onTap: () {},
@@ -196,8 +203,7 @@ class BudgetsListPageState extends State<BudgetsListPage> {
           );
         }
         return SliverPadding(
-          padding:
-              EdgeInsetsDirectional.symmetric(vertical: 7, horizontal: 13),
+          padding: EdgeInsetsDirectional.symmetric(vertical: 7, horizontal: 13),
           sliver: _budgetsGrid(context, budgets, showAddButton: true),
         );
       },

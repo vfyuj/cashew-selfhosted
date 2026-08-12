@@ -4,6 +4,7 @@ import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editObjectivesPage.dart';
 import 'package:cashew_selfhosted/pages/editWalletsPage.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/listenableSelector.dart';
@@ -316,7 +317,7 @@ class SelectedTransactionsAppBarMenu extends StatelessWidget {
               database.watchAllObjectives(objectiveType: ObjectiveType.goal),
           builder: (context, goalsSnapshot) {
             return StreamBuilder<List<Budget>>(
-              stream: database.watchAllAddableBudgets(),
+              stream: visibleBudgetsStream(database.watchAllAddableBudgets()),
               builder: (context, addableBudgetsSnapshot) {
                 bool enableObjectiveLoansSection =
                     (loansSnapshot.data ?? []).length > 0;

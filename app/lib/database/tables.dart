@@ -537,13 +537,26 @@ class Budgets extends Table {
       .map(const StringListInColumnConverter())();
   // Attributes to configure sharing of transactions:
   // Retained only to keep this schema byte-identical to upstream Cashew's so
-  // its backups stay importable (see CLAUDE.md). Nothing writes them: the
-  // Firestore-backed shared budgets they belonged to were removed with the rest
-  // of the Google integration. The one exception is sharedAllMembersEver -
-  // see its own note below.
+  // its backups stay importable (see CLAUDE.md). The Firestore-backed shared
+  // budgets they belonged to were removed with the rest of the Google
+  // integration. Two of them have since been given new jobs, and their names
+  // no longer describe their contents -- see sharedMembers just below and
+  // sharedAllMembersEver further down.
   TextColumn get sharedKey => text().nullable()();
   IntColumn get sharedOwnerMember => intEnum<SharedOwnerMember>().nullable()();
   DateTimeColumn get sharedDateUpdated => dateTime().nullable()();
+  // WARNING: this column's name lies. It no longer holds members.
+  //
+  // It holds at most one entry: the server user id of the household member a
+  // budget is personal to, or nothing when the budget is shared by the whole
+  // household. Personal budgets still sync -- they are filtered out when
+  // drawing the screen, so that the over-allocation check can still count
+  // budgets the viewer cannot see.
+  //
+  // Read and write it ONLY through struct/budgetVisibility.dart. Entries are a
+  // bare `<userId>` and anything not matching that exact shape reads as
+  // "shared", which is what lets an original-Cashew backup's real member IDs
+  // arrive here harmlessly.
   TextColumn get sharedMembers =>
       text().map(const StringListInColumnConverter()).nullable()();
   // WARNING: this column's name lies. It no longer holds members.

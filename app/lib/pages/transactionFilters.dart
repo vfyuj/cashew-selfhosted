@@ -7,6 +7,7 @@ import 'package:cashew_selfhosted/pages/addObjectivePage.dart';
 import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/pages/addWalletPage.dart';
 import 'package:cashew_selfhosted/pages/transactionsSearchPage.dart';
+import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
@@ -855,7 +856,7 @@ class _TransactionFiltersSelectionState
         ),
 
         StreamBuilder<List<Budget>>(
-          stream: database.watchAllAddableBudgets(),
+          stream: visibleBudgetsStream(database.watchAllAddableBudgets()),
           builder: (context, snapshot) {
             if (snapshot.data != null && snapshot.data!.length <= 0)
               return SizedBox.shrink();
@@ -940,7 +941,8 @@ class _TransactionFiltersSelectionState
           },
         ),
         StreamBuilder<List<Budget>>(
-          stream: database.watchAllExcludedTransactionsBudgetsInUse(),
+          stream: visibleBudgetsStream(
+              database.watchAllExcludedTransactionsBudgetsInUse()),
           builder: (context, snapshot) {
             if (snapshot.data != null && snapshot.data!.length <= 0)
               return SizedBox.shrink();
@@ -1433,7 +1435,7 @@ class AppliedFilterChips extends StatelessWidget {
       ));
     }
     // Budgets
-    for (Budget budget in await database.getAllBudgets()) {
+    for (Budget budget in visibleBudgets(await database.getAllBudgets())) {
       if (searchFilters.budgetPks.contains(budget.budgetPk))
         out.add(AppliedFilterChip(
           label: budget.name,
@@ -1445,7 +1447,7 @@ class AppliedFilterChips extends StatelessWidget {
         ));
     }
     // Excluded Budgets
-    for (Budget budget in await database.getAllBudgets()) {
+    for (Budget budget in visibleBudgets(await database.getAllBudgets())) {
       if (searchFilters.excludedBudgetPks.contains(budget.budgetPk))
         out.add(AppliedFilterChip(
           label: "excluded-from".tr() + ": " + budget.name,
