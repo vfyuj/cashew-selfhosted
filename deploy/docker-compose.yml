@@ -2,7 +2,7 @@
 #
 # This is the "download and run" path: it pulls a published image from GHCR, so
 # nothing is compiled on the host. That matters on small machines -- building the
-# Flutter web UI wants 3-4 GB of RAM and will not finish on most Raspberry Pis,
+# Flutter web UI wants 3-4 GB of RAM and will not finish without it,
 # while the server it produces idles under 100 MB. To build from source instead
 # (or to work on the code), use the docker-compose.yml at the repository root.
 #
@@ -79,7 +79,7 @@ services:
       retries: 3
       start_period: 30s
 
-    # Sized for a Raspberry Pi: capped so a runaway takes only itself down
-    # instead of the whole box. The server idles far below this; the ceiling is
+    # Sized for a modest home server: capped so a runaway takes only itself
+    # down instead of the whole box. The server idles far below this; the ceiling is
     # really for backup upload/restore, which reads a whole file into memory.
     mem_limit: 512m

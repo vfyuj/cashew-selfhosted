@@ -16,17 +16,17 @@ docker compose up --build -d
 
 The build compiles the Flutter web app from source inside Docker (needs to download the Flutter SDK image the first time), so the first `--build` will take noticeably longer than a Dart-only build — that's expected, and it also means any redeploy rebuilds the web UI even if you only changed server code. Re-running `docker compose up --build -d` after a `git pull` is the entire redeploy process; there's no separate manual build-and-copy step.
 
-### If the home server is a Raspberry Pi: pull a published image instead of building
+### If the server is short on memory: pull a published image instead of building
 
-`flutter build web --release` wants roughly 3–4 GB of RAM. On a Pi 4 that either thrashes swap for a very long time or gets OOM-killed part-way through, and on a Pi with less than 4 GB it will not finish at all. This is a *build*-time problem only — the compiled server idles in well under 100 MB, which is why `docker-compose.yml` caps the container at 512 MB.
+`flutter build web --release` wants roughly 3–4 GB of RAM. On a host with less it either thrashes swap for a very long time or gets OOM-killed part-way through. This is a *build*-time problem only — the compiled server idles in well under 100 MB, which is why `docker-compose.yml` caps the container at 512 MB.
 
-So don't build on the Pi. Every tagged release publishes a ready arm64 image (see `specs/09-releases.md`), and `deploy/docker-compose.yml` in this repository is a ready-made compose file that pulls one instead of building. That template is what `README.md` walks new installs through: download it plus `deploy/.env.example` into an empty folder, `cp .env.example .env`, and
+So don't build there. Every tagged release publishes ready images for amd64 and arm64 (see `specs/09-releases.md`), and `deploy/docker-compose.yml` in this repository is a ready-made compose file that pulls one instead of building. That template is what `README.md` walks new installs through: download it plus `deploy/.env.example` into an empty folder, `cp .env.example .env`, and
 
 ```bash
 docker compose up -d
 ```
 
-Version, host port, data location and the two behaviour flags all come from `.env`, so there is nothing to edit in the compose file itself. Pin `CASHEW_VERSION` to an exact release if you'd rather choose when to move; `latest` follows every release at the next `docker compose pull`. `docker pull` needs no credentials as long as the GHCR package is public — packages start **private**, so make it public once, under the repository's Packages page, or the Pi will get a 401.
+Version, host port, data location and the two behaviour flags all come from `.env`, so there is nothing to edit in the compose file itself. Pin `CASHEW_VERSION` to an exact release if you'd rather choose when to move; `latest` follows every release at the next `docker compose pull`. `docker pull` needs no credentials as long as the GHCR package is public — packages start **private**, so make it public once, under the repository's Packages page, or the pull gets a 401.
 
 **Note the two compose files keep data in different places.** The one at the repository root uses a named volume (`server-data`), which is where an existing deployment's database already is; `deploy/docker-compose.yml` bind-mounts `./data` next to itself, so the folder *is* the instance. Switching an existing deployment from one to the other does not move the data — it will come up empty and look like everything is gone. To actually migrate, copy it out of the volume first:
 

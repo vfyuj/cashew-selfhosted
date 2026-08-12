@@ -46,7 +46,7 @@ Response _sessionResponse(Session session, AuthUser user) => _json({
 ///
 /// [passwordAttemptLimiter] guards the two endpoints that run bcrypt. Ten
 /// attempts per five minutes is far above what a household typing a password
-/// wrong needs, and far below what it takes to keep a Raspberry Pi's CPU busy.
+/// wrong needs, and far below what it takes to keep a modest server's CPU busy.
 /// Injectable so tests can drive the limit without waiting out a real window.
 Router buildAuthRouter(AuthService authService, {RateLimiter? passwordAttemptLimiter}) {
   final router = Router();
