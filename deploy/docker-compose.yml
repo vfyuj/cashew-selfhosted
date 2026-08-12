@@ -1,0 +1,85 @@
+# Cashew Selfhosted -- deployment template.
+#
+# This is the "download and run" path: it pulls a published image from GHCR, so
+# nothing is compiled on the host. That matters on small machines -- building the
+# Flutter web UI wants 3-4 GB of RAM and will not finish on most Raspberry Pis,
+# while the server it produces idles under 100 MB. To build from source instead
+# (or to work on the code), use the docker-compose.yml at the repository root.
+#
+# Everything this instance keeps -- the SQLite database, backups, attachments --
+# lives in ./data next to this file. Copy that folder and you have copied the
+# whole instance; there is no hidden state anywhere else.
+#
+# Settings come from .env beside this file. See .env.example for what each one
+# does. Every value below has a working default, so a missing .env still starts.
+
+services:
+  app:
+    # One container: the Dart API and the Flutter web UI are served from the
+    # same origin on the same port, so there is no CORS and nothing to split by
+    # path at a reverse proxy.
+    image: ghcr.io/vfyuj/cashew-selfhosted:${CASHEW_VERSION:-latest}
+    container_name: cashew-selfhosted
+
+    ports:
+      # host:container. Only the host side is configurable -- the server inside
+      # always listens on 8080, which is what the healthcheck below assumes.
+      - "${CASHEW_PORT:-8080}:8080"
+
+    volumes:
+      # A bind mount, not a named volume: the data sits in a folder you can see,
+      # back up and move, rather than somewhere under /var/lib/docker. The host
+      # path is relative to this file, so the data follows the compose file
+      # wherever you put the folder.
+      #
+      # Docker creates this directory if it does not exist. On Linux the files
+      # inside end up owned by root, since that is who the server runs as, so
+      # expect to need sudo to copy or delete them; Docker Desktop on macOS and
+      # Windows remaps them to you instead.
+      - ${CASHEW_DATA_DIR:-./data}:/data
+
+    environment:
+      - PORT=8080
+      # Set explicitly rather than relying on the image default: images at 1.0.0
+      # and earlier default this to a path *inside* the container, which would
+      # put the database in the container's writable layer and lose it on the
+      # next `docker compose pull`. Harmless on newer images, which set it
+      # themselves. Must match the right-hand side of the volume above.
+      - DATA_DIR=/data
+      - TZ=${TZ:-UTC}
+      - LOG_REQUESTS=${LOG_REQUESTS:-true}
+      # Whether X-Forwarded-For is trusted to identify clients for auth rate
+      # limiting. Defaults to false here, unlike the repo-root compose file,
+      # because this template publishes a port directly: a header the client
+      # controls would let anyone reset their own rate-limit counter by forging
+      # it. Set it to true in .env only when something you trust (a reverse
+      # proxy) sets that header and the container port is not reachable
+      # directly. See server/lib/src/auth/rate_limiter.dart.
+      - TRUST_PROXY_HEADER=${TRUST_PROXY_HEADER:-false}
+
+    restart: unless-stopped
+
+    # Docker's json-file driver keeps every line forever by default -- on an SD
+    # card that is a slow, permanent write stream and an unbounded claim on free
+    # space. Capped here at 30 MB total.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # `restart: unless-stopped` covers a crash but not a hang, which is what
+    # this catches. Note plain Compose does not restart an unhealthy container
+    # by itself -- this marks it unhealthy so `docker ps` and any monitoring
+    # show it. /health is unauthenticated and precomputed, so polling is free.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    # Sized for a Raspberry Pi: capped so a runaway takes only itself down
+    # instead of the whole box. The server idles far below this; the ceiling is
+    # really for backup upload/restore, which reads a whole file into memory.
+    mem_limit: 512m

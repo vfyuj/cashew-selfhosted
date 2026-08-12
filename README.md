@@ -114,20 +114,66 @@ Backups go to your own server by default, or to Nextcloud/WebDAV if you'd rather
 
 ## Installing
 
+### Requirements
+
+- **Docker Engine** and **Docker Compose v2** on the machine that will run the server. Compose v2 is
+  included with Docker Desktop and with Docker Engine's `docker-compose-plugin`; if
+  `docker compose version` prints a version number, you have everything you need.
+  - [Install Docker Engine](https://docs.docker.com/engine/install/) — Linux servers
+  - [Install Docker Desktop](https://docs.docker.com/desktop/) — macOS, Windows
+  - [Install Docker Compose](https://docs.docker.com/compose/install/) — if you installed Engine
+    without the plugin
+- Roughly 500 MB of disk for the image, plus whatever your data grows to (a few MB for most people).
+- `amd64` or `arm64` — both are published, so a Raspberry Pi 4 or 5 works. Nothing is compiled on
+  your machine, which is deliberate: building the web UI needs 3–4 GB of RAM and will not finish on
+  most Pis, while the server it produces idles under 100 MB.
+
 ### Server
 
-```bash
-docker pull ghcr.io/vfyuj/cashew-selfhosted:1.0.0
-```
+Make a folder for the instance and go into it. Everything — the app's database, backups and
+attachments — stays inside this one folder, so it's the only thing you ever need to back up or move:
 
 ```bash
-docker run -d --name cashew-selfhosted -p 8080:8080 -v cashew-data:/data -e DATA_DIR=/data --restart unless-stopped ghcr.io/vfyuj/cashew-selfhosted:1.0.0
+mkdir -p ~/cashew && cd ~/cashew
 ```
 
-Then open `http://localhost:8080`. `-e DATA_DIR=/data` matters on `1.0.0` specifically: that image
-defaults to a path inside the container rather than the volume, so without the flag your data
-disappears the next time you pull and recreate. Later releases set it themselves, where the flag is
-redundant but harmless.
+Download the two templates:
+
+```bash
+curl -O https://raw.githubusercontent.com/vfyuj/cashew-selfhosted/main/deploy/docker-compose.yml
+curl -O https://raw.githubusercontent.com/vfyuj/cashew-selfhosted/main/deploy/.env.example
+```
+
+Copy the example to `.env`. The defaults work as they are, so you can edit it now or leave it —
+[`.env.example`](deploy/.env.example) explains every setting, and the ones you're most likely to
+want are the port and which version to run:
+
+```bash
+cp .env.example .env
+```
+
+Start it:
+
+```bash
+docker compose up -d
+```
+
+That's it — open `http://localhost:8080` (or whichever port you set) and create your administrator
+account. To check on it from the command line, `curl localhost:8080/health` returns the running
+version.
+
+**Your data is in `./data`, next to the compose file.** Copying that folder copies the entire
+instance; there's no hidden state anywhere else. On Linux those files are owned by root, so copying
+them takes `sudo`.
+
+To upgrade later, from the same folder:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+If you'd rather build from source than pull a published image, clone the repository and use the
+`docker-compose.yml` at its root instead — see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ### First run — claim the administrator account promptly
 

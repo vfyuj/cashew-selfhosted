@@ -9,3 +9,9 @@
 
 # Local test databases created by the runbook in TESTING.md.
 /.testdata*/
+
+# Running deploy/docker-compose.yml from inside a clone puts a live instance
+# here: its database in data/, its settings in .env. The tracked template is
+# .env.example, not .env.
+/deploy/data/
+/deploy/.env

@@ -12,15 +12,24 @@ Two things §4 did not anticipate, both owner-directed:
   not a professional developer; the README says so plainly, tells readers to keep backups, and
   invites an audit — so the "personal fork" framing is *not* "don't contribute". Keep those two
   consistent if either is reworded.
-- **The quickstart is `docker pull` + `docker run`, not the build-from-source path.** It does not
-  mirror `DEPLOYMENT.md` §1 any more, so the two can drift — `DEPLOYMENT.md` stays the runbook for
-  DNS/NPM/redeploys and is linked from the header nav. The `docker run` line carries
-  `-e DATA_DIR=/data`, which `1.0.0` genuinely needs: that image declared `VOLUME ["/data"]` but
-  left `DATA_DIR` unset, so the server fell back to `./data` against `WORKDIR /app` and wrote to
-  the container layer instead of the volume. `docker-compose.yml` set the variable explicitly,
-  which is why only the bare-`docker run` path — the one this README introduced — was exposed. The
-  Dockerfile now sets `ENV DATA_DIR=/data` itself, so once a release ships carrying that, the flag
-  and the sentence explaining it can both come out of the README.
+- **The quickstart pulls a published image rather than building from source.** It does not mirror
+  `DEPLOYMENT.md` §1 any more, so the two can drift — `DEPLOYMENT.md` stays the runbook for
+  DNS/NPM/redeploys and is linked from the header nav.
+
+  It was briefly a bare `docker run` carrying `-e DATA_DIR=/data`, and that flag was load-bearing:
+  the `1.0.0` image declared `VOLUME ["/data"]` but left `DATA_DIR` unset, so the server fell back
+  to `./data` against `WORKDIR /app` and wrote to the container layer instead of the volume. Only
+  that path was exposed — `docker-compose.yml` had always set the variable explicitly. The
+  Dockerfile now sets `ENV DATA_DIR=/data` itself.
+
+  Superseded 2026-08-12 by `deploy/docker-compose.yml` + `deploy/.env.example`, owner-directed: an
+  empty folder, two downloaded files, `docker compose up -d`, and the data bind-mounted to `./data`
+  inside that folder rather than living in a named volume. The template still sets `DATA_DIR=/data`
+  explicitly so it works against `1.0.0`, which is what `latest` currently resolves to. Two
+  consequences worth keeping straight: the README's install flow and the template are now a single
+  contract, so a change to one is a change to the other; and the repo-root compose file still uses
+  the named volume, which makes switching an existing deployment across a data migration rather
+  than an edit (`DEPLOYMENT.md` §1 has the copy command).
 
 Follow-on: [BL-003](BL-003-upstream-legacy-translations-and-docs.md) §4 can now repoint the in-app
 open-source link at this README.
@@ -116,3 +125,5 @@ for" answer shapes both.
 | File | Role |
 |---|---|
 | `README.md` (new, repo root) | The public-facing landing page described above |
+| `deploy/docker-compose.yml` (new) | Pull-an-image compose file the README's install flow downloads; bind-mounts `./data` |
+| `deploy/.env.example` (new) | Its settings template — version, host port, data path, `LOG_REQUESTS`, `TRUST_PROXY_HEADER` |
