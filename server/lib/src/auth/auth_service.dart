@@ -123,8 +123,8 @@ bool _isUniqueViolation(SqliteException e) =>
 /// problem (a login freezing every other request) and would have opened
 /// another if left unbounded: each concurrent hash is a whole isolate, so
 /// enough simultaneous attempts would trade a stalled event loop for memory
-/// exhaustion -- worse on a Pi, and worse still under the 512 MB container cap
-/// in docker-compose.yml. Queued callers cost a closure each, not an isolate.
+/// exhaustion -- worse on a small server, and worse still under the 512 MB
+/// container cap in docker-compose.yml. Queued callers cost a closure each, not an isolate.
 ///
 /// The rate limiter in rate_limiter.dart bounds the *arrival* rate; this
 /// bounds what is in flight regardless of how they arrive.
@@ -158,8 +158,8 @@ class _ConcurrencyGate {
   }
 }
 
-/// Four at a time: enough to keep a multi-core Pi busy without letting a burst
-/// of sign-ins turn into a pile of live isolates.
+/// Four at a time: enough to keep a multi-core server busy without letting a
+/// burst of sign-ins turn into a pile of live isolates.
 final _passwordHashingGate = _ConcurrencyGate(4);
 
 class AuthService {
@@ -169,7 +169,7 @@ class AuthService {
   /// bcrypt, on a worker isolate.
   ///
   /// The cost is the point of bcrypt -- a few hundred milliseconds on a
-  /// Raspberry Pi -- but this server is one Dart process on one event loop,
+  /// modest server -- but this server is one Dart process on one event loop,
   /// and the whole sync fleet is queued behind whatever is running on it. Done
   /// inline, a single login froze every other request for the duration, and a
   /// handful of login attempts per second was enough to stall the instance

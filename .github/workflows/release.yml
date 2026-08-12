@@ -140,9 +140,9 @@ jobs:
         if: always()
         run: rm -f app/android/key.properties app/android/app/keystore.jks
 
-  # linux/arm64 is the architecture that matters -- the deployment target is a
-  # Raspberry Pi, which cannot build this image itself (flutter build web wants
-  # 3-4 GB of RAM). amd64 comes along so an x86 host can pull the same tag.
+  # Both architectures are published so the image runs wherever the server is,
+  # without anything being compiled there (flutter build web wants 3-4 GB of
+  # RAM, which a modest home server does not have to spare).
   #
   # Each architecture builds on a runner of that architecture rather than under
   # QEMU on one runner. Emulating a dart2js compile is pathologically slow, and

@@ -41,8 +41,8 @@ RUN flutter build web --release \
 # serves the .gz when the request allows it.
 #
 # Done here, once per image build, rather than per request: the target is a
-# Raspberry Pi, and gzipping a 7.6 MB main.dart.js on every page load would
-# swap a bandwidth cost for a worse CPU one. Whole build is ~39 MB raw against
+# modest home server, and gzipping a 7.6 MB main.dart.js on every page load
+# would swap a bandwidth cost for a worse CPU one. Whole build is ~39 MB raw against
 # ~12 MB gzipped.
 #
 # Skips files under 1k (the header outweighs the saving) and formats that are

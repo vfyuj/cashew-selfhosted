@@ -5,7 +5,7 @@ import 'package:shelf/shelf.dart';
 /// Per-client attempt limiting for the unauthenticated password endpoints.
 ///
 /// Why this exists: verifying a password is bcrypt, which is *deliberately*
-/// expensive -- a few hundred milliseconds on a Raspberry Pi. Without a limit,
+/// expensive -- a few hundred milliseconds on a modest server. Without a limit,
 /// anyone who can reach `/auth/login` can queue up unbounded bcrypt work with
 /// nothing but a loop and no credentials. Password guessing is the lesser
 /// worry; burning the box's CPU is the real one.

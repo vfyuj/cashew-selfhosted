@@ -5,7 +5,7 @@ import 'package:server/src/web_handler.dart';
 import 'package:shelf/shelf.dart';
 import 'package:test/test.dart';
 
-/// Covers the pre-compressed-asset path added for Raspberry Pi deployments:
+/// Covers the pre-compressed-asset path added for low-powered deployments:
 /// the image gzips the web build at image-build time (see /Dockerfile) and
 /// this handler picks the .gz when the request allows it. The saving is the
 /// whole point (7.6 MB -> 2.0 MB on main.dart.js), so a silent regression back

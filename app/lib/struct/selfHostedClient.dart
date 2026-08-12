@@ -483,8 +483,8 @@ const _sessionRenewWithin = Duration(days: 7);
 /// tick, which meant rotating a 30-day token roughly every 45 seconds: a
 /// request, a `DELETE`+`INSERT` on the server's `sessions` table, and a
 /// SharedPreferences write on the device, ~1900 times a day, per device, to
-/// extend an expiry that was never near. On a Raspberry Pi that is a
-/// meaningful share of the SD card's write budget; on a phone it is wasted
+/// extend an expiry that was never near. On a small home server that is a
+/// meaningful share of its disk write budget; on a phone it is wasted
 /// radio and flash.
 ///
 /// Skipping the renewal is safe because nothing depends on it: [SelfHostedClient]

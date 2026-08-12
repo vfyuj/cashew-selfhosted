@@ -22,9 +22,9 @@ services:
       - TRUST_PROXY_HEADER=true
     restart: unless-stopped
 
-    # Docker's json-file driver keeps every line forever by default. On a Pi
-    # that is a slow, permanent write stream to the SD card and an unbounded
-    # claim on its free space -- capped here at 30 MB total.
+    # Docker's json-file driver keeps every line forever by default, which is a
+    # permanent write stream and an unbounded claim on the host's free space --
+    # capped here at 30 MB total.
     logging:
       driver: json-file
       options:
@@ -44,7 +44,7 @@ services:
       retries: 3
       start_period: 30s
 
-    # A Raspberry Pi has no headroom to give away. Capped so a runaway takes
+    # A home server has no headroom to give away. Capped so a runaway takes
     # only itself down instead of the whole box; the server idles far below
     # this, and the ceiling is really for backup upload/restore, which reads a
     # whole file into memory.

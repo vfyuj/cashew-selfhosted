@@ -109,8 +109,8 @@ File? _resolveWithinWebDir(String webDir, String relativePath) {
 /// * **Pre-compressed variants.** The image gzips every compressible file at
 ///   build time (see /Dockerfile); when the client accepts gzip and a
 ///   `<file>.gz` exists, that is what gets sent. Pre-compressing rather than
-///   compressing per request is deliberate -- this runs on a Raspberry Pi, and
-///   gzipping a 7.6 MB `main.dart.js` on every request would trade a bandwidth
+///   compressing per request is deliberate -- this runs on a modest home
+///   server, and gzipping a 7.6 MB `main.dart.js` on every request would trade a bandwidth
 ///   problem for a worse CPU one. The saving is large: the whole build is
 ///   ~39 MB raw against ~12 MB gzipped, and `main.dart.js` alone is 7.6 MB
 ///   against 2.0 MB.
