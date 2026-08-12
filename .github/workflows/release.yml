@@ -246,11 +246,22 @@ jobs:
           # 1.0.0 is not. See specs/07-versioning.md.
           prerelease: ${{ contains(needs.verify-version.outputs.version, '-beta.') }}
           body: |
-            Self-hosted deployment:
+            Self-hosted deployment — in an empty folder:
 
             ```
-            docker pull ${{ env.IMAGE_NAME }}:${{ needs.verify-version.outputs.version }}
+            curl -O https://raw.githubusercontent.com/${{ github.repository }}/main/deploy/docker-compose.yml
+            curl -O https://raw.githubusercontent.com/${{ github.repository }}/main/deploy/.env.example
+            cp .env.example .env
+            docker compose up -d
             ```
+
+            That runs `${{ env.IMAGE_NAME }}:latest` and keeps the database in
+            `./data` beside the compose file. To stay on this release instead of
+            following `latest`, set `CASHEW_VERSION=${{ needs.verify-version.outputs.version }}`
+            in `.env` before starting.
+
+            Upgrading an existing folder: `docker compose pull && docker compose up -d`.
 
             The APK below is sideloadable and signed with this project's release
-            key. See `DEPLOYMENT.md` for the server runbook.
+            key. Full install notes are in `README.md`; `DEPLOYMENT.md` is the
+            server runbook (DNS, reverse proxy, redeploys).

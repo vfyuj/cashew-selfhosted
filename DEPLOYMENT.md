@@ -20,13 +20,22 @@ The build compiles the Flutter web app from source inside Docker (needs to downl
 
 `flutter build web --release` wants roughly 3–4 GB of RAM. On a Pi 4 that either thrashes swap for a very long time or gets OOM-killed part-way through, and on a Pi with less than 4 GB it will not finish at all. This is a *build*-time problem only — the compiled server idles in well under 100 MB, which is why `docker-compose.yml` caps the container at 512 MB.
 
-So don't build on the Pi. Every tagged release publishes a ready arm64 image (see `specs/09-releases.md`). Point `docker-compose.yml` at it instead of building — swap `build: .` for `image: ghcr.io/vfyuj/cashew-selfhosted:latest` — and deploy with:
+So don't build on the Pi. Every tagged release publishes a ready arm64 image (see `specs/09-releases.md`), and `deploy/docker-compose.yml` in this repository is a ready-made compose file that pulls one instead of building. That template is what `README.md` walks new installs through: download it plus `deploy/.env.example` into an empty folder, `cp .env.example .env`, and
 
 ```bash
-docker compose pull && docker compose up -d
+docker compose up -d
 ```
 
-Pin the version instead of `latest` if you'd rather choose when to move: `ghcr.io/vfyuj/cashew-selfhosted:1.0.0-beta.22`. `docker pull` needs no credentials as long as the GHCR package is public — packages start **private**, so make it public once, under the repository's Packages page, or the Pi will get a 401.
+Version, host port, data location and the two behaviour flags all come from `.env`, so there is nothing to edit in the compose file itself. Pin `CASHEW_VERSION` to an exact release if you'd rather choose when to move; `latest` follows every release at the next `docker compose pull`. `docker pull` needs no credentials as long as the GHCR package is public — packages start **private**, so make it public once, under the repository's Packages page, or the Pi will get a 401.
+
+**Note the two compose files keep data in different places.** The one at the repository root uses a named volume (`server-data`), which is where an existing deployment's database already is; `deploy/docker-compose.yml` bind-mounts `./data` next to itself, so the folder *is* the instance. Switching an existing deployment from one to the other does not move the data — it will come up empty and look like everything is gone. To actually migrate, copy it out of the volume first:
+
+```bash
+docker compose down
+docker run --rm -v cashew-selfhosted_server-data:/from -v "$PWD/data":/to alpine sh -c 'cp -a /from/. /to/'
+```
+
+Check the volume's real name with `docker volume ls` first — Compose prefixes it with the project directory name.
 
 Check `/health` afterwards exactly as above; the version number is still how you confirm the new build actually landed.
 
