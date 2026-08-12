@@ -8,6 +8,7 @@ import 'package:cashew_selfhosted/struct/keyboardIntents.dart';
 import 'package:cashew_selfhosted/struct/logging.dart';
 import 'package:cashew_selfhosted/widgets/fadeIn.dart';
 import 'package:cashew_selfhosted/struct/languageMap.dart';
+import 'package:cashew_selfhosted/struct/translationOverrides.dart';
 import 'package:cashew_selfhosted/struct/initializeBiometrics.dart';
 import 'package:cashew_selfhosted/widgets/util/appLinks.dart';
 import 'package:cashew_selfhosted/widgets/util/onAppResume.dart';
@@ -57,6 +58,9 @@ void main() async {
     entireAppLoaded = false;
     await loadCurrencyJSON();
     await loadLanguageNamesJSON();
+    // Before runApp: the localization delegate loads on the first frame and
+    // reads this map. Synchronous, so it costs nothing here.
+    loadTranslationOverrides();
     await initializeSettings();
     tz.initializeTimeZones();
     final String? locationName = await FlutterTimezone.getLocalTimezone();

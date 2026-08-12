@@ -42,6 +42,11 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.0.2
+    Translations no longer depend on anything outside this app. You can now fix any piece of text yourself: Settings, Language, Edit translations. Search for it, type the fix, and it applies immediately - no restart.
+    Russian has been rewritten from scratch to match this app, not the original Cashew it was translated from.
+    The app now ships 8 languages instead of 46. The other 38 were never updated for this fork and were quietly showing English or a stale sentence about Google Drive. Missing one? Translate it yourself in Settings, and it can be added back.
+
     < 1.0.1
     Fixes a crash opening the Budgets tab on iPhone after a database import, caused by iOS Safari getting a different, less stable renderer than every other device.
 

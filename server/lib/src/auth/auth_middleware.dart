@@ -20,7 +20,7 @@ Middleware requireAuth(AuthService authService) {
       try {
         final user = authService.authenticate(token);
         final updatedRequest = request.change(context: {authenticatedUserContextKey: user});
-        return innerHandler(updatedRequest);
+        return await innerHandler(updatedRequest);
       } on InvalidSessionException {
         return Response(401, body: 'Session expired or invalid');
       }

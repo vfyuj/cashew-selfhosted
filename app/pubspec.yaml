@@ -19,7 +19,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString -- note that a
 # pre-release suffix is not valid there for App Store submission. Irrelevant
 # while this fork only ships web and sideloaded APKs.
-version: 1.0.1+28
+version: 1.0.2+30
 
 environment:
   sdk: ">= 3.0.0"
@@ -88,7 +88,12 @@ dependencies:
   flutter_timezone: ^1.0.8
   device_preview: ^1.1.0 
   scrollable_positioned_list: ^0.3.8
-  easy_localization: ^3.0.7
+  # Pinned, not caret: lib/struct/translationOverrides.dart imports
+  # easy_localization/src/localization.dart to swap the live translation maps
+  # when a string is edited in the in-app editor. That is the package's own
+  # mechanism (its delegate calls the same Localization.load), but it is not
+  # exported, so an unreviewed minor bump could break it silently.
+  easy_localization: 3.0.8
   # simple_shadow: ^0.3.1
   quick_actions: ^1.0.7
   # feature_discovery: ^0.14.1

@@ -5,6 +5,7 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageLineGraph.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/languageMap.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/notificationsSettings.dart';
@@ -429,6 +430,25 @@ attemptToMigrateCustomNumberFormattingSettings() {
   } catch (e) {
     print(
         "Error migrating setting long term loans amounts to 0 " + e.toString());
+  }
+}
+
+// This fork ships far fewer languages than upstream did. easy_localization
+// already falls back to English on its own when the saved locale has no file,
+// so the app comes up fine -- but appStateSettings["locale"] would still name
+// the dropped language, and the language picker would show it as selected while
+// the UI was English. Reset it to "System" so the setting matches reality.
+Future attemptToMigrateUnsupportedLocale() async {
+  try {
+    String locale = appStateSettings["locale"].toString();
+    if (locale != "System" && supportedLocales.containsKey(locale) == false) {
+      print("Migrating unsupported locale " + locale + " to System");
+      appStateSettings["locale"] = "System";
+      await sharedPreferences.setString(
+          'userSettings', json.encode(appStateSettings));
+    }
+  } catch (e) {
+    print("Error migrating unsupported locale " + e.toString());
   }
 }
 

@@ -6,6 +6,7 @@ import 'package:cashew_selfhosted/pages/billSplitter.dart';
 import 'package:cashew_selfhosted/pages/budgetsListPage.dart';
 import 'package:cashew_selfhosted/pages/creditDebtTransactionsPage.dart';
 import 'package:cashew_selfhosted/pages/editHomePage.dart';
+import 'package:cashew_selfhosted/pages/translationEditorPage.dart';
 import 'package:cashew_selfhosted/pages/editObjectivesPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageNetWorth.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
@@ -587,6 +588,16 @@ class LocalizationSettingsPage extends StatelessWidget {
       horizontalPaddingConstrained: true,
       listWidgets: [
         LanguageSetting(),
+        // Raw English, like the page it opens -- this is the way back from a
+        // translation someone has made unreadable.
+        SettingsContainerOpenPage(
+          openPage: const TranslationEditorPage(),
+          title: "Edit translations",
+          description: "Reword any text in the app",
+          icon: appStateSettings["outlinedIcons"]
+              ? Icons.translate_outlined
+              : Icons.translate_rounded,
+        ),
         PrimaryCurrencySetting(),
         SettingsHeader(title: "formatting".tr()),
         NumberFormattingSetting(),
