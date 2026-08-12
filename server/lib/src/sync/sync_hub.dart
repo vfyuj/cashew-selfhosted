@@ -2,29 +2,30 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// In-memory registry of open `/sync-stream` sockets per user, used to
+/// In-memory registry of open `/sync-stream` sockets per dataset, used to
 /// deliver bare "something changed" wake-ups after a push. Deliberately
 /// process-local: only correct because the server is a single Dart process
 /// (see the documented constraint in specs/04-stage-2-instant-sync.md).
 class SyncHub {
   final Map<int, Set<WebSocketChannel>> _sockets = {};
 
-  void add(int userId, WebSocketChannel channel) {
-    _sockets.putIfAbsent(userId, () => {}).add(channel);
+  void add(int datasetId, WebSocketChannel channel) {
+    _sockets.putIfAbsent(datasetId, () => {}).add(channel);
   }
 
-  void remove(int userId, WebSocketChannel channel) {
-    final set = _sockets[userId];
+  void remove(int datasetId, WebSocketChannel channel) {
+    final set = _sockets[datasetId];
     if (set == null) return;
     set.remove(channel);
-    if (set.isEmpty) _sockets.remove(userId);
+    if (set.isEmpty) _sockets.remove(datasetId);
   }
 
-  /// Notifies every open socket for this user. The notification carries no
+  /// Notifies every open socket for this dataset -- every device of every
+  /// member of the household, not just the pusher's own. The notification carries no
   /// data -- the client's only reaction is to run an ordinary pull, so a
   /// dropped/duplicated/reordered message can never lose or double-apply data.
-  void notify(int userId) {
-    final set = _sockets[userId];
+  void notify(int datasetId) {
+    final set = _sockets[datasetId];
     if (set == null) return;
     final message = jsonEncode({'type': 'changed'});
     for (final channel in set) {

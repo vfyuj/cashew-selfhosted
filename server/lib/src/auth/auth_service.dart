@@ -22,13 +22,40 @@ class AuthUser {
   final String email;
   final String name;
   final bool isAdmin;
-  AuthUser(this.id, this.email, {this.name = '', this.isAdmin = false});
+
+  /// Which set of synced data this request is scoped to.
+  ///
+  /// Distinct from [isAdmin] on purpose. `isAdmin` says who may provision
+  /// accounts and reset passwords; this says whose transactions and budgets
+  /// you see. Two accounts sharing a household have the same [datasetId] and
+  /// may differ on [isAdmin], and vice versa -- collapsing the two would mean
+  /// granting somebody administration silently merged their finances into the
+  /// household's.
+  final int datasetId;
+
+  /// How many accounts share [datasetId], including this one.
+  ///
+  /// Sent to the client so it can tell a solo account from a shared one
+  /// without a second round trip -- restore and reset-sync both need to warn
+  /// differently when the action reaches somebody else's devices.
+  final int householdSize;
+
+  AuthUser(
+    this.id,
+    this.email, {
+    this.name = '',
+    this.isAdmin = false,
+    required this.datasetId,
+    required this.householdSize,
+  });
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'email': email,
         'name': name,
         'isAdmin': isAdmin,
+        'datasetId': datasetId,
+        'householdSize': householdSize,
       };
 }
 
@@ -39,7 +66,13 @@ class UserRecord {
   final String name;
   final bool isAdmin;
   final DateTime createdAt;
-  UserRecord(this.id, this.email, this.name, this.isAdmin, this.createdAt);
+
+  /// Lets the admin UI show which accounts share the caller's household:
+  /// the ones whose datasetId matches their own.
+  final int datasetId;
+
+  UserRecord(this.id, this.email, this.name, this.isAdmin, this.createdAt,
+      this.datasetId);
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -47,6 +80,7 @@ class UserRecord {
         'name': name,
         'isAdmin': isAdmin,
         'createdAt': createdAt.toIso8601String(),
+        'datasetId': datasetId,
       };
 }
 
@@ -181,25 +215,102 @@ class AuthService {
     return List.generate(20, (_) => chars[random.nextInt(chars.length)]).join();
   }
 
-  AuthUser _userFromRow(Row row) => AuthUser(
-        row['id'] as int,
-        row['email'] as String,
-        name: (row['name'] as String?) ?? '',
-        isAdmin: (row['is_admin'] as int? ?? 0) == 1,
-      );
+  /// The columns every query feeding [_userFromRow] must select.
+  ///
+  /// The join is a LEFT join and the membership is resolved per request rather
+  /// than cached on the session: a user with no membership row would drop out
+  /// of an inner join entirely, which surfaces as a 401 and an account that can
+  /// never sign in again. [_userFromRow] heals that case instead.
+  static const _datasetColumns =
+      'dm.dataset_id AS dataset_id, '
+      '(SELECT COUNT(*) FROM dataset_members WHERE dataset_id = dm.dataset_id) '
+      'AS household_size';
+
+  AuthUser _userFromRow(Row row) {
+    final id = row['id'] as int;
+    final datasetId = row['dataset_id'] as int?;
+    return AuthUser(
+      id,
+      row['email'] as String,
+      name: (row['name'] as String?) ?? '',
+      isAdmin: (row['is_admin'] as int? ?? 0) == 1,
+      // Self-heals rather than throwing. This should be unreachable -- every
+      // path that creates a user also creates their membership -- but the cost
+      // of being wrong is a permanently locked-out account, and the repair is
+      // one insert.
+      datasetId: datasetId ?? createDatasetFor(id),
+      householdSize: datasetId == null ? 1 : (row['household_size'] as int? ?? 1),
+    );
+  }
+
+  /// Creates a dataset with [userId] as its only member. Returns its id.
+  int createDatasetFor(int userId) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    db.execute(
+      'INSERT INTO datasets (name, created_at) VALUES (?, ?)',
+      ['', now],
+    );
+    final datasetId = db.lastInsertRowId;
+    joinDataset(userId, datasetId);
+    return datasetId;
+  }
+
+  /// Moves [userId] into [datasetId]. `INSERT OR REPLACE` because
+  /// dataset_members is keyed by user_id alone -- one membership per user.
+  void joinDataset(int userId, int datasetId) {
+    db.execute(
+      'INSERT OR REPLACE INTO dataset_members (user_id, dataset_id, joined_at) '
+      'VALUES (?, ?, ?)',
+      [userId, datasetId, DateTime.now().millisecondsSinceEpoch],
+    );
+  }
+
+  int countDatasetMembers(int datasetId) => db.select(
+        'SELECT COUNT(*) AS c FROM dataset_members WHERE dataset_id = ?',
+        [datasetId],
+      ).first['c'] as int;
+
+  /// Drops a dataset once its last member is gone, which is what cascades its
+  /// sync_records and sync_state away -- those no longer hang off `users`.
+  void deleteDataset(int datasetId) {
+    db.execute('DELETE FROM datasets WHERE id = ?', [datasetId]);
+  }
 
   /// Creates a user record. Returns the new user's id.
+  ///
+  /// With [joinDatasetId] the account shares that dataset -- the whole point of
+  /// a household. Without it the account gets a fresh, empty dataset of its
+  /// own, which is the isolated behaviour every account had before datasets
+  /// existed and is the right default.
   Future<int> createUser(
     String email,
     String password, {
     String name = '',
     bool isAdmin = false,
+    int? joinDatasetId,
   }) async {
     _requireStrongEnough(password);
-    // Hashed before any database work starts, so the insert below stays a
-    // single synchronous step -- see the note on [hashPassword].
+    // Hashed before any database work starts, so the transaction below stays a
+    // single synchronous run -- see the note on [hashPassword].
     final passwordHash = await hashPassword(password);
-    return _insertUser(email, passwordHash, name: name, isAdmin: isAdmin);
+    late int userId;
+    // The user and their membership go in together. A user with no membership
+    // is the one state [_userFromRow] has to paper over, so don't manufacture
+    // it by letting the second insert fail on its own.
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      userId = _insertUser(email, passwordHash, name: name, isAdmin: isAdmin);
+      if (joinDatasetId == null) {
+        createDatasetFor(userId);
+      } else {
+        joinDataset(userId, joinDatasetId);
+      }
+      db.execute('COMMIT');
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+    return userId;
   }
 
   /// The synchronous half of [createUser], taking an already-computed hash.
@@ -263,7 +374,10 @@ class AuthService {
 
   AuthUser? findUserById(int userId) {
     final rows = db.select(
-      'SELECT id, email, name, is_admin FROM users WHERE id = ?',
+      'SELECT u.id AS id, u.email AS email, u.name AS name, '
+      'u.is_admin AS is_admin, $_datasetColumns '
+      'FROM users u LEFT JOIN dataset_members dm ON dm.user_id = u.id '
+      'WHERE u.id = ?',
       [userId],
     );
     if (rows.isEmpty) return null;
@@ -282,7 +396,11 @@ class AuthService {
   /// profile without a second round trip.
   Future<(Session, AuthUser)> login(String email, String password) async {
     final rows = db.select(
-      'SELECT id, email, name, is_admin, password_hash FROM users WHERE email = ?',
+      'SELECT u.id AS id, u.email AS email, u.name AS name, '
+      'u.is_admin AS is_admin, u.password_hash AS password_hash, '
+      '$_datasetColumns '
+      'FROM users u LEFT JOIN dataset_members dm ON dm.user_id = u.id '
+      'WHERE u.email = ?',
       [email],
     );
     if (rows.isEmpty) throw InvalidCredentialsException();
@@ -316,6 +434,7 @@ class AuthService {
     try {
       if (countUsers() > 0) throw SetupAlreadyCompletedException();
       userId = _insertUser(email, passwordHash, name: name, isAdmin: true);
+      createDatasetFor(userId);
       db.execute('COMMIT');
     } catch (_) {
       db.execute('ROLLBACK');
@@ -329,8 +448,10 @@ class AuthService {
     final tokenHash = _hashToken(token);
     final rows = db.select(
       'SELECT sessions.user_id AS id, sessions.expires_at AS expires_at, '
-      'users.email AS email, users.name AS name, users.is_admin AS is_admin '
+      'users.email AS email, users.name AS name, users.is_admin AS is_admin, '
+      '$_datasetColumns '
       'FROM sessions JOIN users ON users.id = sessions.user_id '
+      'LEFT JOIN dataset_members dm ON dm.user_id = sessions.user_id '
       'WHERE sessions.token_hash = ?',
       [tokenHash],
     );
@@ -408,13 +529,21 @@ class AuthService {
 
   List<UserRecord> listUsers() {
     return db
-        .select('SELECT id, email, name, is_admin, created_at FROM users ORDER BY id')
+        .select('SELECT u.id AS id, u.email AS email, u.name AS name, '
+            'u.is_admin AS is_admin, u.created_at AS created_at, '
+            'dm.dataset_id AS dataset_id '
+            'FROM users u LEFT JOIN dataset_members dm ON dm.user_id = u.id '
+            'ORDER BY u.id')
         .map((row) => UserRecord(
               row['id'] as int,
               row['email'] as String,
               (row['name'] as String?) ?? '',
               (row['is_admin'] as int? ?? 0) == 1,
               DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
+              // 0 rather than a heal: this is a read-only listing and a write
+              // from here would be a surprise. A membership-less account shows
+              // as sharing nothing, and signing in repairs it.
+              (row['dataset_id'] as int?) ?? 0,
             ))
         .toList();
   }
@@ -427,9 +556,15 @@ class AuthService {
     return requireUserById(userId);
   }
 
-  /// Deletes a user and, by foreign-key cascade, their sessions. Refuses to
-  /// remove the last administrator. Their stored sync/backup files are the
-  /// caller's responsibility -- the service layer doesn't know about disk.
+  /// Deletes a user and, by foreign-key cascade, their sessions and their
+  /// dataset membership. Refuses to remove the last administrator.
+  ///
+  /// Note what does **not** go with them: the dataset itself, and therefore its
+  /// sync_records and sync_state. That is deliberate -- the dataset may still
+  /// have other members, and dropping it here would delete a household's data
+  /// because one of its accounts was removed. Reaping an emptied dataset, and
+  /// removing stored files, are the caller's responsibility; the service layer
+  /// doesn't know about disk. See the delete handler in admin_routes.dart.
   void deleteUser(int userId) {
     final user = requireUserById(userId);
     if (user.isAdmin && countAdmins() <= 1) throw LastAdminException();

@@ -11,15 +11,18 @@ import '../storage.dart';
 /// fork inherited from upstream -- see specs/03-stage-1-kill-google.md.
 ///
 /// Deliberately the same shape as the sync and backup routers so it reuses
-/// [UserFileStore] unchanged: same per-user scoping, same filename validation.
+/// [UserFileStore] unchanged: same filename validation, same layout.
 /// A third namespace directory keeps attachments out of the way of the sync
 /// snapshot diff (which lists every file in its namespace and would otherwise
 /// treat a receipt photo as a peer device's database).
 Router buildAttachmentRouter(String dataDir) {
   final router = Router();
 
+  // Scoped by dataset, and it has to be: attachmentUrl() bakes this server's
+  // URL into the transaction's note, and that note syncs. Scoped by user, a
+  // receipt added by one member of a household would 404 for the other.
   UserFileStore storeFor(Request request) =>
-      UserFileStore(dataDir, 'attachments', currentUser(request).id);
+      UserFileStore(dataDir, 'attachments', currentUser(request).datasetId);
 
   router.get('/list', (Request request) {
     final files = storeFor(request).list();

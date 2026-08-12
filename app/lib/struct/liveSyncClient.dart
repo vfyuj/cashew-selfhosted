@@ -37,13 +37,26 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 const _pushCursorPrefsKeyPrefix = "liveSyncPushCursorMs:";
 const _pullCursorPrefsKeyPrefix = "liveSyncPullCursorSeq:";
 
-/// Scopes cursors per server+account, same reasoning as the existing
+/// Scopes cursors per server+account+dataset, same reasoning as the existing
 /// per-account session storage: switching servers/accounts must not reuse
 /// stale progress from a different one.
+///
+/// The dataset is in the key because the pull cursor is a sequence number and
+/// sequence numbers are only meaningful within one dataset's feed. Neither the
+/// server URL nor the email changes when an account's dataset does, so without
+/// this a cursor from the old feed would be applied to the new one and every
+/// change below it would be skipped -- silently, permanently, and with no 409
+/// to signal it, because the server has no way to know the cursor came from
+/// somewhere else.
+///
+/// Adding this changes every existing device's key once, so each does one full
+/// re-sync on upgrade. That is a no-op in both directions: pushes lose
+/// last-write-wins against identical stored timestamps, and pulls lose against
+/// identical local ones.
 String? _cursorScopeKey() {
   final session = selfHostedSession;
   if (session == null) return null;
-  return "${session.serverUrl}:${session.email}";
+  return "${session.serverUrl}:${session.email}:${cachedServerProfile?.datasetId ?? 0}";
 }
 
 Future<DateTime> _getPushCursor() async {

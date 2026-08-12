@@ -13,6 +13,22 @@ import '../storage.dart';
 Router buildBackupRouter(String dataDir) {
   final router = Router();
 
+  // Scoped by USER, not by dataset -- deliberately, and not an oversight left
+  // over from before datasets existed. Sync and attachments are dataset-scoped
+  // because the household shares that data; backups are one device's manual
+  // snapshots of it, and sharing the directory breaks two things:
+  //
+  //  - Filenames collide. createBackup names a file db-v<schema>-<deviceName>,
+  //    and getCurrentDeviceName() strips clientID's millisecond suffix down to
+  //    the device model. Two same-model phones in one household would silently
+  //    overwrite each other's backups. (Sync snapshots keep the suffix, which
+  //    is why sync/ can be shared safely.)
+  //  - Retention crosses over. deleteRecentBackups prunes to backupLimit over
+  //    the whole listing, so one member's automatic backup would evict
+  //    another's.
+  //
+  // Each member keeping their own history costs nothing: they are snapshots of
+  // the same shared database, so either member's restores the household.
   UserFileStore storeFor(Request request) => UserFileStore(dataDir, 'backup', currentUser(request).id);
 
   router.get('/list', (Request request) {

@@ -33,14 +33,19 @@ Handler buildSyncStreamHandler(AuthService authService) {
           final data = jsonDecode(message as String) as Map<String, dynamic>;
           if (data['type'] != 'auth') throw const FormatException('expected auth first');
           user = authService.authenticate(data['token'] as String);
-          syncHub.add(user!.id, channel);
+          // Registered by dataset, matching syncHub.notify's key in the push
+          // handler. Keying this by user id instead would still compile and
+          // still work for a solo account -- it would just silently stop
+          // waking the other members of a household, leaving them on the
+          // 45s/5min poll and looking like "sync is slow" rather than broken.
+          syncHub.add(user!.datasetId, channel);
           channel.sink.add(jsonEncode({'type': 'ready'}));
         } catch (_) {
           channel.sink.close(4001, 'auth failed');
         }
       },
       onDone: () {
-        if (user != null) syncHub.remove(user!.id, channel);
+        if (user != null) syncHub.remove(user!.datasetId, channel);
       },
       cancelOnError: true,
     );
