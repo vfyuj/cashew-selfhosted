@@ -1,6 +1,8 @@
 # Releases
 
-**Status:** implemented 2026-08-11. Not yet exercised — no tag has been cut through it.
+**Status:** implemented 2026-08-11, and exercised since — `v1.0.0-beta.21`, `v1.0.0` and `v1.0.1` have all shipped through it. The four signing secrets are configured, releases carry a signed APK (~87 MB), and the GHCR package is public: an unauthenticated manifest fetch for `ghcr.io/vfyuj/cashew-selfhosted:1.0.1` returns 200.
+
+Note `1.0.2` was developed but never tagged, so the next release carries both its changelog section and its own.
 
 ## Why this exists
 
@@ -108,8 +110,8 @@ failed to parse platform : "" is an invalid OS component
 - [x] `flutter build apk --release` succeeds locally.
 - [x] `flutter analyze` reports no errors and `flutter test` passes after the plugin upgrades.
 - [x] `flutter build web` still succeeds, so the container image is unaffected.
-- [ ] Owner: generate the keystore, back it up, add the four secrets.
-- [ ] Owner: push a tag and confirm the workflow produces a Release with an APK plus a `:<version>` image on GHCR.
-- [ ] Owner: confirm the published APK installs on a phone and reports the expected version on the About row.
-- [ ] Owner: make the GHCR package public, then confirm `docker pull` works from the Pi without credentials.
+- [x] Owner: generate the keystore, back it up, add the four secrets. (All four are set on the repository. Whether the keystore itself is backed up somewhere outside this repo is the owner's to confirm — nothing here can check that, and it is the one step with no second chance.)
+- [x] Owner: push a tag and confirm the workflow produces a Release with an APK plus a `:<version>` image on GHCR.
+- [ ] Owner: confirm the published APK installs on a phone and reports the expected version on the About row. (Every release asset so far shows 0 downloads, so this has probably not happened yet.)
+- [x] Owner: make the GHCR package public, then confirm `docker pull` works from the Pi without credentials. (Public — an unauthenticated manifest fetch returns 200.)
 - [ ] Owner: confirm the arm64 image actually starts on the Pi and answers `/health`.
