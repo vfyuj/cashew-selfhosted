@@ -157,6 +157,11 @@ Store](https://apps.apple.com/us/app/cashew-expense-budget-tracker/id6463662930)
 Play](https://play.google.com/store/apps/details?id=com.budget.tracker_app) and as a [web
 app](https://budget-track.web.app/) — if you don't specifically need self-hosting, use the original.
 
+The translations also come from upstream, and are the work of Cashew's community translators. This
+fork now maintains them itself rather than regenerating them from upstream's spreadsheet — what it
+has changed, and when, is recorded in
+[app/assets/translations/README.md](app/assets/translations/README.md).
+
 This fork is a personal project, built for one household's server and published because GPL-3.0 asks
 for the source to stay available. It comes with no promise of support — though see the note at the
 top if you'd like to help.

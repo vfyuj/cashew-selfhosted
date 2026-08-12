@@ -1,8 +1,8 @@
 # BL-003 — Reminder: Decide What To Do With Upstream-Origin Translations and In-App Documentation Links
 
-**Status:** Reminder / inventory only. No fix proposed — this exists so the decision doesn't get
-forgotten, per `specs/00-overview.md`'s "this will never be upstreamed, treat it as permanently
-diverging." **Not approved for implementation** until the owner picks an option per item in §4.
+**Status:** §2A (translations) resolved — see [BL-007](BL-007-fork-owned-translations.md), implemented
+2026-08-12. §2B (in-app documentation/policy links) is still reminder / inventory only, **not approved
+for implementation** until the owner picks an option per row.
 
 **Origin:** owner-submitted reminder, 2026-08-09.
 
@@ -25,20 +25,21 @@ this item catalogs them so the "decide what to do about it" step isn't lost.
 
 ## 2. Known instances (verified against source, 2026-08-09)
 
-### A. Translations pipeline
+### A. Translations pipeline — ✅ resolved, see [BL-007](BL-007-fork-owned-translations.md)
 
-Full detail already written up in [BL-002](BL-002-onboarding-create-main-account.md) §3 C1:
-`app/assets/translations/generate-translations.py` re-downloads `translations.csv` from a Google
-Sheet **upstream owns**, then regenerates every file in `app/assets/translations/generated/`. This
-fork's own string edits already have to live only in `generated/en.json` by hand (precedent: commit
-`31baf88`) because the CSV can't be safely touched — anything written there is wiped on the next
+Full detail was written up in [BL-002](BL-002-onboarding-create-main-account.md) §3 C1:
+`app/assets/translations/generate-translations.py` re-downloaded `translations.csv` from a Google
+Sheet **upstream owned**, then regenerated every file in `app/assets/translations/generated/`. This
+fork's own string edits had to live only in `generated/en.json` by hand (precedent: commit `31baf88`)
+because the CSV couldn't be safely touched — anything written there was wiped on the next
 regeneration run.
 
-Open question, no default assumed: keep piggybacking on upstream's sheet forever (free translation
-work for 48 languages, at the cost of any fork-specific `en.json` edit slowly drifting out of sync
-with what those 48 languages say), fork the sheet into something this project owns and maintains, or
-drop non-English locales as out of scope for a single-household self-hosted app and simplify the
-pipeline accordingly?
+**Decision (2026-08-12):** the pipeline is deleted. The fork now ships 8 languages
+(`en, ru, de, es, fr, pt, uk, zh`, down from 46) that it maintains itself, plus an in-app editor
+(Settings → Language → Edit translations) so a bad string can be fixed without a rebuild, exported,
+and promoted into the repo with `dart run tool/merge_translation_overrides.dart`. Russian was
+rewritten from scratch against this fork's actual UI. Full rationale and the alternatives considered
+are in BL-007 §3.
 
 ### B. In-app documentation/links pointing at upstream's own hosted assets
 

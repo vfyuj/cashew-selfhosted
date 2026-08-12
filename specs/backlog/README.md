@@ -24,7 +24,8 @@ not scheduled** — nothing in this folder is approved for implementation until 
 |---|---|---|---|
 | [BL-001](BL-001-category-locked-budgets.md) | Category budgets, percent-of-income entry, share-of-plan labels | Implemented 2026-08-09, needs owner acceptance pass | — |
 | [BL-002](BL-002-onboarding-create-main-account.md) | Onboarding rework: accounts, income, categories, envelope explainer, skippable steps | **Implemented 2026-08-10** | — |
-| [BL-003](BL-003-upstream-legacy-translations-and-docs.md) | Reminder: decide what to do with upstream-origin translations pipeline and in-app doc/policy links | Reminder / inventory only | Per-item decisions in §3 |
+| [BL-003](BL-003-upstream-legacy-translations-and-docs.md) | Reminder: decide what to do with upstream-origin translations pipeline and in-app doc/policy links | §2A resolved by BL-007; §2B still open | §2B per-item decisions |
 | [BL-004](BL-004-public-readme-for-selfhosted-deploy.md) | Public README.md for the GitHub repo describing self-hosted deployment | Reviewed, needs owner decisions | 2 open decisions in §5 |
 | [BL-005](BL-005-imap-receipt-scanning.md) | Receipt scanning over IMAP, replacing the deleted Gmail version | Not started | Web-vs-Android decision in §4 |
 | [BL-006](BL-006-per-period-budget-amounts.md) | Per-period budget amounts, so changing a budget stops rewriting finished periods | **Implemented 2026-08-10**, needs owner acceptance pass | — |
+| [BL-007](BL-007-fork-owned-translations.md) | Fork-owned translations + in-app translation editor, dropping the last upstream dependency | **Implemented 2026-08-12**, needs owner acceptance pass | — |

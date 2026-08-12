@@ -3,6 +3,7 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/main.dart';
 import 'package:cashew_selfhosted/pages/editHomePage.dart';
+import 'package:cashew_selfhosted/pages/translationEditorPage.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
 import 'package:cashew_selfhosted/widgets/textWidgets.dart';
@@ -103,6 +104,7 @@ Future<bool> initializeSettings() async {
   await attemptToMigrateServerSetupWizard();
   await attemptToMigrateSetLongTermLoansAmountTo0();
   attemptToMigrateCustomNumberFormattingSettings();
+  await attemptToMigrateUnsupportedLocale();
 
   // Disable sync every change is not on web
   // It will still sync when user pulls down to refresh
@@ -289,7 +291,7 @@ void openLanguagePicker(BuildContext context) {
         children: [
           Padding(
             padding: const EdgeInsetsDirectional.only(bottom: 10),
-            child: TranslationsHelp(),
+            child: TranslationsEditorTile(),
           ),
           RadioItems(
             items: [
@@ -350,8 +352,17 @@ Future backupSettings() async {
   print("Created settings entry in DB");
 }
 
-class TranslationsHelp extends StatelessWidget {
-  const TranslationsHelp({
+/// Offers the in-app translation editor wherever languages come up.
+///
+/// This used to be upstream's "email me your translations" card, pointing at
+/// the original author's personal address -- which for a fork is somebody
+/// else's inbox receiving corrections to strings they never wrote. There is
+/// nowhere to send them here, so the fix is to edit them in place instead.
+///
+/// Raw English on purpose, like the editor it opens: see
+/// lib/pages/translationEditorPage.dart.
+class TranslationsEditorTile extends StatelessWidget {
+  const TranslationsEditorTile({
     super.key,
     this.showIcon = true,
     this.backgroundColor,
@@ -364,10 +375,7 @@ class TranslationsHelp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tappable(
       onTap: () {
-        openUrl('mailto:dapperappdeveloper@gmail.com');
-      },
-      onLongPress: () {
-        copyToClipboard("dapperappdeveloper@gmail.com");
+        pushRoute(context, const TranslationEditorPage());
       },
       color: backgroundColor ??
           Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.7),
@@ -382,41 +390,19 @@ class TranslationsHelp extends StatelessWidget {
                 padding: const EdgeInsetsDirectional.only(end: 12),
                 child: Icon(
                   appStateSettings["outlinedIcons"]
-                      ? Icons.connect_without_contact_outlined
-                      : Icons.connect_without_contact_rounded,
+                      ? Icons.translate_outlined
+                      : Icons.translate_rounded,
                   color: Theme.of(context).colorScheme.secondary,
                   size: 31,
                 ),
               ),
             Expanded(
               child: TextFont(
-                text: "",
+                text: "Something worded badly? Edit any of the app's own text "
+                    "here, in any language.",
                 textColor: getColor(context, "black"),
                 textAlign:
                     showIcon == true ? TextAlign.start : TextAlign.center,
-                richTextSpan: [
-                  TextSpan(
-                    text: "translations-help".tr() + " ",
-                    style: TextStyle(
-                      color: getColor(context, "black"),
-                      fontFamily: appStateSettings["font"],
-                      fontFamilyFallback: ['Inter'],
-                    ),
-                  ),
-                  TextSpan(
-                    text: 'dapperappdeveloper@gmail.com',
-                    style: TextStyle(
-                      decoration: TextDecoration.underline,
-                      decorationStyle: TextDecorationStyle.solid,
-                      decorationColor:
-                          getColor(context, "unPaidOverdue").withOpacity(0.8),
-                      color:
-                          getColor(context, "unPaidOverdue").withOpacity(0.8),
-                      fontFamily: appStateSettings["font"],
-                      fontFamilyFallback: ['Inter'],
-                    ),
-                  ),
-                ],
                 maxLines: 5,
                 fontSize: 13,
               ),

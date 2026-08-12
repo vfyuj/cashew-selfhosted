@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 
 // Don't use Inter or the offset
+// Matched against appStateSettings["locale"], so only keys in supportedLocales
+// can ever appear here -- zh_Hant and ja were dropped along with their files.
 Set<String> fallbackFontLocales = {
   "zh",
-  "zh_Hant",
-  "ja",
 };
 
 class TextFont extends StatelessWidget {

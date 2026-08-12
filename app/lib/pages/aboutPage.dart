@@ -678,7 +678,7 @@ class AboutPageState extends State<AboutPage> {
               Padding(
                 padding: const EdgeInsetsDirectional.only(
                     start: 15, end: 15, top: 5),
-                child: TranslationsHelp(
+                child: TranslationsEditorTile(
                   showIcon: false,
                   backgroundColor: containerColor,
                 ),
