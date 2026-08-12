@@ -4215,7 +4215,7 @@ class FinanceDatabase extends _$FinanceDatabase {
   }
 
   Future<int> createOrUpdateBudget(Budget budget,
-      {bool insert = false}) async {
+      {DateTime? customDateTimeModified, bool insert = false}) async {
     budget = limitBudgetPeriod(budget);
 
     double maxAmount = 999999999999;
@@ -4224,7 +4224,8 @@ class FinanceDatabase extends _$FinanceDatabase {
     budget = budget.copyWith(name: budget.name.trim());
     // print(budget);
 
-    budget = budget.copyWith(dateTimeModified: Value(DateTime.now()));
+    budget = budget.copyWith(
+        dateTimeModified: Value(customDateTimeModified ?? DateTime.now()));
     BudgetsCompanion companionToInsert = budget.toCompanion(true);
 
     if (insert) {

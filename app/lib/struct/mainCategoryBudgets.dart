@@ -210,6 +210,19 @@ Future<int> ensureMainCategoryBudgetsExist() async {
       budgetForMainCategory(category),
       // Never route an auto created budget through the shared/Firestore branch
       // of createOrUpdateBudget - it is dead in this fork.
+      //
+      // Stamped at the epoch so it always loses last-write-wins, the same
+      // reason initializeDefaultDatabase does it for the default wallet and
+      // categories. This runs before the first sync of a launch, so a device
+      // that has just signed in to an account which already has data creates
+      // its own amount: 0 envelopes for any category it shares a pk with -
+      // the default categories "1".."11" - before hearing about the real ones.
+      // Stamped "now" those zeroes would win the merge and wipe both the
+      // household's targets and the per-period history in
+      // Budgets.sharedAllMembersEver. Every real edit still stamps now via
+      // createOrUpdateBudget's default. Two devices independently creating the
+      // same envelope at the epoch is a no-op, not a conflict.
+      customDateTimeModified: DateTime(0),
     );
     createdCount++;
   }
