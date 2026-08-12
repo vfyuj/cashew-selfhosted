@@ -1,4 +1,5 @@
 import 'package:cashew_selfhosted/database/tables.dart';
+import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/subCategoryBudgetAllocation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,6 +40,55 @@ void main() {
 
     test('zero stays zero', () {
       expect(amountOverPeriod(0, 7, 31), 0);
+    });
+  });
+
+  group('attributing a budget to a main category', () {
+    // "Gifts & charity" has three subcategories; "Food" has one. Only budgets
+    // whose every category sits under the same parent count against that
+    // parent's envelope.
+    const PlannedBudgetTotals totals = PlannedBudgetTotals(
+      budgets: [],
+      mainCategoryPks: {'gifts', 'food'},
+      subCategoryParents: {
+        'presents': 'gifts',
+        'charity': 'gifts',
+        'irregular': 'gifts',
+        'groceries': 'food',
+      },
+    );
+
+    test('one subcategory attributes to its parent', () {
+      expect(totals.soleParentOfSubCategories(['presents']), 'gifts');
+    });
+
+    test('several subcategories of one parent still attribute to it', () {
+      // The ordinary case once the picker lets you tick two subcategories in
+      // one budget.
+      expect(
+          totals.soleParentOfSubCategories(['presents', 'charity']), 'gifts');
+      expect(
+          totals
+              .soleParentOfSubCategories(['presents', 'charity', 'irregular']),
+          'gifts');
+    });
+
+    test('subcategories of different parents attribute to neither', () {
+      expect(
+          totals.soleParentOfSubCategories(['presents', 'groceries']), isNull,
+          reason: 'a budget spanning two categories belongs to neither, and '
+              'counting it against one would overstate that one');
+    });
+
+    test('a main category is not a subcategory of anything', () {
+      expect(totals.soleParentOfSubCategories(['gifts']), isNull);
+      expect(totals.soleParentOfSubCategories(['gifts', 'presents']), isNull,
+          reason: 'the parent alone already covers everything inside it');
+    });
+
+    test('an unknown category attributes to nothing', () {
+      expect(totals.soleParentOfSubCategories(['made-up']), isNull);
+      expect(totals.soleParentOfSubCategories([]), isNull);
     });
   });
 

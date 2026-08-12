@@ -98,16 +98,19 @@ List<SubCategoryAllocation> subCategoryAllocations(
     // for the one-shot path and for anything that builds totals by hand.
     if (budget.archived || budget.income) continue;
     final List<String>? categoryFks = budget.categoryFks;
-    // A budget spanning several categories, or none, cannot be attributed to
-    // one parent, so it is left out rather than guessed at.
-    if (categoryFks == null || categoryFks.length != 1) continue;
+    if (categoryFks == null || categoryFks.isEmpty) continue;
 
     if (totals.isMainCategoryBudget(budget)) {
       envelopeByCategoryPk[categoryFks.first] = budget;
       continue;
     }
+    // Several subcategories of one category still count against that one
+    // envelope -- picking two subcategories in a single budget is an ordinary
+    // thing to do now that the picker allows it. A budget spanning two
+    // different main categories belongs to neither, and is left out rather
+    // than guessed at.
     final String? mainCategoryPk =
-        totals.mainCategoryOfSubCategory(categoryFks.first);
+        totals.soleParentOfSubCategories(categoryFks);
     if (mainCategoryPk == null) continue;
     subBudgetsByMainCategoryPk
         .putIfAbsent(mainCategoryPk, () => [])

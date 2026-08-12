@@ -4540,6 +4540,22 @@ class FinanceDatabase extends _$FinanceDatabase {
     });
   }
 
+  /// Every category, main and sub, in display order.
+  ///
+  /// watchAllCategories() lists main categories only, and
+  /// watchAllSubCategoriesIndexedByMainCategoryPk() loses the categories
+  /// themselves. Choosing a budget's subcategories needs both halves at once —
+  /// the parents to group by and the children to name — so it takes the flat
+  /// list and derives them together from one subscription.
+  Stream<List<TransactionCategory>> watchAllCategoriesAndSubCategories() {
+    return (select(categories)
+          ..orderBy([
+            (c) => OrderingTerm.asc(c.mainCategoryPk),
+            (c) => OrderingTerm.asc(c.order),
+          ]))
+        .watch();
+  }
+
   Stream<Map<String, List<TransactionCategory>>>
       watchAllSubCategoriesIndexedByMainCategoryPk() {
     return (select(categories)..orderBy([(w) => OrderingTerm.asc(w.order)]))

@@ -29,6 +29,7 @@ import 'package:cashew_selfhosted/widgets/radioItems.dart';
 import 'package:cashew_selfhosted/widgets/saveBottomButton.dart';
 import 'package:cashew_selfhosted/widgets/selectAmount.dart';
 import 'package:cashew_selfhosted/widgets/selectCategory.dart';
+import 'package:cashew_selfhosted/widgets/selectCategoryWithSubCategories.dart';
 import 'package:cashew_selfhosted/widgets/selectColor.dart';
 import 'package:cashew_selfhosted/widgets/settingsContainers.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
@@ -316,12 +317,15 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
   // honest rather than just reporting that it isn't.
   Future<void> _warnIfMainCategoryOverAllocated(Budget saved) async {
     final List<String>? categoryFks = saved.categoryFks;
-    if (categoryFks == null || categoryFks.length != 1) return;
+    if (categoryFks == null || categoryFks.isEmpty) return;
     if (!mounted) return;
 
     final PlannedBudgetTotals totals = await getPlannedBudgetTotals();
+    // Null unless every category this budget targets is a subcategory of the
+    // same parent -- so a main-category envelope, or a budget spanning two
+    // categories, checks nothing.
     final String? mainCategoryPk =
-        totals.mainCategoryOfSubCategory(categoryFks.first);
+        totals.soleParentOfSubCategories(categoryFks);
     if (mainCategoryPk == null || !mounted) return;
 
     final AllWallets allWallets =
@@ -1389,10 +1393,15 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                   child: AnimatedExpanded(
                     expand: !(selectedShared == true ||
                         selectedAddedTransactionsOnly),
-                    child: SelectCategory(
-                      horizontalList: true,
-                      selectedCategories: selectedCategoryPks,
-                      setSelectedCategories: (categories) {
+                    // Unlike the exclude picker below, this one can go down to
+                    // individual subcategories -- see
+                    // widgets/selectCategoryWithSubCategories.dart. A budget
+                    // targeting subcategories needs no schema or query change;
+                    // categoryFks is already matched against both a
+                    // transaction's category and its subcategory.
+                    child: SelectCategoryWithSubCategories(
+                      selectedCategoryPks: selectedCategoryPks,
+                      setSelectedCategoryPks: (categories) {
                         checkPopupBalanceCorrectionSelectedWarning(
                             context, categories);
                         setSelectedCategories(categories);

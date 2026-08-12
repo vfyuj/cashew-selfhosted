@@ -44,6 +44,28 @@ class PlannedBudgetTotals {
   String? mainCategoryOfSubCategory(String categoryPk) =>
       subCategoryParents[categoryPk];
 
+  // The one main category every pk in [categoryPks] sits under, or null if
+  // they don't all share a parent.
+  //
+  // A budget can target several subcategories at once ("Gifts" and "Charity"
+  // inside Gifts & charity), and that still counts against exactly one
+  // envelope. A budget spanning two different main categories does not belong
+  // to either, and one targeting something that is not a subcategory at all
+  // belongs to none.
+  String? soleParentOfSubCategories(List<String> categoryPks) {
+    String? parent;
+    for (String categoryPk in categoryPks) {
+      final String? mainCategoryPk = subCategoryParents[categoryPk];
+      if (mainCategoryPk == null) return null;
+      if (parent == null) {
+        parent = mainCategoryPk;
+      } else if (parent != mainCategoryPk) {
+        return null;
+      }
+    }
+    return parent;
+  }
+
   // Denominator of the share label on the budget card.
   double totalPlannedExpenses(AllWallets allWallets) {
     double total = 0;
