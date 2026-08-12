@@ -3,10 +3,14 @@ import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePagePlannedVsActual.dart';
+import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/struct/subCategoryBudgetAllocation.dart';
 import 'package:cashew_selfhosted/widgets/budgetContainer.dart';
+import 'package:cashew_selfhosted/widgets/statusBox.dart';
+import 'package:provider/provider.dart';
 import 'package:cashew_selfhosted/widgets/navigationSidebar.dart';
 import 'package:cashew_selfhosted/widgets/sliverStickyLabelDivider.dart';
 import 'package:cashew_selfhosted/widgets/slidingSelectorIncomeExpense.dart';
@@ -127,6 +131,7 @@ class BudgetsListPageState extends State<BudgetsListPage> {
           // follows the screen, matching the envelope sections below and the
           // home page, where the widget's own 13px padding is all it gets.
           SliverToBoxAdapter(child: HomePagePlannedVsActual()),
+          _overAllocationWarning(context),
           _mainCategorySection(context, wantIncome: false, titleKey: "expense"),
           _mainCategorySection(context, wantIncome: true, titleKey: "income"),
         ] else
@@ -136,6 +141,94 @@ class BudgetsListPageState extends State<BudgetsListPage> {
         ),
       ],
     );
+  }
+
+  // Warns when a main category's subcategory budgets add up to more than the
+  // category's own envelope, so the household does not commit 1200 inside a
+  // category budgeted at 1000 without noticing. Nothing is drawn while
+  // everything fits - under-allocating is fine.
+  //
+  // The totals include budgets belonging to other household members, which are
+  // not on this screen. That is deliberate (see subCategoryBudgetAllocation),
+  // and the copy says so when it applies, because otherwise the numbers would
+  // not add up against the visible cards and would read like a bug.
+  Widget _overAllocationWarning(BuildContext context) {
+    return StreamBuilder<PlannedBudgetTotals>(
+      stream: watchPlannedBudgetTotals(),
+      initialData: latestPlannedBudgetTotals,
+      builder: (context, snapshot) {
+        final PlannedBudgetTotals? totals = snapshot.data;
+        if (totals == null) return SliverToBoxAdapter();
+        final AllWallets allWallets = Provider.of<AllWallets>(context);
+        final List<SubCategoryAllocation> over =
+            overAllocatedMainCategories(totals, allWallets);
+        if (over.isEmpty) return SliverToBoxAdapter();
+
+        final SubCategoryAllocation worst = over.first;
+        final String description = over.length == 1
+            ? "over-allocated-description".tr(namedArgs: {
+                "category": worst.envelope.name,
+                "allocated": convertToMoney(allWallets, worst.allocated),
+                "budgeted": convertToMoney(allWallets, worst.envelopeAmount),
+              })
+            : "over-allocated-description-multiple".tr(namedArgs: {
+                "count": over.length.toString(),
+              });
+        final bool anyHidden =
+            over.any((SubCategoryAllocation a) => a.hasHidden);
+
+        return SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsetsDirectional.symmetric(
+                horizontal: 13, vertical: 7),
+            child: StatusBox(
+              title: "over-allocated".tr(),
+              description: anyHidden
+                  ? description + " " + "over-allocated-includes-hidden".tr()
+                  : description,
+              color: getColor(context, "expenseAmount"),
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.warning_outlined
+                  : Icons.warning_rounded,
+              onTap: () => _offerToRaiseEnvelopes(context, over, allWallets),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Tapping the warning offers to raise each over-committed envelope so its
+  // subcategory budgets fit exactly. Confirmed one category at a time, and
+  // never automatic - it is the household's plan, not a number to correct
+  // behind their back.
+  Future<void> _offerToRaiseEnvelopes(
+    BuildContext context,
+    List<SubCategoryAllocation> over,
+    AllWallets allWallets,
+  ) async {
+    for (final SubCategoryAllocation allocation in over) {
+      final dynamic raise = await openPopup(
+        context,
+        title: allocation.envelope.name,
+        description: "raise-budget-to-fit-description".tr(namedArgs: {
+          "budgeted": convertToMoney(allWallets, allocation.envelopeAmount),
+          "allocated": convertToMoney(allWallets, allocation.allocated),
+        }),
+        icon: appStateSettings["outlinedIcons"]
+            ? Icons.trending_up_outlined
+            : Icons.trending_up_rounded,
+        onSubmitLabel: "raise-budget-to-fit".tr(),
+        onSubmit: () => popRoute(context, true),
+        onCancelLabel: "keep".tr(),
+        onCancel: () => popRoute(context, false),
+      );
+      if (raise == true) {
+        // Routed through withUpdatedAmountHistory, so periods that have
+        // already ended keep the target they were set to at the time.
+        await raiseEnvelopeToFitAllocation(allocation, allWallets);
+      }
+    }
   }
 
   // One of the two stacked sections on the Main Categories tab - expense

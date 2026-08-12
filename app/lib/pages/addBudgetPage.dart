@@ -7,6 +7,8 @@ import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
 import 'package:cashew_selfhosted/struct/budgetPeriodAmounts.dart';
 import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
+import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
+import 'package:cashew_selfhosted/struct/subCategoryBudgetAllocation.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
@@ -300,7 +302,56 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
         insert: widget.budget == null, createdBudget);
     loadingIndeterminateKey.currentState?.setVisibility(false);
     savingHapticFeedback();
+    // Checked after the write, not from BudgetDetails' amount-dismissed
+    // callback: that fires while the new amount is still only on screen, so
+    // the sum would be measured against the previous saved value.
+    await _warnIfMainCategoryOverAllocated(createdBudget);
     popRoute(context);
+  }
+
+  // If this budget targets one subcategory, re-measure that subcategory's
+  // parent: the household may now have committed more inside the parent
+  // category than the parent's envelope holds. Offers to raise the envelope to
+  // match, which is the whole point - keeping the main category's number
+  // honest rather than just reporting that it isn't.
+  Future<void> _warnIfMainCategoryOverAllocated(Budget saved) async {
+    final List<String>? categoryFks = saved.categoryFks;
+    if (categoryFks == null || categoryFks.length != 1) return;
+    if (!mounted) return;
+
+    final PlannedBudgetTotals totals = await getPlannedBudgetTotals();
+    final String? mainCategoryPk =
+        totals.mainCategoryOfSubCategory(categoryFks.first);
+    if (mainCategoryPk == null || !mounted) return;
+
+    final AllWallets allWallets =
+        Provider.of<AllWallets>(context, listen: false);
+    final SubCategoryAllocation? allocation =
+        allocationForMainCategory(totals, allWallets, mainCategoryPk);
+    if (allocation == null || !allocation.isOver || !mounted) return;
+
+    final dynamic raise = await openPopup(
+      context,
+      title: "over-allocated".tr(),
+      description: "over-allocated-description".tr(namedArgs: {
+            "category": allocation.envelope.name,
+            "allocated": convertToMoney(allWallets, allocation.allocated),
+            "budgeted": convertToMoney(allWallets, allocation.envelopeAmount),
+          }) +
+          (allocation.hasHidden
+              ? " " + "over-allocated-includes-hidden".tr()
+              : ""),
+      icon: appStateSettings["outlinedIcons"]
+          ? Icons.warning_outlined
+          : Icons.warning_rounded,
+      onSubmitLabel: "raise-budget-to-fit".tr(),
+      onSubmit: () => popRoute(context, true),
+      onCancelLabel: "keep".tr(),
+      onCancel: () => popRoute(context, false),
+    );
+    if (raise == true) {
+      await raiseEnvelopeToFitAllocation(allocation, allWallets);
+    }
   }
 
   // Changing a budget's cycle discards the per-period amounts it has recorded,
@@ -448,10 +499,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
         setSelectedShared(false);
       }
       if (widget.budget != null) {
-        final Set<String> mainCategoryPks = (await database.getAllCategories(
-                includeSubCategories: false))
-            .map((TransactionCategory category) => category.categoryPk)
-            .toSet();
+        final Set<String> mainCategoryPks =
+            (await database.getAllCategories(includeSubCategories: false))
+                .map((TransactionCategory category) => category.categoryPk)
+                .toSet();
         final List<String> categoryFks = widget.budget!.categoryFks ?? const [];
         isEnvelopeBudget = categoryFks.length == 1 &&
             mainCategoryPks.contains(categoryFks.first);
