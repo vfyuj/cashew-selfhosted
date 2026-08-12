@@ -80,6 +80,27 @@ class SelectCategoryWithSubCategories extends StatelessWidget {
               category
         ];
 
+        // Ordered by when each category was picked, so a second one opens its
+        // line below the first rather than jumping above it because it happens
+        // to sort earlier. categoryFks preserves the order things were added
+        // in, so the position of a category's first entry is its pick order --
+        // and _SubCategoryLine edits in place, so changing one line's
+        // subcategories doesn't move it.
+        int pickedAt(TransactionCategory main) {
+          final Set<String> pks = {
+            main.categoryPk,
+            for (TransactionCategory sub
+                in subCategoriesByMainPk[main.categoryPk] ?? const [])
+              sub.categoryPk,
+          };
+          final int index =
+              selected.indexWhere((String pk) => pks.contains(pk));
+          return index == -1 ? selected.length : index;
+        }
+
+        expanded.sort((TransactionCategory a, TransactionCategory b) =>
+            pickedAt(a).compareTo(pickedAt(b)));
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -112,6 +133,38 @@ class SelectCategoryWithSubCategories extends StatelessWidget {
       },
     );
   }
+}
+
+/// [selection] with everything in [ownedPks] replaced by [nextPks].
+///
+/// Substitutes in place, where the first owned entry already sits, rather than
+/// stripping and appending. The order of `categoryFks` is what orders the
+/// subcategory lines on screen, so re-appending would drop a line to the
+/// bottom every time somebody ticked one of its subcategories. A category with
+/// nothing selected yet is new, and goes to the end — which is what puts a
+/// second expanded category below the first.
+///
+/// Top-level and pure so the ordering rule can be tested; the widget below is
+/// its only caller.
+List<String> replaceCategorySelection({
+  required List<String> selection,
+  required Set<String> ownedPks,
+  required List<String> nextPks,
+}) {
+  final List<String> next = [];
+  bool placed = false;
+  for (String pk in selection) {
+    if (!ownedPks.contains(pk)) {
+      next.add(pk);
+      continue;
+    }
+    if (!placed) {
+      next.addAll(nextPks);
+      placed = true;
+    }
+  }
+  if (!placed) next.addAll(nextPks);
+  return next;
 }
 
 /// One expanded main category: `[x] [All <category>] [sub] [sub] ... [+]`.
@@ -155,26 +208,26 @@ class _SubCategoryLine extends StatelessWidget {
     setSelectedCategoryPks(next.isEmpty ? null : next);
   }
 
-  /// Everything selected that has nothing to do with this main category.
-  List<String> _selectionElsewhere() {
-    final Set<String> mine = {
-      mainCategory.categoryPk,
-      for (TransactionCategory sub in subCategories) sub.categoryPk,
-    };
-    return [
-      for (String pk in selectedCategoryPks)
-        if (!mine.contains(pk)) pk
-    ];
-  }
+  /// Every pk this line owns: the main category and all of its subcategories.
+  Set<String> get _myPks => {
+        mainCategory.categoryPk,
+        for (TransactionCategory sub in subCategories) sub.categoryPk,
+      };
+
+  List<String> _withMySelection(List<String> myNextPks) =>
+      replaceCategorySelection(
+        selection: selectedCategoryPks,
+        ownedPks: _myPks,
+        nextPks: myNextPks,
+      );
 
   void _onSelected(String pk) {
-    final List<String> next = _selectionElsewhere();
     if (pk == _allSentinel) {
       // "All" and specific subcategories are alternatives, not additions:
       // keeping the main pk alongside a subcategory pk would match every
       // transaction in the category anyway and make the narrower pick a lie.
-      if (!_allSelected) next.add(mainCategory.categoryPk);
-      _apply(next);
+      _apply(_withMySelection(
+          _allSelected ? const [] : [mainCategory.categoryPk]));
       return;
     }
 
@@ -187,7 +240,7 @@ class _SubCategoryLine extends StatelessWidget {
     } else {
       currentSubs.add(pk);
     }
-    _apply(next..addAll(currentSubs));
+    _apply(_withMySelection(currentSubs));
   }
 
   @override
@@ -239,7 +292,7 @@ class _SubCategoryLine extends StatelessWidget {
                 : Icons.close_rounded,
             iconSize: 18,
             scale: 1.5,
-            onTap: () => _apply(_selectionElsewhere()),
+            onTap: () => _apply(_withMySelection(const [])),
           ),
         ),
         extraWidgetAfter: SelectChipsAddButtonExtraWidget(
