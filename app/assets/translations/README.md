@@ -55,7 +55,10 @@ shadowing the shipped values.
 **By hand.** Flat `key: string` JSON, one file per language, two-space indent, no
 trailing newline, non-ASCII written literally rather than escaped. Every key must
 exist in `en.json` — `app/test/translation_keys_test.dart` fails the build
-otherwise. Other languages may omit keys; they fall back to English.
+otherwise. The other 7 locales technically fall back to English when a key is
+missing, but that's a safety net for a missed key, not a target: every interface
+change should add or edit the key in all 8 files, not just `en.json` (see
+`CLAUDE.md` § Translations).
 
 ## Why the format is what it is
 

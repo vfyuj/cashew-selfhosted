@@ -23,6 +23,10 @@ git config core.hooksPath .githooks
 - The running version shows in the sidebar (on the About row) and in `GET /health`. That's how the owner confirms a redeploy landed, so don't break it casually.
 - The changelog in `app/lib/widgets/showChangelog.dart` is the fork's own; upstream's was removed and still lives in `upstream/`. **Only add a section when a change is worth interrupting someone for** — most betas get none, and a version with no section shows no popup. Use raw English strings, never `.tr()` keys (see BL-003) — the in-app translation editor (below) follows the same rule for its own chrome, for the same reason.
 
+## Translations
+
+Every change that adds, edits, or removes user-facing text must translate it into all 8 supported locales as part of the same change — `en, ru, de, es, fr, pt, uk, zh`, in `app/assets/translations/generated/<locale>.json` (flat `key: string`, two-space indent, no trailing newline; see `app/assets/translations/README.md`). `app/test/translation_keys_test.dart` only enforces that a `.tr()` key exists in `en.json`; the other 7 locales falling back to English is a safety net for a missed key, not a substitute for translating one. (The fork's own ~109 self-hosting/onboarding keys were first added English + Russian only — `specs/backlog/BL-007-fork-owned-translations.md` §7 — that gap is pre-existing, not the standard to repeat going forward.)
+
 ## Testing & verification workflow
 
 The owner has time to test and wants to do it themselves — do not spend agent time/tokens simulating multi-device scenarios, airplane mode, or long manual QA passes. Instead:

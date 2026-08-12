@@ -1185,5 +1185,21 @@
   "create-account": "Créer un compte",
   "currency-label": "Étiquette de devise",
   "currency-label-description": "Afficher la devise à côté des montants des autres comptes",
-  "remain": "restants"
+  "remain": "restants",
+  "load-backup-warning-household": "Cela remplacera toutes vos données actuelles — et comme ce budget est partagé, celles de toutes les personnes qui le partagent, sur tous leurs appareils.",
+  "hidden-from-your-home-page": "Masqué de votre accueil",
+  "hidden-from-your-home-page-description": "Les comptes que vous ne voulez pas voir sur votre propre accueil. Cela ne change que votre affichage, sur tous vos appareils — les autres gardent le leur tel quel, et le compte reste utilisable partout ailleurs.",
+  "over-allocated": "Plus budgétisé que prévu",
+  "over-allocated-description": "Les budgets dans {category} totalisent {allocated}, alors que {category} est prévu à {budgeted}.",
+  "over-allocated-description-multiple": "{count} catégories principales ont plus de budgétisé à l'intérieur que ce qui est prévu pour elles.",
+  "over-allocated-includes-hidden": "Cela inclut des budgets qui ne vous sont pas montrés.",
+  "raise-budget-to-fit": "Augmenter",
+  "raise-budget-to-fit-description": "Augmenter le prévisionnel de cette catégorie de {budgeted} à {allocated} pour que tout ce qui y est budgétisé tienne ? Les mois déjà terminés conservent le montant qui leur était fixé à l'époque.",
+  "keep": "Conserver",
+  "share-budget-with-household": "Partager avec le foyer",
+  "share-budget-with-household-description": "Désactivé, ce budget n'appartient qu'à vous et personne d'autre ne le voit — il compte toutefois toujours dans le total de sa catégorie principale. Activé, toutes les personnes qui partagent ce budget le voient.",
+  "personal-budget": "Budget personnel",
+  "share-household-data": "Partager le budget du foyer",
+  "share-household-data-description": "Ce compte voit et modifie les mêmes transactions, budgets et comptes que vous. Laissez désactivé pour lui donner un budget distinct. Cela ne peut être défini que maintenant, pendant la création du compte.",
+  "shares-household-data": "Partage ce budget"
 }

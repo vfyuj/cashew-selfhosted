@@ -1185,5 +1185,21 @@
   "create-account": "Crear cuenta",
   "currency-label": "Etiqueta de divisa",
   "currency-label-description": "Mostrar la divisa junto a los importes de otras cuentas",
-  "remain": "restantes"
+  "remain": "restantes",
+  "load-backup-warning-household": "Esto reemplazará todos sus datos actuales; y como este presupuesto es compartido, también los de todos los que lo comparten, en todos sus dispositivos.",
+  "hidden-from-your-home-page": "Oculto de su inicio",
+  "hidden-from-your-home-page-description": "Cuentas que no quiere ver en su propio inicio. Esto solo cambia lo que usted ve, en todos sus dispositivos; los demás mantienen el suyo como está, y la cuenta sigue siendo utilizable en todo lo demás.",
+  "over-allocated": "Más presupuestado de lo previsto",
+  "over-allocated-description": "Los presupuestos dentro de {category} suman {allocated}, pero {category} tiene previsto {budgeted}.",
+  "over-allocated-description-multiple": "{count} categorías principales tienen más presupuestado dentro de lo que tienen previsto.",
+  "over-allocated-includes-hidden": "Esto incluye presupuestos que no se le muestran.",
+  "raise-budget-to-fit": "Aumentarlo",
+  "raise-budget-to-fit-description": "¿Aumentar lo previsto para esta categoría de {budgeted} a {allocated} para que quepa todo lo presupuestado dentro? Los meses ya terminados conservan el importe que tenían entonces.",
+  "keep": "Dejarlo",
+  "share-budget-with-household": "Compartir con el hogar",
+  "share-budget-with-household-description": "Desactivado, este presupuesto es solo suyo y nadie más lo ve, aunque sigue contando para el total de su categoría principal. Activado, lo ven todos los que comparten este presupuesto.",
+  "personal-budget": "Presupuesto personal",
+  "share-household-data": "Compartir el presupuesto del hogar",
+  "share-household-data-description": "Esta cuenta ve y edita las mismas transacciones, presupuestos y cuentas que usted. Déjelo desactivado para darle un presupuesto propio y separado. Solo puede establecerse ahora, mientras se crea la cuenta.",
+  "shares-household-data": "Comparte este presupuesto"
 }
