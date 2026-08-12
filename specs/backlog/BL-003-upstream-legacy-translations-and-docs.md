@@ -6,11 +6,6 @@ for implementation** until the owner picks an option per row.
 
 **Origin:** owner-submitted reminder, 2026-08-09.
 
-**Local-first / sync check:** ✅ N/A. Nothing here is load-bearing for offline app functionality —
-it's static translation content and outbound links to upstream's own hosted pages
-(FAQ/policy/GitHub/web-app). Safe to change or remove any of it without touching
-`specs/01-local-first-invariant.md` or the sync path.
-
 ---
 
 ## 1. What this is

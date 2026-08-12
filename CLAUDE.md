@@ -5,7 +5,7 @@ A permanently-diverging fork of [jameskokoska/Cashew](https://github.com/jamesko
 ## Before changing anything
 
 1. Read `specs/00-overview.md` (principles, tech stack, non-goals).
-2. Read `specs/01-local-first-invariant.md` — **hard constraint, not a suggestion**: the app must be fully usable offline, forever, and auth must never gate local usage. Any change that violates this is wrong regardless of what else it accomplishes.
+2. Read `specs/01-local-first-invariant.md`: local data (transactions, budgets, categories, ...) is always readable and writable regardless of network or auth state — sync/auth sit on top, never gate it. This matters concretely for local testing without a server and for devices that go offline and resync later; it isn't a mandate to hyper-engineer "works offline forever" as a feature in itself.
 3. Check which stage doc applies to the current work (`specs/02-*`, `specs/03-*`, ...) and its acceptance criteria before considering work done.
 4. Prefer small, surgical diffs over sweeping rewrites, especially anywhere near sync. A previous Stage 2 attempt (event-push/WebSocket instant sync) landed ~4,300 lines of change, broke unrelated UI (the "Add Account" button), and reintroduced a data-loss race on backup restore — it was reverted (never merged; see `specs/04-stage-2-instant-sync.md` for the postmortem and the current plan). Large diffs in this codebase are a warning sign, not a sign of thoroughness.
 
@@ -42,17 +42,19 @@ The owner has time to test and wants to do it themselves — do not spend agent 
 - `.github/workflows/` — `ci.yml` (`flutter`/`dart analyze` + tests for both `app/` and `server/`, plus a Dockerfile build check), `build-apk.yml` (a debug APK on every push/PR as a downloadable artifact — debug because PR builds deliberately have no access to the signing secrets, *not* because release builds are broken any more), and `release.yml` (on a `v*` tag: signed release APK + multi-arch GHCR image + GitHub Release). Release process and the AGP 8 upgrade that unblocked it: `specs/09-releases.md`.
 - `app/assets/translations/` — this fork's own translations (8 languages), no longer generated from upstream's spreadsheet. Edit a string in-app (Settings → Language → Edit translations, applies instantly) or by hand in `generated/<locale>.json`; either way, `app/test/translation_keys_test.dart` fails the build if a `.tr()` key has no `en.json` entry. To make an in-app edit permanent, export it and run `dart run tool/merge_translation_overrides.dart <file>` from `app/`. Provenance and what changed: `app/assets/translations/README.md`; design: `specs/backlog/BL-007-fork-owned-translations.md`.
 
-## Hard invariant: upstream database compatibility
+## Upstream database compatibility
 
-The **app's** Drift table/column structure must stay identical to upstream Cashew's (currently `schemaVersionGlobal = 46`, 10 tables). This is what makes an original-Cashew backup importable, and the owner cares about it. Verify with:
+The goal is that an original-Cashew backup stays importable into this fork for as long as reasonably possible — not that the schema is frozen forever. Today that goal costs nothing: the app's Drift table/column structure is identical to upstream's (currently `schemaVersionGlobal = 46`, 10 tables), so there's no reason to drift from it by accident. Verify with:
 
 ```bash
 diff <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" app/lib/database/tables.dart) <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
 ```
 
-Empty output = still compatible. Note `upstream/` is not checked in, so it only exists in the main checkout — from a `.claude/worktrees/` worktree, point the second path at the main checkout's copy. Note the pattern is deliberately narrowed to `extends Table` and column declarations: a looser `^class ` also catches the type converters, which legitimately differ from upstream (Stage 2 gave them `with JsonTypeConverter2<...>` for the sync feed's JSON payloads — that changes serialization, not the stored SQLite representation) and produces a false alarm.
+Empty output = still schema-identical. Note `upstream/` is not checked in, so it only exists in the main checkout — from a `.claude/worktrees/` worktree, point the second path at the main checkout's copy. The pattern is deliberately narrowed to `extends Table` and column declarations: a looser `^class ` also catches the type converters, which legitimately differ from upstream (Stage 2 gave them `with JsonTypeConverter2<...>` for the sync feed's JSON payloads — that changes serialization, not the stored SQLite representation) and produces a false alarm.
 
-The **server's** database (`users`, `sessions`, `sync_records`, `sync_state`) is entirely unrelated and free to change — it has its own migration runner and has never held a transaction. Don't confuse the two. Breaking the app-side invariant is a Stage 4 decision, scoped in `specs/06-shared-household-data.md`; don't do it incidentally.
+When a feature genuinely needs the schema to diverge (Stage 4's private-wallet flag is the first candidate — see `specs/06-shared-household-data.md`), that's an acceptable, deliberate trade: compatibility can then be carried by a conversion/import step instead of by identical tables. What to avoid is *incidental* drift — adding or changing a column without noticing you've spent that option.
+
+The **server's** database (`users`, `sessions`, `sync_records`, `sync_state`) is entirely unrelated and free to change however's convenient — it has its own migration runner and has never held a transaction. Don't confuse the two.
 
 ## Status
 

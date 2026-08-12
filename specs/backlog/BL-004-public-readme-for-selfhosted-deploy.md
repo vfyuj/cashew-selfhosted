@@ -38,8 +38,6 @@ Original request below, kept for context.
 
 **Origin:** owner-submitted, 2026-08-09.
 
-**Local-first / sync check:** ✅ N/A. Documentation only — no app/server code.
-
 ---
 
 ## 1. What's being asked

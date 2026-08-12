@@ -51,16 +51,14 @@ Attaching privacy to a **transaction** breaks the other person's arithmetic: a h
 
 **Recommendation: the wallet-level model.** It also composes with item 2, which is already about hiding wallets that aren't relevant to you.
 
-### Upstream schema compatibility — a decision this stage must make consciously
+### Upstream compatibility — a decision this stage must make consciously
 
-Everything up to this point keeps the app's Drift schema **byte-identical to original Cashew's** (`schemaVersionGlobal = 46`, same 10 tables, empty column diff). That is what makes an original-Cashew backup importable, and it is currently verified by a diff in the `05-accounts-and-admin.md` verification section.
+Everything up to this point keeps the app's Drift schema identical to original Cashew's (`schemaVersionGlobal = 46`, same 10 tables), which is what currently makes an original-Cashew backup importable — for free, verified by the diff in `CLAUDE.md`. The actual goal was never the identical schema; it's staying import-compatible with upstream for as long as that's practical. Identical tables are just the cheapest way to get that while it costs nothing.
 
-This stage is the first thing that genuinely needs to break it — a private/owner flag has to live on a row somewhere. Record both directions before doing it:
+This stage is the first thing that genuinely wants to spend that budget — a private/owner flag has to live on a row somewhere. Two ways to keep the real goal without keeping the schema identical:
 
-- **Importing an original Cashew backup keeps working.** Drift migrations run forward, so an older database upgrades cleanly.
-- **A fork backup stops importing into original Cashew**, which has no migration for columns it doesn't know about and would see a higher schema version.
-
-**Price the cheaper alternative first:** keeping privacy flags in the *unsynced* settings layer, keyed by row id. That preserves schema compatibility entirely, at the cost of the flags not surviving a device migration or a restore. For a "don't spoil the gift" threat model that may well be the better trade.
+1. **Cheapest: keep privacy flags out of the synced schema entirely** — in the *unsynced* settings layer, keyed by row id. Full compatibility in both directions, at the cost of the flags not surviving a device migration or a restore. For a "don't spoil the gift" threat model, likely the better trade regardless of the point below.
+2. **If the flag has to live in the synced table:** importing an original-Cashew backup still works (Drift migrations run forward). What breaks is the reverse — a fork backup importing into stock Cashew, which has no migration for a column it doesn't know. That's a reasonable trade to accept, or it can be recovered with a small conversion step (an export path that strips or translates the fork-only column back out) rather than treated as a hard blocker. Only worth deciding if option 1 turns out not to fit.
 
 ## Sequencing
 

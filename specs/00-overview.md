@@ -13,7 +13,7 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 
 ## Non-negotiable principles
 
-1. **Local-first, always.** Full detail and acceptance tests in `01-local-first-invariant.md`. The single most important constraint in this project.
+1. **Local data first.** Sync and auth are an optional layer over the local Drift database, never a gate on it — see `01-local-first-invariant.md`. Matters most for local testing and for devices reconnecting after time offline; it's not a mandate to engineer "offline" as a feature in itself.
 2. **No Google/Firebase anywhere** in the auth, sync, or backup path.
 3. **Single-owner-per-account** until Stage 4. No shared/merged household data yet — each person has their own private multi-device sync, same as today's one-Google-account-per-person model.
 4. **Reuse, don't rewrite, the local conflict-resolution logic.** Upstream's `SyncLog` model, `processSyncLogs` (last-write-wins by `dateTimeModified`), and `DeleteLog` tombstone table are sound and transport-agnostic. Only the transport (how bytes move between devices) and auth (how a device is authorized) are being replaced.
