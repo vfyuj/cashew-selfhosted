@@ -135,6 +135,19 @@ class _SubCategoryLine extends StatelessWidget {
   bool get _allSelected =>
       selectedCategoryPks.contains(mainCategory.categoryPk);
 
+  /// The category a chip stands for. The "All" chip stands for the parent.
+  ///
+  /// Falls back to the parent rather than throwing: the chips are built from
+  /// these same lists so a miss should be impossible, but a StateError here
+  /// would take down the whole budget page over a label.
+  TransactionCategory _categoryFor(String pk) {
+    if (pk == _allSentinel) return mainCategory;
+    return subCategories.firstWhere(
+      (TransactionCategory sub) => sub.categoryPk == pk,
+      orElse: () => mainCategory,
+    );
+  }
+
   void _apply(List<String> next) {
     // Empty means nothing is selected anywhere, which the budget stores as
     // null ("all categories") rather than as an empty list -- the same
@@ -194,16 +207,27 @@ class _SubCategoryLine extends StatelessWidget {
         onSelected: _onSelected,
         getLabel: (String pk) => pk == _allSentinel
             ? "all".tr() + " " + mainCategory.name
-            : subCategories
-                .firstWhere((TransactionCategory sub) => sub.categoryPk == pk)
-                .name,
-        getAvatar: (String pk) => CategoryIcon(
-          categoryPk: pk == _allSentinel ? mainCategory.categoryPk : pk,
-          size: 20,
-          sizePadding: 12,
-          margin: EdgeInsetsDirectional.zero,
-          canEditByLongPress: false,
-        ),
+            : _categoryFor(pk).name,
+        // Sized from the slot SelectChips hands it rather than to a fixed
+        // number, which is what every other chip row in the app does and what
+        // keeps these the same size as the ones on the transaction page.
+        // Passing `category` avoids looking up a row we already hold.
+        getAvatar: (String pk) {
+          final TransactionCategory category = _categoryFor(pk);
+          return LayoutBuilder(builder: (context, constraints) {
+            return CategoryIcon(
+              categoryPk: "-1",
+              category: category,
+              emojiSize: constraints.maxWidth * 0.73,
+              emojiScale: 1.2,
+              size: constraints.maxWidth,
+              sizePadding: 0,
+              noBackground: true,
+              canEditByLongPress: false,
+              margin: EdgeInsetsDirectional.zero,
+            );
+          });
+        },
         // Closes the line by dropping everything selected under this category,
         // which puts its icon back in the row above.
         extraWidgetBefore: Padding(
