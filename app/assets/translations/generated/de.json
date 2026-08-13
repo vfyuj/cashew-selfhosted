@@ -1197,7 +1197,6 @@
   "raise-budget-to-fit-description": "Den Plan dieser Kategorie von {budgeted} auf {allocated} erhöhen, damit alles darin Eingeplante hineinpasst? Bereits abgeschlossene Monate behalten den Betrag, der damals festgelegt war.",
   "keep": "Beibehalten",
   "share-budget-with-household": "Mit dem Haushalt teilen",
-  "share-budget-with-household-description": "Aus gehört dieses Budget nur dir und niemand sonst sieht es — es zählt aber weiterhin zur Summe seiner Hauptkategorie. An sehen es alle, die dieses Budget teilen.",
   "personal-budget": "Persönliches Budget",
   "share-household-data": "Haushaltsbudget teilen",
   "share-household-data-description": "Dieses Konto sieht und bearbeitet dieselben Transaktionen, Budgets und Konten wie du. Lass es aus, um ihm ein eigenes, getrenntes Budget zu geben. Das lässt sich nur jetzt festlegen, während das Konto erstellt wird.",
