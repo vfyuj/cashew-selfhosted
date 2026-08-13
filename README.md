@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://github.com/vfyuj/cashew-selfhosted/releases/latest">Releases</a> ·
   <a href="DEPLOYMENT.md">Deployment runbook</a> ·
+  <a href="docs/">How it works</a> ·
   <a href="specs/">Design specs</a>
 </p>
 
@@ -29,7 +30,9 @@ developer, and I can't guarantee the quality or security of the code — please 
 before trusting it with anything you'd hate to lose. Keep backups.
 
 If you *are* a professional developer, I'd genuinely welcome an audit, a second opinion, or any
-help — especially on the server, the sync logic and the auth code.
+help — especially on the server, the sync logic and the auth code. The quickest way in is
+[docs/server/api.md](docs/server/api.md), which lists every endpoint with its auth level and the data
+it can reach; [docs/](docs/) covers the rest of the moving parts.
 
 <img alt="Cashew Selfhosted home page" src="https://github.com/user-attachments/assets/c5a4e7c2-41a9-4bdc-8bf8-e8b978117506">
 

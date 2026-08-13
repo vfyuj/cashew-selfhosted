@@ -1,87 +1,115 @@
 # Cashew Selfhosted (fork)
 
-A permanently-diverging fork of [jameskokoska/Cashew](https://github.com/jameskokoska/Cashew) (GPL-3.0) that replaces Google Sign-In / Firebase Auth / Google Drive (auth, sync, backup) with self-hosted equivalents. Background and rationale: `specs/00-overview.md`.
+A permanently-diverging fork of [jameskokoska/Cashew](https://github.com/jameskokoska/Cashew) (GPL-3.0) that replaces Google Sign-In / Firebase Auth / Google Drive (auth, sync, backup) with self-hosted equivalents.
 
 ## Before changing anything
 
-1. Read `specs/00-overview.md` (principles, tech stack, non-goals).
-2. Read `specs/01-local-first-invariant.md`: local data (transactions, budgets, categories, ...) is always readable and writable regardless of network or auth state — sync/auth sit on top, never gate it. This matters concretely for local testing without a server and for devices that go offline and resync later; it isn't a mandate to hyper-engineer "works offline forever" as a feature in itself.
-3. Check which stage doc applies to the current work (`specs/02-*`, `specs/03-*`, ...) and its acceptance criteria before considering work done.
-4. Prefer small, surgical diffs over sweeping rewrites, especially anywhere near sync. A previous Stage 2 attempt (event-push/WebSocket instant sync) landed ~4,300 lines of change, broke unrelated UI (the "Add Account" button), and reintroduced a data-loss race on backup restore — it was reverted (never merged; see `specs/04-stage-2-instant-sync.md` for the postmortem and the current plan). Large diffs in this codebase are a warning sign, not a sign of thoroughness.
+1. Read `specs/00-overview.md` — principles, tech stack, settled decisions, explicit non-goals.
+2. **How something works today: `docs/README.md`** (per-module, read from code). **Why it was decided that way: `specs/README.md`.** Open the one page you need; don't read either set.
+3. Open the stage doc when your change touches that stage — not up front. Its acceptance criteria decide when the work is done, and its `- [x]` checkboxes are the status of record; check items off instead of re-describing status in prose.
+4. **Prefer small, surgical diffs, especially near sync.** A previous Stage 2 attempt landed ~4,300 lines, broke unrelated UI and reintroduced a data-loss race; it was reverted. Postmortem: `specs/04-stage-2-instant-sync.md`. Large diffs here are a warning sign, not thoroughness.
+
+## Invariants
+
+Break one of these and it usually fails silently. One line each; the reasoning is on the linked page.
+
+- **Local data is always readable and writable**, regardless of network or auth state. Sync and auth sit on top and never gate it, and a sync failure never becomes a blocked screen or an error the user must dismiss. `specs/01-local-first-invariant.md` (cited from 8 places in the app code).
+- **`is_admin` is a role; dataset membership is what data you see.** Independent axes — never use one as a proxy for the other. `docs/server/auth.md`
+- **Backups are per-user; sync and attachments follow the dataset.** Deliberate, with a test pinning it. `docs/server/storage.md`
+- **A personal budget is hidden at draw time only, never in a query that feeds a total** — the over-allocation check must count budgets the viewer cannot see. `docs/app/budgets.md`
+- **`AppSettings` row 0 is device-local and excluded from the change feed.** That exclusion is what makes syncing the table safe at all. `docs/app/settings.md`
+- **`Budgets.sharedAllMembersEver` and `sharedMembers` are fork storage in dead upstream columns** — their names lie. Read and write them only through `struct/budgetPeriodAmounts.dart` and `struct/budgetVisibility.dart`, and parse strictly. `docs/app/database.md`
+
+## Checks
+
+Fast and cheap; run them yourself before handing anything off.
+
+```bash
+cd app && flutter analyze --no-fatal-infos --no-fatal-warnings && flutter test
+cd server && dart analyze && dart test
+```
+
+`--no-fatal-infos/--no-fatal-warnings` because the fork carries ~260 pre-existing warning/info issues, zero errors — real errors still fail.
+
+```bash
+# Upstream schema still identical? Empty output = yes.
+diff <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" app/lib/database/tables.dart) <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
+
+# Still de-Googled? Must print nothing.
+grep -iE "google|firebase|firestore|gms|play" app/pubspec.lock
+
+# Every server route documented? (also runs in CI as api_docs_test.dart)
+grep -rnoE "\.(get|post|put|delete|patch)\(\s*'[^']*'" server/lib
+```
+
+`upstream/` is not checked in — from a `.claude/worktrees/` worktree, point the diff's second path at the main checkout.
 
 ## Versioning
 
-Full contract in `specs/07-versioning.md`. The short version:
+Full contract in `specs/07-versioning.md`.
 
 - `app/pubspec.yaml` holds the only version number: `1.0.0-beta.<n>+<n>`. The fork restarted at `1.0.0-beta.1` and does not continue upstream's 5.x line.
-- **Every commit bumps it**, via `.githooks/pre-commit`. Enable once per clone — do this before your first commit in a fresh clone, or builds stop being distinguishable:
+- **Every commit bumps it**, via `.githooks/pre-commit`. Enable once per clone, before your first commit:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-- The running version shows in the sidebar (on the About row) and in `GET /health`. That's how the owner confirms a redeploy landed, so don't break it casually.
-- The changelog in `app/lib/widgets/showChangelog.dart` is the fork's own; upstream's was removed and still lives in `upstream/`. **Only add a section when a change is worth interrupting someone for** — most betas get none, and a version with no section shows no popup. **Title and bullet text must be `.tr()` keys, translated into all 8 locales** like any other user-facing text (see "Translations" below) — this reverses the original "raw English, never `.tr()`" rule, which existed only because the translations pipeline was upstream-owned and couldn't safely take new fork keys (BL-003); that blocker is gone since BL-007. The in-app translation editor's own chrome is the one place that's still raw English on purpose — it's the tool you'd use to fix a broken translation, so it can't depend on the system it exists to repair. Older changelog sections predate this rule and are still raw English; `.tr()` on an unmatched key falls back to the string itself, so they render unchanged — no need to backfill them.
-- **When a version's section covers more than one feature, give each feature its own short bold title** (a `## Title` line above its paragraph — see the format comment above `getChangelogString()`), so the popup reads as scannable sections instead of a wall of paragraphs. Skip the title on a version that's a single bug fix, where the version heading already says everything a title would add.
+- The version shows in the sidebar (About row) and in `GET /health`. That's how the owner confirms a redeploy landed — don't break it casually.
+- The changelog (`app/lib/widgets/showChangelog.dart`) is the fork's own. **Only add a section when a change is worth interrupting someone for** — most betas get none, and a version with no section shows no popup.
+- **Changelog title and bullet text must be `.tr()` keys, translated into all 8 locales**, like any other user-facing text. Older sections predate this rule and are raw English; `.tr()` falls back to the string itself, so they render unchanged — no backfill needed. The in-app translation editor's own chrome stays raw English on purpose: it's the tool for fixing a broken translation, so it can't depend on the system it repairs.
+- **When a version's section covers more than one feature, give each its own short bold title** (a `## Title` line above its paragraph — see the format comment above `getChangelogString()`), so the popup is scannable. Skip it on a single-bug-fix version.
 
 ## Translations
 
-Every change that adds, edits, or removes user-facing text must translate it into all 8 supported locales as part of the same change — `en, ru, de, es, fr, pt, uk, zh`, in `app/assets/translations/generated/<locale>.json` (flat `key: string`, two-space indent, no trailing newline; see `app/assets/translations/README.md`). `app/test/translation_keys_test.dart` only enforces that a `.tr()` key exists in `en.json`; the other 7 locales falling back to English is a safety net for a missed key, not a substitute for translating one. (The fork's own ~109 self-hosting/onboarding keys were first added English + Russian only — `specs/backlog/BL-007-fork-owned-translations.md` §7 — that gap is pre-existing, not the standard to repeat going forward.)
+Every change that adds, edits or removes user-facing text must translate it into all 8 locales in the same change — `en, ru, de, es, fr, pt, uk, zh`, in `app/assets/translations/generated/<locale>.json` (flat `key: string`, two-space indent, no trailing newline).
+
+`app/test/translation_keys_test.dart` only enforces that a `.tr()` key exists in `en.json`; the other 7 falling back to English is a safety net for a missed key, not a substitute for translating one. Provenance and the in-app editor: `app/assets/translations/README.md`.
 
 ## Testing & verification workflow
 
-The owner has time to test and wants to do it themselves — do not spend agent time/tokens simulating multi-device scenarios, airplane mode, or long manual QA passes. Instead:
+The owner has time to test and wants to do it themselves — **do not spend agent time simulating multi-device scenarios, airplane mode, or long manual QA passes.**
 
-- Build and start the app locally (`docker compose up --build`, or `flutter run -d chrome` / `-d web-server` for faster iteration) yourself.
-- Report back the URL (e.g. `http://localhost:8080`) and any credentials needed (account email/password, e.g. from `bin/create_user.dart`) so the owner can log in and test.
-- Let the owner drive acceptance testing (two-device sync, airplane-mode/offline behavior, restore propagation, etc.) — these are exactly the scenarios that are slow and expensive for an agent to verify but fast for a human to click through.
-- Still run fast, cheap checks yourself before handing off: `flutter analyze`, `dart analyze`, and getting a build to succeed. Don't hand off code that doesn't even compile.
-- If the owner reports a bug, reproduce it by reading/tracing code first; only drive the UI yourself for verification if the owner asks you to or it's the fastest way to confirm a fix.
+- Build and start the app locally yourself (`docker compose up --build`, or `flutter run -d chrome` for faster iteration).
+- Report the URL and any credentials needed (e.g. from `bin/create_user.dart`) so the owner can log in and test.
+- Let the owner drive acceptance testing — two-device sync, offline behaviour, restore propagation. Slow for an agent, fast for a human.
+- Run the checks above first. Don't hand off code that doesn't compile.
+- If the owner reports a bug, reproduce it by reading and tracing code first; drive the UI only if asked or if it's genuinely fastest.
 
 ## Repo layout
 
-- `upstream/` — pristine shallow clone of upstream Cashew, kept **read-only** as a reference for diffing/porting. Do not edit in place; re-clone/re-pull if it goes stale.
-- `specs/` — source of truth for what to build. Written for AI agents: precise contracts, explicit non-goals, testable acceptance criteria. Update specs when a decision changes; don't let code and specs drift.
-- `app/` — the Flutter fork (created in Stage 0, package `cashew_selfhosted` / applicationId `com.selfhosted.cashew`; fork name is finalized as "Cashew Selfhosted", so these are no longer placeholders).
-- `server/` — the Dart backend (created in Stage 0; auth/sync/backup endpoints added in Stage 1).
-- `.github/workflows/` — `ci.yml` (`flutter`/`dart analyze` + tests for both `app/` and `server/`, plus a Dockerfile build check), `build-apk.yml` (a debug APK on every push/PR as a downloadable artifact — debug because PR builds deliberately have no access to the signing secrets, *not* because release builds are broken any more), and `release.yml` (on a `v*` tag: signed release APK + multi-arch GHCR image + GitHub Release). Release process and the AGP 8 upgrade that unblocked it: `specs/09-releases.md`.
-- `app/assets/translations/` — this fork's own translations (8 languages), no longer generated from upstream's spreadsheet. Edit a string in-app (Settings → Language → Edit translations, applies instantly) or by hand in `generated/<locale>.json`; either way, `app/test/translation_keys_test.dart` fails the build if a `.tr()` key has no `en.json` entry. To make an in-app edit permanent, export it and run `dart run tool/merge_translation_overrides.dart <file>` from `app/`. Provenance and what changed: `app/assets/translations/README.md`; design: `specs/backlog/BL-007-fork-owned-translations.md`.
+- `app/` — the Flutter fork (package `cashew_selfhosted`, applicationId `com.selfhosted.cashew`).
+- `server/` — the Dart backend (auth, sync, backup, attachments, admin).
+- `docs/` — **how it works now**, per module, read from code. Start at `docs/README.md`.
+- `specs/` — **why it was decided**, plus what's planned and the acceptance criteria. Start at `specs/README.md`. Update a spec when a decision changes; don't let code and specs drift.
+- `upstream/` — pristine shallow clone of upstream Cashew, **read-only** reference for diffing and porting. Not checked in.
+- `app/assets/translations/` — the fork's own 8 languages, no longer generated from upstream's spreadsheet.
+- `.github/workflows/` — `ci.yml` (analyze + tests for both packages, plus a Dockerfile build), `build-apk.yml` (debug APK per push/PR; debug because PR builds deliberately have no signing secrets), `release.yml` (on a `v*` tag: signed APK + multi-arch GHCR image + GitHub Release). See `specs/09-releases.md`.
 
 ## Upstream database compatibility
 
-The goal is that an original-Cashew backup stays importable into this fork for as long as reasonably possible — not that the schema is frozen forever. Today that goal costs nothing: the app's Drift table/column structure is identical to upstream's (currently `schemaVersionGlobal = 46`, 10 tables), so there's no reason to drift from it by accident. Verify with:
+An original-Cashew backup should stay importable for as long as reasonably possible. Today that costs nothing — the app's Drift tables are identical to upstream's — so don't drift by accident. Deliberate divergence is an acceptable trade when a feature needs it (compatibility can then be carried by a conversion step); *incidental* drift is what to avoid.
 
-```bash
-diff <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" app/lib/database/tables.dart) <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
-```
+Mechanics, the dead-column convention, and why the diff pattern is narrowed: `docs/app/database.md`.
 
-Empty output = still schema-identical. Note `upstream/` is not checked in, so it only exists in the main checkout — from a `.claude/worktrees/` worktree, point the second path at the main checkout's copy. The pattern is deliberately narrowed to `extends Table` and column declarations: a looser `^class ` also catches the type converters, which legitimately differ from upstream (Stage 2 gave them `with JsonTypeConverter2<...>` for the sync feed's JSON payloads — that changes serialization, not the stored SQLite representation) and produces a false alarm.
-
-When a feature genuinely needs the schema to diverge (Stage 4's private-wallet flag is the first candidate — see `specs/06-shared-household-data.md`), that's an acceptable, deliberate trade: compatibility can then be carried by a conversion/import step instead of by identical tables. What to avoid is *incidental* drift — adding or changing a column without noticing you've spent that option.
-
-The **server's** database (`users`, `sessions`, `sync_records`, `sync_state`) is entirely unrelated and free to change however's convenient — it has its own migration runner and has never held a transaction. Don't confuse the two.
+The **server's** database is entirely unrelated and free to change however's convenient — it has its own migration runner and has never held a transaction. `docs/server/database.md`. Don't confuse the two.
 
 ## Status
 
-Accounts work landed 2026-08-09 and merged to `main` via PR #8: first-run setup wizard where the first user becomes instance administrator, in-app account management (name/email/password), admin user provisioning, and password-manager autofill. Full detail and acceptance criteria in `specs/05-accounts-and-admin.md`.
+Stage docs carry the authoritative checkboxes; this is the map.
 
-**Stage 4 (shared household data) is implemented, 2026-08-12** — `specs/06-shared-household-data.md`, which is now a description of what shipped rather than a design. Data is scoped to a *dataset* rather than a user, so two accounts can share one budget; an account created without the sharing switch gets its own dataset and behaves exactly as before. Four things worth knowing before touching any of it:
+| Area | State | Where |
+|---|---|---|
+| Stage 0/1 foundations — app, server, Docker, repointed sign-in/sync/backup | built | `specs/02-*`, `specs/03-*` |
+| De-Googling — Firebase, Sign-In, Drive, Play all gone; attachments replaced server-side | complete | `specs/03-*`; the one gap with no replacement is `backlog/BL-005` |
+| Accounts, first-run setup wizard, admin provisioning | shipped | `specs/05-*` |
+| Stage 2 live sync — row feed, WebSocket wake-up, Reset Sync | implemented end to end; owner's acceptance pass outstanding | `specs/04-*` |
+| Stage 4 shared household data — datasets, personal budgets, per-user views | shipped | `specs/06-*` |
+| Releases — signed APK, multi-arch GHCR image, tag workflow | working | `specs/09-*` |
+| Per-period budget amounts | shipped | `backlog/BL-006` |
+| Category-locked envelope budgets, Planned vs Actual | shipped | `backlog/BL-001` |
+| Onboarding rework | shipped | `backlog/BL-002` |
+| Fork-owned translations + in-app editor | shipped | `backlog/BL-007` |
+| Real home-server deployment, and every acceptance pass | the owner's, not an agent task | `DEPLOYMENT.md` |
 
-- **`is_admin` and dataset membership are orthogonal on purpose.** The role says who provisions accounts; membership says whose data you see. Do not collapse them.
-- **Backups stay per-user while sync and attachments follow the dataset.** Deliberate — backup filenames drop clientID's millisecond suffix, so two same-model phones would overwrite each other. There is a test pinning this; don't "fix" it for consistency.
-- **A budget can be personal to one member** (`app/lib/struct/budgetVisibility.dart`, borrowing the dead `Budgets.sharedMembers` the way BL-006 borrowed `sharedAllMembersEver`). It still syncs — hiding is at the UI layer only, so the subcategory-vs-envelope allocation check can count budgets the viewer cannot see. Filter at the point of drawing, **never** in a query that feeds a total.
-- **Per-user view preferences sync via one `AppSettings` row per member** (`app/lib/struct/perUserViewSettings.dart`). Row 0 remains the device-local settings blob and is excluded from the feed; that exclusion is what makes syncing this table safe at all.
-
-The upstream schema invariant survived all of it — still byte-identical, verified by the diff below. The acceptance pass is the owner's; the checklist is in the spec.
-
-**De-Googled completely, 2026-08-10.** The fork no longer depends on Google at build time or run time. Firebase/Firestore, Google Sign-In, `googleapis`, Play Billing and Play Review are gone from `pubspec.yaml`, and `pubspec.lock` resolves no package matching `google|firebase|firestore|gms|play` — that grep is the cheapest regression check. Shared budgets (Firestore), Gmail receipt scanning, the feedback/rating popups and the Play Billing paywall were deleted; attachments were **replaced** with server-side storage (`/attachments`, a third `UserFileStore` namespace next to sync and backup). A Google request that wasn't in the dependency list at all — CanvasKit, fetched from gstatic by Flutter's default web renderer — was found by grepping the built `main.dart.js` for external hosts and fixed in the `Dockerfile`. The upstream schema invariant still passes: every `shared*` column stays, nothing writes them. Full detail in `specs/03-stage-1-kill-google.md`; the one deleted feature with no replacement is tracked in `specs/backlog/BL-005-imap-receipt-scanning.md`.
-
-Budget amounts became per-period on 2026-08-10: editing a budget's amount now applies from the current period onward, and finished periods keep the target they had at the time, instead of the history view recomputing every past period from the current value. Done without a schema change by storing the history in `Budgets.sharedAllMembersEver`, a dead column from the deleted Firestore sharing — **read and write it only through `app/lib/struct/budgetPeriodAmounts.dart`**, and note the column name no longer describes its contents. Design, the rejected alternatives, and both directions of upstream compatibility are in `specs/backlog/BL-006-per-period-budget-amounts.md`.
-
-**The last upstream dependency — translations — was dropped 2026-08-12.** The Google Sheet pipeline (`generate-translations.py` / `translations.csv`) is deleted; it could never actually be run because it would have wiped this fork's own strings. The fork now ships 8 languages it maintains itself (`en, ru, de, es, fr, pt, uk, zh`, down from 46 frozen upstream snapshots) and an in-app editor that applies an edited string immediately, no restart. Russian was rewritten from scratch against this fork's UI, including the account/server strings upstream's translators never had to translate. Full design and the alternatives considered: `specs/backlog/BL-007-fork-owned-translations.md`; closes `specs/backlog/BL-003-upstream-legacy-translations-and-docs.md` §2A.
-
-**Releasing became a real process 2026-08-11.** `flutter build apk --release` works for the first time — the SDK-35/aapt2 failure was an AGP 7.3.1 limitation, fixed by moving to AGP 8.7.3 / Gradle 8.9 / `compileSdk 35` (Flutter itself stays pinned at 3.19.6). Pushing a `v*` tag now runs `release.yml`: a signed APK, a multi-arch image on `ghcr.io/vfyuj/cashew-selfhosted`, and a GitHub Release. Two things are the owner's and cannot be done from here — generating and backing up the Android signing keystore (lose it and no existing install can ever be upgraded in place) and making the GHCR package public. Design, the AGP 8 knock-on fixes, and the acceptance checklist: `specs/09-releases.md`.
-
-Onboarding was reworked 2026-08-10 into five skippable steps (accounts → categories → expected income → planned spending), where the last two set amounts on BL-001's per-category envelope budgets rather than creating budgets of their own; and signing in to an account that already has server-side data no longer re-runs onboarding on the new device. Detail and testing checklist in `specs/backlog/BL-002-onboarding-create-main-account.md`.
-
-Stage 0 and Stage 1 have initial implementations (last updated 2026-08-08) — the "Status" sections at the top of `specs/02-stage-0-foundations.md` and `specs/03-stage-1-kill-google.md` now use `- [ ]`/`- [x]` checkboxes; check those first before assuming something is or isn't done, and check items off as you complete them instead of re-describing status in prose each session. Short version: `/app` and `/server` exist and build clean (`flutter build apk`/`flutter build web`, `docker compose up`); server auth/sync/backup endpoints work end-to-end (tested via curl); app-side sign-in/sync/backup UI is repointed to the new server, including an optional client-side WebDAV/Nextcloud backup target (not yet verified against a real WebDAV server). `docker-compose.yml` runs a single container — the Dart server compiles the Flutter web build from source and serves both the API and the UI from one port, so there's nothing to path-split behind the reverse proxy; see `DEPLOYMENT.md`. Fork identity (name "Cashew Selfhosted", icon) is finalized. A real bug where restoring a backup or importing a `.sqlite` file didn't propagate to other synced devices has been fixed (rows are now stamped as modified on restore, same as any other write). Not yet done: real home-server deployment (needs the operator's physical server/NPM — see `/DEPLOYMENT.md`), and the acceptance-criteria verification pass (now the owner's job to run against a locally-started instance — see "Testing & verification workflow" above, not an agent task). Stage 2 (live sync) **is** implemented end to end, server and app: a row-level change feed with a WebSocket wake-up, plus a Reset Sync escape hatch. What it still lacks is the on-device acceptance pass — see the status block in `specs/04-stage-2-instant-sync.md`, which is authoritative. (Note this is the *second* attempt; the first was reverted, see "Before changing anything" above.)
+Stage 3 (public-fork readiness) is intentionally unwritten.
