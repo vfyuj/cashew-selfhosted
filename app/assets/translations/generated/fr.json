@@ -1201,5 +1201,17 @@
   "personal-budget": "Budget personnel",
   "share-household-data": "Partager le budget du foyer",
   "share-household-data-description": "Ce compte voit et modifie les mêmes transactions, budgets et comptes que vous. Laissez désactivé pour lui donner un budget distinct. Cela ne peut être défini que maintenant, pendant la création du compte.",
-  "shares-household-data": "Partage ce budget"
+  "shares-household-data": "Partage ce budget",
+  "changelog-1-0-3-shared-budgets-title": "Budgets partagés du foyer",
+  "changelog-1-0-3-shared-budgets-body": "Deux comptes peuvent désormais partager un même budget. Lorsqu'un administrateur ajoute un compte, un interrupteur détermine s'il partage les transactions, budgets et comptes du foyer, ou s'il obtient son propre budget séparé. Les comptes ajoutés sans cette option restent entièrement indépendants, exactement comme avant.",
+  "changelog-1-0-3-subcategory-budgets-title": "Budgets pour une seule sous-catégorie",
+  "changelog-1-0-3-subcategory-budgets-body": "Les budgets peuvent désormais couvrir une seule sous-catégorie au lieu d'une catégorie entière. Touchez une catégorie dans la liste des catégories d'un budget pour ouvrir une ligne où vous pouvez choisir la catégorie entière ou seulement les parties que vous voulez.",
+  "changelog-1-0-3-personal-budgets-title": "Budgets personnels",
+  "changelog-1-0-3-personal-budgets-body": "Les budgets que vous créez vous appartiennent par défaut et n'apparaissent pour personne d'autre. Un interrupteur sur chaque budget le partage avec le foyer. Les budgets des catégories principales sont toujours partagés.",
+  "changelog-1-0-3-overspending-warnings-title": "Alertes de dépassement de budget",
+  "changelog-1-0-3-overspending-warnings-body": "La page Budgets vous avertit lorsque les budgets d'une catégorie principale dépassent au total ce qui est prévu pour cette catégorie, et propose d'augmenter le plan en conséquence. Elle compte les budgets de tout le monde, y compris ceux que vous ne pouvez pas voir : le chiffre est donc toujours le vrai.",
+  "changelog-1-0-3-hide-accounts-title": "Masquer des comptes par appareil",
+  "changelog-1-0-3-hide-accounts-body": "Vous pouvez masquer des comptes de votre propre page d'accueil sans changer celle des autres, et ce choix vous suit sur vos autres appareils.",
+  "changelog-1-0-3-sharing-semantics-title": "Comment fonctionne le partage",
+  "changelog-1-0-3-sharing-semantics-body": "Partager un budget signifie vraiment le partager : c'est la dernière modification qui l'emporte, et restaurer une sauvegarde remplace les données de toutes les personnes qui le partagent."
 }

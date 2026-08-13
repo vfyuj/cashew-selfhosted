@@ -1201,5 +1201,17 @@
   "personal-budget": "Presupuesto personal",
   "share-household-data": "Compartir el presupuesto del hogar",
   "share-household-data-description": "Esta cuenta ve y edita las mismas transacciones, presupuestos y cuentas que usted. Déjelo desactivado para darle un presupuesto propio y separado. Solo puede establecerse ahora, mientras se crea la cuenta.",
-  "shares-household-data": "Comparte este presupuesto"
+  "shares-household-data": "Comparte este presupuesto",
+  "changelog-1-0-3-shared-budgets-title": "Presupuestos compartidos del hogar",
+  "changelog-1-0-3-shared-budgets-body": "Ahora dos cuentas pueden compartir un mismo presupuesto. Al añadir una cuenta, un administrador decide con un interruptor si comparte las transacciones, presupuestos y cuentas del hogar, o si obtiene un presupuesto propio y separado. Las cuentas añadidas sin esta opción permanecen totalmente separadas, igual que antes.",
+  "changelog-1-0-3-subcategory-budgets-title": "Presupuestos para una sola subcategoría",
+  "changelog-1-0-3-subcategory-budgets-body": "Los presupuestos ahora pueden cubrir una sola subcategoría en lugar de toda una categoría. Toca una categoría en la lista de categorías de un presupuesto y se abrirá una línea para ella, donde puedes elegir la categoría completa o solo las partes que quieras.",
+  "changelog-1-0-3-personal-budgets-title": "Presupuestos personales",
+  "changelog-1-0-3-personal-budgets-body": "Los presupuestos que creas son tuyos por defecto y no aparecen para nadie más. Un interruptor en cada presupuesto lo comparte con el hogar. Los presupuestos de categorías principales siempre se comparten.",
+  "changelog-1-0-3-overspending-warnings-title": "Avisos de exceso de gasto",
+  "changelog-1-0-3-overspending-warnings-body": "La página de Presupuestos te avisa cuando los presupuestos dentro de una categoría principal suman más de lo planeado para esa categoría, y te ofrece aumentar el plan para que coincida. Cuenta los presupuestos de todos, incluso los que no puedes ver, así que la cifra siempre es la real.",
+  "changelog-1-0-3-hide-accounts-title": "Ocultar cuentas por dispositivo",
+  "changelog-1-0-3-hide-accounts-body": "Puedes ocultar cuentas de tu propia página de inicio sin cambiar la de nadie más, y esa elección te sigue en tus otros dispositivos.",
+  "changelog-1-0-3-sharing-semantics-title": "Cómo funciona compartir",
+  "changelog-1-0-3-sharing-semantics-body": "Compartir un presupuesto significa compartirlo de verdad: gana quien edita algo en último lugar, y restaurar una copia de seguridad reemplaza los datos de todos los que lo comparten."
 }

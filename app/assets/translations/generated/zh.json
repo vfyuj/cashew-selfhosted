@@ -1201,5 +1201,17 @@
   "personal-budget": "个人预算",
   "share-household-data": "共享家庭预算",
   "share-household-data-description": "该账号与你看到和编辑相同的交易、预算和账户。保持关闭则为其单独建立一份预算。此设置只能在现在、创建账号时确定。",
-  "shares-household-data": "共享此预算"
+  "shares-household-data": "共享此预算",
+  "changelog-1-0-3-shared-budgets-title": "家庭共享预算",
+  "changelog-1-0-3-shared-budgets-body": "现在两个账户可以共享同一个预算。管理员添加账户时，可以用一个开关决定该账户是共享家庭的交易、预算和账户，还是拥有自己独立的预算。未开启此选项添加的账户和以前一样，完全独立。",
+  "changelog-1-0-3-subcategory-budgets-title": "单个子类别的预算",
+  "changelog-1-0-3-subcategory-budgets-body": "预算现在可以只针对单个子类别，而不必是整个类别。点击预算类别列表中的某个类别，会展开一行，你可以选择整个类别，也可以只选择你需要的部分。",
+  "changelog-1-0-3-personal-budgets-title": "个人预算",
+  "changelog-1-0-3-personal-budgets-body": "你创建的预算默认只有你自己可见。每个预算都有一个开关，用来把它共享给家庭其他成员。主要类别的预算始终是共享的。",
+  "changelog-1-0-3-overspending-warnings-title": "超支提醒",
+  "changelog-1-0-3-overspending-warnings-body": "当某个主要类别下的所有预算加起来超过该类别的计划金额时，预算页面会提醒你，并可以帮你把计划金额调高。它会计算所有人的预算，包括你看不到的那些，所以这个数字始终是真实的。",
+  "changelog-1-0-3-hide-accounts-title": "按设备隐藏账户",
+  "changelog-1-0-3-hide-accounts-body": "你可以在自己的主页上隐藏某些账户，而不会影响其他人看到的内容，这个选择会同步到你的其他设备。",
+  "changelog-1-0-3-sharing-semantics-title": "共享是如何运作的",
+  "changelog-1-0-3-sharing-semantics-body": "共享一个预算就是真正意义上的共享：谁最后修改就以谁为准，而恢复备份会替换所有共享该预算的人的数据。"
 }

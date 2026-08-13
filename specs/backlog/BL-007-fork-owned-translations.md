@@ -61,9 +61,12 @@ Settings → Language → Edit translations
 - **Live apply**: `applyTranslationOverridesNow()` rebuilds the primary and fallback translation maps
   from `rootBundle` (cached) merged with the override map, and calls `Localization.load(...)` — the same
   public static the package's own delegate calls on every locale change.
-- **Editor**: `app/lib/pages/translationEditorPage.dart`. Its own chrome is raw English, never `.tr()`
-  — the same rule `CLAUDE.md` already sets for the changelog, so a mangled `settings` or `cancel`
-  string can never hide the way back. Search, three filters (All / Missing here / Edited), a
+- **Editor**: `app/lib/pages/translationEditorPage.dart`. Its own chrome is raw English, never
+  `.tr()`, so a mangled `settings` or `cancel` string can never hide the way back to fixing it — it's
+  the tool you'd use to fix a broken translation, so it can't depend on the system it exists to
+  repair. (The changelog used to follow this same raw-English rule, for the different reason that its
+  translations pipeline was upstream-owned; that blocker is gone and the changelog is `.tr()`-based
+  now — see `CLAUDE.md` § Versioning.) Search, three filters (All / Missing here / Edited), a
   placeholder-mismatch warning (`{app}`, `{account}` are the only two used anywhere), and two
   revert-all actions.
 - **Entry point**: `TranslationsEditorTile` (`app/lib/struct/settings.dart`) replaces the old

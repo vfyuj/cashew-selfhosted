@@ -28,9 +28,35 @@ const String upstreamBaseVersion = "5.4.3";
 /// [getChangelogPointsWidgets]):
 ///   * a line starting with `< ` opens the section for that version and is
 ///     rendered as its heading; every line below belongs to that version until
-///     the next `< ` line.
+///     the next `< ` line. Version numbers are not translated.
+///   * a line starting with `## ` is a short bold title for the feature
+///     described by the paragraph(s) that follow it, so a version with
+///     several unrelated changes reads as scannable sections instead of a
+///     wall of paragraphs. Use one whenever a version has more than one
+///     feature worth separating; skip it for a version that is just a single
+///     bug fix, where the version heading already says everything a title
+///     would.
 ///   * any other non-empty line is one bullet, an empty line is a spacer.
 ///   * every line is indented four spaces, which the parser strips.
+///
+/// Title and bullet lines are `.tr()` keys, not raw English: both are passed
+/// through `.tr()` when rendered, so put a `changelog-<version>-<feature>-title`
+/// / `-body` key here and add the actual English/translated text to all 8
+/// `assets/translations/generated/<locale>.json` files (same rule as every
+/// other piece of user-facing text -- see CLAUDE.md § Translations). This
+/// used to be an explicit exception (raw English, never `.tr()`) because the
+/// translations pipeline was upstream-owned and couldn't safely take new
+/// fork keys; that blocker is gone as of BL-007, so the exception no longer
+/// applies here. It still applies to the translation editor's own chrome
+/// (`translationEditorPage.dart`), which has a real, separate reason to stay
+/// untranslated: it's the tool you'd use to fix a broken translation, so it
+/// can't depend on the system it exists to repair.
+///
+/// Older sections below predate this rule and are still raw English rather
+/// than keys. That's fine: `.tr()` on a string with no matching key falls
+/// back to rendering the string itself, which is exactly the old behaviour --
+/// no need to backfill keys for a version nobody's looking at, only for new
+/// ones.
 ///
 /// A section is only shown when its version is newer than the last version the
 /// user launched, so a beta with no section of its own produces no popup at
@@ -43,12 +69,18 @@ const String upstreamBaseVersion = "5.4.3";
 String getChangelogString() {
   return """
     < 1.0.3
-    Two accounts can now share one budget. When an administrator adds an account, a switch decides whether it shares the household's transactions, budgets and accounts, or gets a separate budget of its own. Accounts added without it stay completely separate, exactly as before.
-    Budgets can now cover a single subcategory instead of a whole category. Tap a category in a budget's category list and it opens a line for it, where you can pick the whole category or just the parts of it you want.
-    Budgets you create are yours by default and don't show up for anyone else. A switch on each budget shares it with the household. Main category budgets are always shared.
-    The Budgets page warns you when the budgets inside a main category add up to more than that category is planned for, and offers to raise the plan to match. It counts everyone's budgets, including the ones you can't see, so the number is the real one.
-    You can hide accounts from your own home page without changing anyone else's, and that choice follows you to your other devices.
-    Sharing a budget means sharing it: whoever edits something last wins, and restoring a backup replaces the data for everyone sharing it.
+    ## changelog-1-0-3-shared-budgets-title
+    changelog-1-0-3-shared-budgets-body
+    ## changelog-1-0-3-subcategory-budgets-title
+    changelog-1-0-3-subcategory-budgets-body
+    ## changelog-1-0-3-personal-budgets-title
+    changelog-1-0-3-personal-budgets-body
+    ## changelog-1-0-3-overspending-warnings-title
+    changelog-1-0-3-overspending-warnings-body
+    ## changelog-1-0-3-hide-accounts-title
+    changelog-1-0-3-hide-accounts-body
+    ## changelog-1-0-3-sharing-semantics-title
+    changelog-1-0-3-sharing-semantics-body
 
     < 1.0.2
     Translations no longer depend on anything outside this app. You can now fix any piece of text yourself: Settings, Language, Edit translations. Search for it, type the fix, and it applies immediately - no restart.
@@ -99,12 +131,11 @@ String getChangelogString() {
 /// Highlighted, tappable "major change" cards shown above the plain changelog
 /// bullets for a given version.
 ///
-/// Empty for now. Upstream's entries were all `.tr()` keys resolved against
-/// `assets/translations/generated/*.json`, which is machine-generated from an
-/// upstream sheet this fork does not control (see
-/// `specs/backlog/BL-003-upstream-legacy-translations-and-docs.md`), so they
-/// could not simply be carried over. Add fork entries here with raw strings
-/// when a release introduces something that deserves more than a bullet.
+/// Empty for now -- upstream's entries didn't carry over when this fork
+/// stopped following upstream's changelog. `MajorChanges.title` is passed to
+/// `.tr()` (see `getAllMajorChangeWidgetsForVersion`), so a fork entry here
+/// follows the same rule as the plain bullets above: a translation key with
+/// matching entries in all 8 locale files, not raw English.
 Map<String, List<MajorChanges>> getMajorChanges() {
   return {};
 }
@@ -237,11 +268,22 @@ List<Widget>? getChangelogPointsWidgets(BuildContext context,
         changelogPoints.add(SizedBox(
           height: 8,
         ));
+      } else if (string.startsWith("## ")) {
+        // a short title for the feature described by the paragraph(s) below it
+        changelogPoints.add(Padding(
+          padding: const EdgeInsetsDirectional.only(bottom: 2, top: 8),
+          child: TextFont(
+            text: string.replaceFirst("## ", "").tr(),
+            fontSize: 17,
+            maxLines: 3,
+            fontWeight: FontWeight.bold,
+          ),
+        ));
       } else if (string.trim() != "end") {
         changelogPoints.add(Padding(
           padding: const EdgeInsetsDirectional.only(bottom: 5.5),
           child: TextFont(
-            text: string,
+            text: string.tr(),
             fontSize: 16.5,
             maxLines: 5,
           ),
