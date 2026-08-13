@@ -114,7 +114,7 @@ Android native gets full autofill with none of these caveats.
 
 ## Known gaps, deliberately not addressed
 
-- `POST /auth/login` has no rate limiting or lockout. Belongs with the Stage 3 hardening pass.
+- ~~`POST /auth/login` has no rate limiting or lockout.~~ **Closed.** `server/lib/src/auth/rate_limiter.dart` now guards both bcrypt endpoints (`/auth/login` and `/auth/setup`) at 10 attempts per 5 minutes per client, answering `429`. Account lockout is still deliberately absent — the threat addressed is CPU exhaustion, not guessing. See `docs/server/auth.md`.
 - `GET /auth/setup-state` discloses whether an instance has any users. Same as Immich and Nextcloud; accepted.
 - Session tokens are stored in plain `sharedPreferences`, unchanged from Stage 1.
 
