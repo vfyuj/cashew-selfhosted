@@ -1212,5 +1212,9 @@
   "changelog-1-0-3-hide-accounts-title": "Ocultar cuentas por dispositivo",
   "changelog-1-0-3-hide-accounts-body": "Puedes ocultar cuentas de tu propia página de inicio sin cambiar la de nadie más, y esa elección te sigue en tus otros dispositivos.",
   "changelog-1-0-3-sharing-semantics-title": "Cómo funciona compartir",
-  "changelog-1-0-3-sharing-semantics-body": "Compartir un presupuesto significa compartirlo de verdad: gana quien edita algo en último lugar, y restaurar una copia de seguridad reemplaza los datos de todos los que lo comparten."
+  "changelog-1-0-3-sharing-semantics-body": "Compartir un presupuesto significa compartirlo de verdad: gana quien edita algo en último lugar, y restaurar una copia de seguridad reemplaza los datos de todos los que lo comparten.",
+  "changelog-1-0-4-subcategory-colors-title": "Las subcategorías usan el color de su categoría",
+  "changelog-1-0-4-subcategory-colors-body": "Las subcategorías ya no tienen un selector de color propio: siempre usan el color de su categoría principal, y las subcategorías existentes se actualizaron para coincidir.",
+  "changelog-1-0-4-account-dedupe-title": "Se acabaron las cuentas duplicadas",
+  "changelog-1-0-4-account-dedupe-body": "Corrige que las cuentas aparecieran duplicadas al elegir cuáles mostrar en tu página de inicio."
 }

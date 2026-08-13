@@ -1212,5 +1212,9 @@
   "changelog-1-0-3-hide-accounts-title": "Konten pro Gerät ausblenden",
   "changelog-1-0-3-hide-accounts-body": "Du kannst Konten von deiner eigenen Startseite ausblenden, ohne die Ansicht anderer zu ändern, und diese Wahl gilt auf all deinen Geräten.",
   "changelog-1-0-3-sharing-semantics-title": "So funktioniert das Teilen",
-  "changelog-1-0-3-sharing-semantics-body": "Ein geteiltes Budget ist wirklich geteilt: Wer zuletzt etwas ändert, gewinnt, und das Wiederherstellen eines Backups ersetzt die Daten für alle, die das Budget teilen."
+  "changelog-1-0-3-sharing-semantics-body": "Ein geteiltes Budget ist wirklich geteilt: Wer zuletzt etwas ändert, gewinnt, und das Wiederherstellen eines Backups ersetzt die Daten für alle, die das Budget teilen.",
+  "changelog-1-0-4-subcategory-colors-title": "Unterkategorien übernehmen die Farbe ihrer Kategorie",
+  "changelog-1-0-4-subcategory-colors-body": "Unterkategorien haben keine eigene Farbauswahl mehr -- sie verwenden immer die Farbe ihrer Hauptkategorie, und bestehende Unterkategorien wurden entsprechend aktualisiert.",
+  "changelog-1-0-4-account-dedupe-title": "Keine doppelten Konten mehr",
+  "changelog-1-0-4-account-dedupe-body": "Behebt einen Fehler, bei dem Konten beim Auswählen der auf der Startseite angezeigten Konten doppelt erschienen."
 }

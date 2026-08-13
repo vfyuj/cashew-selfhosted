@@ -1212,5 +1212,9 @@
   "changelog-1-0-3-hide-accounts-title": "按设备隐藏账户",
   "changelog-1-0-3-hide-accounts-body": "你可以在自己的主页上隐藏某些账户，而不会影响其他人看到的内容，这个选择会同步到你的其他设备。",
   "changelog-1-0-3-sharing-semantics-title": "共享是如何运作的",
-  "changelog-1-0-3-sharing-semantics-body": "共享一个预算就是真正意义上的共享：谁最后修改就以谁为准，而恢复备份会替换所有共享该预算的人的数据。"
+  "changelog-1-0-3-sharing-semantics-body": "共享一个预算就是真正意义上的共享：谁最后修改就以谁为准，而恢复备份会替换所有共享该预算的人的数据。",
+  "changelog-1-0-4-subcategory-colors-title": "子类别使用其类别的颜色",
+  "changelog-1-0-4-subcategory-colors-body": "子类别不再有独立的颜色选择——它们始终使用主类别的颜色，已有的子类别也已相应更新。",
+  "changelog-1-0-4-account-dedupe-title": "账户不再重复出现",
+  "changelog-1-0-4-account-dedupe-body": "修复了在选择主页显示哪些账户时，账户会重复出现的问题。"
 }

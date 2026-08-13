@@ -1212,5 +1212,9 @@
   "changelog-1-0-3-hide-accounts-title": "Masquer des comptes par appareil",
   "changelog-1-0-3-hide-accounts-body": "Vous pouvez masquer des comptes de votre propre page d'accueil sans changer celle des autres, et ce choix vous suit sur vos autres appareils.",
   "changelog-1-0-3-sharing-semantics-title": "Comment fonctionne le partage",
-  "changelog-1-0-3-sharing-semantics-body": "Partager un budget signifie vraiment le partager : c'est la dernière modification qui l'emporte, et restaurer une sauvegarde remplace les données de toutes les personnes qui le partagent."
+  "changelog-1-0-3-sharing-semantics-body": "Partager un budget signifie vraiment le partager : c'est la dernière modification qui l'emporte, et restaurer une sauvegarde remplace les données de toutes les personnes qui le partagent.",
+  "changelog-1-0-4-subcategory-colors-title": "Les sous-catégories reprennent la couleur de leur catégorie",
+  "changelog-1-0-4-subcategory-colors-body": "Les sous-catégories n'ont plus de sélecteur de couleur propre : elles utilisent toujours la couleur de leur catégorie principale, et les sous-catégories existantes ont été mises à jour en conséquence.",
+  "changelog-1-0-4-account-dedupe-title": "Fini les comptes en double",
+  "changelog-1-0-4-account-dedupe-body": "Corrige les comptes qui apparaissaient deux fois lors du choix de ceux à afficher sur la page d'accueil."
 }

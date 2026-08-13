@@ -1321,5 +1321,9 @@
   "changelog-1-0-3-hide-accounts-title": "Hide accounts per device",
   "changelog-1-0-3-hide-accounts-body": "You can hide accounts from your own home page without changing anyone else's, and that choice follows you to your other devices.",
   "changelog-1-0-3-sharing-semantics-title": "How sharing works",
-  "changelog-1-0-3-sharing-semantics-body": "Sharing a budget means sharing it: whoever edits something last wins, and restoring a backup replaces the data for everyone sharing it."
+  "changelog-1-0-3-sharing-semantics-body": "Sharing a budget means sharing it: whoever edits something last wins, and restoring a backup replaces the data for everyone sharing it.",
+  "changelog-1-0-4-subcategory-colors-title": "Subcategories match their category's color",
+  "changelog-1-0-4-subcategory-colors-body": "Subcategories no longer have a separate color picker -- they always use their main category's color, and existing subcategories are updated to match.",
+  "changelog-1-0-4-account-dedupe-title": "No more duplicate accounts",
+  "changelog-1-0-4-account-dedupe-body": "Fixes accounts appearing twice when choosing which ones show on your home page."
 }

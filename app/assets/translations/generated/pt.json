@@ -1212,5 +1212,9 @@
   "changelog-1-0-3-hide-accounts-title": "Ocultar contas por aparelho",
   "changelog-1-0-3-hide-accounts-body": "Você pode ocultar contas da sua própria página inicial sem alterar a de mais ninguém, e essa escolha te acompanha nos seus outros aparelhos.",
   "changelog-1-0-3-sharing-semantics-title": "Como funciona o compartilhamento",
-  "changelog-1-0-3-sharing-semantics-body": "Compartilhar um orçamento significa compartilhá-lo de verdade: quem edita algo por último vence, e restaurar um backup substitui os dados de todos que o compartilham."
+  "changelog-1-0-3-sharing-semantics-body": "Compartilhar um orçamento significa compartilhá-lo de verdade: quem edita algo por último vence, e restaurar um backup substitui os dados de todos que o compartilham.",
+  "changelog-1-0-4-subcategory-colors-title": "As subcategorias usam a cor da categoria",
+  "changelog-1-0-4-subcategory-colors-body": "As subcategorias não têm mais um seletor de cor próprio: elas sempre usam a cor da categoria principal, e as subcategorias existentes foram atualizadas para corresponder.",
+  "changelog-1-0-4-account-dedupe-title": "Fim das contas duplicadas",
+  "changelog-1-0-4-account-dedupe-body": "Corrige contas que apareciam duas vezes ao escolher quais mostrar na página inicial."
 }
