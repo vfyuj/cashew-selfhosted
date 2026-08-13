@@ -1197,7 +1197,6 @@
   "raise-budget-to-fit-description": "Augmenter le prévisionnel de cette catégorie de {budgeted} à {allocated} pour que tout ce qui y est budgétisé tienne ? Les mois déjà terminés conservent le montant qui leur était fixé à l'époque.",
   "keep": "Conserver",
   "share-budget-with-household": "Partager avec le foyer",
-  "share-budget-with-household-description": "Désactivé, ce budget n'appartient qu'à vous et personne d'autre ne le voit — il compte toutefois toujours dans le total de sa catégorie principale. Activé, toutes les personnes qui partagent ce budget le voient.",
   "personal-budget": "Budget personnel",
   "share-household-data": "Partager le budget du foyer",
   "share-household-data-description": "Ce compte voit et modifie les mêmes transactions, budgets et comptes que vous. Laissez désactivé pour lui donner un budget distinct. Cela ne peut être défini que maintenant, pendant la création du compte.",

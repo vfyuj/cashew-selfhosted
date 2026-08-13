@@ -31,6 +31,7 @@ class SettingsContainerSwitch extends StatefulWidget {
     this.backgroundColor,
     this.isOutlined,
     this.horizontalPadding,
+    this.compactSwitch = false,
     Key? key,
   }) : super(key: key);
 
@@ -51,6 +52,11 @@ class SettingsContainerSwitch extends StatefulWidget {
   final Color? backgroundColor;
   final bool? isOutlined;
   final double? horizontalPadding;
+  // Shrinks the switch to the same footprint as a leading icon (25px), so a
+  // switch row sits at the same height as a sibling icon row -- the switch's
+  // own intrinsic size is otherwise taller than an icon and stretches the
+  // container. Opt-in: existing callers keep the switch's natural size.
+  final bool compactSwitch;
 
   @override
   State<SettingsContainerSwitch> createState() =>
@@ -118,10 +124,21 @@ class _SettingsContainerSwitchState extends State<SettingsContainerSwitch> {
         description: description,
         afterWidget: Padding(
           padding: const EdgeInsetsDirectional.only(start: 5),
-          child: PlatformSwitch(
-            value: value,
-            onTap: toggleSwitch,
-          ),
+          child: widget.compactSwitch
+              ? SizedBox(
+                  height: 25,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: PlatformSwitch(
+                      value: value,
+                      onTap: toggleSwitch,
+                    ),
+                  ),
+                )
+              : PlatformSwitch(
+                  value: value,
+                  onTap: toggleSwitch,
+                ),
         ),
         icon: widget.icon,
         verticalPadding: widget.verticalPadding,

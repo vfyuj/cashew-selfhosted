@@ -127,32 +127,33 @@ class EditHomePagePinnedWalletsPopup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<TransactionWallet>>(
-      stream: database.getAllPinnedWallets(homePageWidgetDisplay).$1,
-      builder: (context, snapshot2) {
-        Map<String, TransactionWallet> walletsIndexedByPk =
-            Provider.of<AllWallets>(context).indexedByPk;
-        List<String> allWalletsPks = walletsIndexedByPk.keys.toList();
-        List<TransactionWallet> allPinnedWallets = snapshot2.data ?? [];
-        Widget child = Column(
-          children: [
-            if (allWalletsPks.length <= 0)
-              NoResultsCreate(
-                message: "no-accounts-found".tr(),
-                buttonLabel: "create-account".tr(),
-                route: AddWalletPage(
-                  routesToPopAfterDelete: RoutesToPopAfterDelete.None,
-                ),
-              ),
-            if (snapshot2.hasData)
-              SelectItems(
+    Map<String, TransactionWallet> walletsIndexedByPk =
+        Provider.of<AllWallets>(context).indexedByPk;
+    List<String> allWalletsPks = walletsIndexedByPk.keys.toList();
+    Widget child = Column(
+      children: [
+        if (allWalletsPks.length <= 0)
+          NoResultsCreate(
+            message: "no-accounts-found".tr(),
+            buttonLabel: "create-account".tr(),
+            route: AddWalletPage(
+              routesToPopAfterDelete: RoutesToPopAfterDelete.None,
+            ),
+          ),
+        // useCheckMarks selects which wallets feed a specific calculation
+        // (currently only the Net Worth total) -- a scoping choice, not a
+        // visibility one, so it keeps the original per-widget-type pinning
+        // instead of the merged toggle below.
+        if (allWalletsPks.length > 0 && useCheckMarks)
+          StreamBuilder<List<TransactionWallet>>(
+            stream: database.getAllPinnedWallets(homePageWidgetDisplay).$1,
+            builder: (context, snapshot2) {
+              if (!snapshot2.hasData) return SizedBox.shrink();
+              List<TransactionWallet> allPinnedWallets = snapshot2.data ?? [];
+              return SelectItems(
                 allSelected: allSelected,
                 highlightSelected: highlightSelected,
                 syncWithInitial: true,
-                checkboxCustomIconSelected:
-                    useCheckMarks ? null : Icons.push_pin_rounded,
-                checkboxCustomIconUnselected:
-                    useCheckMarks ? null : Icons.push_pin_outlined,
                 items: allWalletsPks,
                 getColor: (walletPk, selected) {
                   TransactionWallet? wallet = walletsIndexedByPk[walletPk];
@@ -160,10 +161,8 @@ class EditHomePagePinnedWalletsPopup extends StatelessWidget {
                           defaultColor: Theme.of(context).colorScheme.primary)
                       .withOpacity(selected == true ? 0.7 : 0.5);
                 },
-                displayFilter: (walletPk) {
-                  TransactionWallet? wallet = walletsIndexedByPk[walletPk];
-                  return wallet?.name;
-                },
+                displayFilter: (walletPk) =>
+                    walletsIndexedByPk[walletPk]?.name,
                 initialItems: [
                   for (TransactionWallet wallet in allPinnedWallets)
                     wallet.walletPk.toString()
@@ -195,149 +194,158 @@ class EditHomePagePinnedWalletsPopup extends StatelessWidget {
                     ),
                   );
                 },
-              ),
-            // Pinning above writes to the wallet row, so it is the household's
-            // shared decision about which accounts belong on the home page.
-            // This is the personal layer on top: accounts one member does not
-            // want on *their* home page, following them between their own
-            // devices without touching what anyone else sees. Only offered
-            // when there is somebody else to differ from.
-            if (perUserViewSettingsApply && allWalletsPks.length > 0)
-              HorizontalBreakAbove(
-                enabled: true,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsetsDirectional.only(
-                          start: 20, end: 20, top: 13, bottom: 5),
-                      child: TextFont(
-                        text: "hidden-from-your-home-page".tr(),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsetsDirectional.only(
-                          start: 20, end: 20, bottom: 8),
-                      child: TextFont(
-                        text: "hidden-from-your-home-page-description".tr(),
-                        fontSize: 13,
-                        maxLines: 4,
-                        textColor: getColor(context, "textLight"),
-                      ),
-                    ),
-                    SelectItems(
-                      syncWithInitial: true,
-                      checkboxCustomIconSelected: Icons.visibility_off_rounded,
-                      checkboxCustomIconUnselected: Icons.visibility_outlined,
-                      items: allWalletsPks,
-                      displayFilter: (walletPk) =>
-                          walletsIndexedByPk[walletPk]?.name,
-                      initialItems: hiddenWalletPks.toList(),
-                      onChangedSingleItem: (String walletPk) async {
-                        await setWalletHiddenForCurrentUser(
-                          walletPk,
-                          !isWalletHiddenForCurrentUser(walletPk),
-                        );
-                        if (onAnySelected != null) onAnySelected!();
-                      },
-                    ),
-                  ],
+              );
+            },
+          ),
+        // A single per-account visibility toggle, colored like the account
+        // itself. Works the same for a solo instance as a shared household --
+        // there is no separate shared/pinned layer underneath it anymore.
+        if (allWalletsPks.length > 0 && !useCheckMarks)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsetsDirectional.only(
+                    start: 20, end: 20, top: 13, bottom: 5),
+                child: TextFont(
+                  text: "hidden-from-your-home-page".tr(),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
                 ),
               ),
-            if (allWalletsPks.length > 0 && includeFramework == true)
-              AddButton(
-                onTap: () {},
-                height: 50,
-                width: null,
-                margin: const EdgeInsetsDirectional.only(
-                  start: 13,
-                  end: 13,
-                  bottom: 13,
-                  top: 13,
+              Padding(
+                padding: const EdgeInsetsDirectional.only(
+                    start: 20, end: 20, bottom: 8),
+                child: TextFont(
+                  text: "hidden-from-your-home-page-description".tr(),
+                  fontSize: 13,
+                  maxLines: 4,
+                  textColor: getColor(context, "textLight"),
                 ),
-                openPage: AddWalletPage(
-                  routesToPopAfterDelete: RoutesToPopAfterDelete.None,
-                ),
-                afterOpenPage: () {
-                  Future.delayed(Duration(milliseconds: 100), () {
-                    bottomSheetControllerGlobalCustomAssigned?.snapToExtent(0);
-                  });
+              ),
+              SelectItems(
+                syncWithInitial: true,
+                checkboxCustomIconSelected: Icons.visibility_off_rounded,
+                checkboxCustomIconUnselected: Icons.visibility_outlined,
+                items: allWalletsPks,
+                getColor: (walletPk, selected) {
+                  TransactionWallet? wallet = walletsIndexedByPk[walletPk];
+                  return HexColor(wallet?.colour,
+                          defaultColor: Theme.of(context).colorScheme.primary)
+                      .withOpacity(selected == true ? 0.5 : 0.7);
+                },
+                displayFilter: (walletPk) =>
+                    walletsIndexedByPk[walletPk]?.name,
+                initialItems: hiddenWalletPks.toList(),
+                onChangedSingleItem: (String walletPk) async {
+                  await setWalletHiddenForCurrentUser(
+                    walletPk,
+                    !isWalletHiddenForCurrentUser(walletPk),
+                  );
+                  if (onAnySelected != null) onAnySelected!();
+                },
+                onLongPress: (String walletPk) async {
+                  TransactionWallet? wallet = walletsIndexedByPk[walletPk];
+                  pushRoute(
+                    context,
+                    AddWalletPage(
+                      routesToPopAfterDelete: RoutesToPopAfterDelete.One,
+                      wallet: wallet,
+                    ),
+                  );
                 },
               ),
-            if (homePageWidgetDisplay == HomePageWidgetDisplay.WalletList &&
-                Provider.of<AllWallets>(context).allContainSameCurrency() ==
-                    false &&
-                Provider.of<AllWallets>(context)
-                        .containsMultipleAccountsWithSameCurrency() ==
-                    true)
-              HorizontalBreakAbove(
-                enabled: true,
-                child: SettingsContainerSwitch(
-                  enableBorderRadius: true,
-                  title: "currency-total".tr(),
-                  description: "currency-total-description".tr(),
-                  onSwitched: (value) {
-                    updateSettings("walletsListCurrencyBreakdown", value,
-                        updateGlobalState: false, pagesNeedingRefresh: [1]);
-                  },
-                  initialValue:
-                      appStateSettings["walletsListCurrencyBreakdown"],
-                  icon: appStateSettings["outlinedIcons"]
-                      ? Icons.view_list_outlined
-                      : Icons.view_list_rounded,
-                ),
-              ),
-            // if (showCyclePicker &&
-            //         homePageWidgetDisplay ==
-            //             HomePageWidgetDisplay.WalletSwitcher ||
-            //     homePageWidgetDisplay == HomePageWidgetDisplay.WalletList)
-            //   HorizontalBreakAbove(
-            //     enabled: true,
-            //     child: Column(
-            //       children: [
-            //         Padding(
-            //           padding: const EdgeInsetsDirectional.only(
-            //               bottom: 10, start: 15, end: 15, top: 4),
-            //           child: TextFont(
-            //             text: "customize-period-for-account-totals".tr(),
-            //             textAlign: TextAlign.center,
-            //             fontSize: 16,
-            //             textColor: getColor(context, "black").withOpacity(0.8),
-            //           ),
-            //         ),
-            //         PeriodCyclePicker(
-            //           cycleSettingsExtension: homePageWidgetDisplay ==
-            //                   HomePageWidgetDisplay.WalletSwitcher
-            //               ? "Wallets"
-            //               : homePageWidgetDisplay ==
-            //                       HomePageWidgetDisplay.WalletList
-            //                   ? "WalletsList"
-            //                   : "",
-            //         ),
-            //       ],
-            //     ),
-            //   ),
-          ],
-        );
-        if (includeFramework) {
-          return PopupFramework(
-            title: "select-accounts".tr(),
-            outsideExtraWidget: OutsideExtraWidgetIconButton(
-              iconData: appStateSettings["outlinedIcons"]
-                  ? Icons.edit_outlined
-                  : Icons.edit_rounded,
-              onPressed: () async {
-                pushRoute(context, EditWalletsPage());
-              },
+            ],
+          ),
+        if (allWalletsPks.length > 0 && includeFramework == true)
+          AddButton(
+            onTap: () {},
+            height: 50,
+            width: null,
+            margin: const EdgeInsetsDirectional.only(
+              start: 13,
+              end: 13,
+              bottom: 13,
+              top: 13,
             ),
-            child: child,
-          );
-        } else {
-          return child;
-        }
-      },
+            openPage: AddWalletPage(
+              routesToPopAfterDelete: RoutesToPopAfterDelete.None,
+            ),
+            afterOpenPage: () {
+              Future.delayed(Duration(milliseconds: 100), () {
+                bottomSheetControllerGlobalCustomAssigned?.snapToExtent(0);
+              });
+            },
+          ),
+        if (homePageWidgetDisplay == HomePageWidgetDisplay.WalletList &&
+            Provider.of<AllWallets>(context).allContainSameCurrency() ==
+                false &&
+            Provider.of<AllWallets>(context)
+                    .containsMultipleAccountsWithSameCurrency() ==
+                true)
+          HorizontalBreakAbove(
+            enabled: true,
+            child: SettingsContainerSwitch(
+              enableBorderRadius: true,
+              title: "currency-total".tr(),
+              description: "currency-total-description".tr(),
+              onSwitched: (value) {
+                updateSettings("walletsListCurrencyBreakdown", value,
+                    updateGlobalState: false, pagesNeedingRefresh: [1]);
+              },
+              initialValue: appStateSettings["walletsListCurrencyBreakdown"],
+              icon: appStateSettings["outlinedIcons"]
+                  ? Icons.view_list_outlined
+                  : Icons.view_list_rounded,
+            ),
+          ),
+        // if (showCyclePicker &&
+        //         homePageWidgetDisplay ==
+        //             HomePageWidgetDisplay.WalletSwitcher ||
+        //     homePageWidgetDisplay == HomePageWidgetDisplay.WalletList)
+        //   HorizontalBreakAbove(
+        //     enabled: true,
+        //     child: Column(
+        //       children: [
+        //         Padding(
+        //           padding: const EdgeInsetsDirectional.only(
+        //               bottom: 10, start: 15, end: 15, top: 4),
+        //           child: TextFont(
+        //             text: "customize-period-for-account-totals".tr(),
+        //             textAlign: TextAlign.center,
+        //             fontSize: 16,
+        //             textColor: getColor(context, "black").withOpacity(0.8),
+        //           ),
+        //         ),
+        //         PeriodCyclePicker(
+        //           cycleSettingsExtension: homePageWidgetDisplay ==
+        //                   HomePageWidgetDisplay.WalletSwitcher
+        //               ? "Wallets"
+        //               : homePageWidgetDisplay ==
+        //                       HomePageWidgetDisplay.WalletList
+        //                   ? "WalletsList"
+        //                   : "",
+        //         ),
+        //       ],
+        //     ),
+        //   ),
+      ],
     );
+    if (includeFramework) {
+      return PopupFramework(
+        title: "select-accounts".tr(),
+        outsideExtraWidget: OutsideExtraWidgetIconButton(
+          iconData: appStateSettings["outlinedIcons"]
+              ? Icons.edit_outlined
+              : Icons.edit_rounded,
+          onPressed: () async {
+            pushRoute(context, EditWalletsPage());
+          },
+        ),
+        child: child,
+      );
+    } else {
+      return child;
+    }
   }
 }

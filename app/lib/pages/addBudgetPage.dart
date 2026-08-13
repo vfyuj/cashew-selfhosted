@@ -994,14 +994,13 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                 ? SizedBox.shrink()
                 : Padding(
                     padding: const EdgeInsetsDirectional.only(
-                      start: 13,
-                      end: 13,
+                      start: 24,
+                      end: 24,
                       bottom: 15,
                     ),
                     child: SettingsContainerSwitch(
                       title: "share-budget-with-household".tr(),
-                      description:
-                          "share-budget-with-household-description".tr(),
+                      compactSwitch: true,
                       initialValue: selectedOwnerUserId == null,
                       onSwitched: (bool shared) {
                         selectedOwnerUserId =

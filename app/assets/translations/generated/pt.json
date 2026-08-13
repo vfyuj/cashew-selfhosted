@@ -1197,7 +1197,6 @@
   "raise-budget-to-fit-description": "Aumentar o previsto desta categoria de {budgeted} para {allocated} para que tudo o que está orçado dentro dela caiba? Meses já encerrados mantêm o valor definido na época.",
   "keep": "Manter",
   "share-budget-with-household": "Compartilhar com a casa",
-  "share-budget-with-household-description": "Desligado, este orçamento é só seu e mais ninguém o vê — mas ele continua contando para o total da sua categoria principal. Ligado, todos que compartilham este orçamento o veem.",
   "personal-budget": "Orçamento pessoal",
   "share-household-data": "Compartilhar o orçamento da casa",
   "share-household-data-description": "Esta conta vê e edita as mesmas transações, orçamentos e contas que você. Deixe desligado para dar a ela um orçamento próprio e separado. Isso só pode ser definido agora, enquanto a conta está sendo criada.",

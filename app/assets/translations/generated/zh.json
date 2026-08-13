@@ -1197,7 +1197,6 @@
   "raise-budget-to-fit-description": "将该类别的计划从 {budgeted} 调高到 {allocated}，以容纳其中所有预算？已结束的月份仍保留当时设定的金额。",
   "keep": "保持不变",
   "share-budget-with-household": "与家庭共享",
-  "share-budget-with-household-description": "关闭时，这个预算只属于你，其他人看不到，但它仍会计入所属主类别的总额。开启时，共享该预算的所有人都能看到。",
   "personal-budget": "个人预算",
   "share-household-data": "共享家庭预算",
   "share-household-data-description": "该账号与你看到和编辑相同的交易、预算和账户。保持关闭则为其单独建立一份预算。此设置只能在现在、创建账号时确定。",
