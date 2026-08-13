@@ -26,6 +26,10 @@ Future<bool> initializeDefaultDatabase() async {
   // that arrived over sync. Idempotent, and local only - never blocks on the
   // network, per specs/01-local-first-invariant.md.
   await ensureMainCategoryBudgetsExist();
+
+  // Same idea: subcategories created before color inheritance existed still
+  // carry their own stale color until this runs once.
+  await database.reconcileSubCategoryColors();
   return true;
 }
 

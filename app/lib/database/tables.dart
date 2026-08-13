@@ -4153,6 +4153,35 @@ class FinanceDatabase extends _$FinanceDatabase {
     category = category.copyWith(name: category.name.trim());
     category = category.copyWith(
         dateTimeModified: Value(customDateTimeModified ?? DateTime.now()));
+
+    if (category.mainCategoryPk != null) {
+      // Subcategories always inherit their main category's color -
+      // there is no per-subcategory color picker.
+      TransactionCategory? mainCategory =
+          await getCategoryInstanceOrNull(category.mainCategoryPk!);
+      if (mainCategory != null) {
+        category = category.copyWith(colour: Value(mainCategory.colour));
+      }
+    } else if (!insert) {
+      // If a main category's color changed, cascade it to its
+      // subcategories so they keep matching it.
+      TransactionCategory? previous =
+          await getCategoryInstanceOrNull(category.categoryPk);
+      if (previous != null && previous.colour != category.colour) {
+        List<TransactionCategory> subCategories =
+            await getAllSubCategoriesOfMainCategory(category.categoryPk);
+        if (subCategories.isNotEmpty) {
+          await updateBatchCategoriesOnly(subCategories
+              .map((subCategory) => subCategory.copyWith(
+                    colour: Value(category.colour),
+                    dateTimeModified:
+                        Value(customDateTimeModified ?? DateTime.now()),
+                  ))
+              .toList());
+        }
+      }
+    }
+
     CategoriesCompanion companionToInsert = category.toCompanion(true);
 
     if (insert) {
@@ -4166,6 +4195,31 @@ class FinanceDatabase extends _$FinanceDatabase {
         .insert((companionToInsert), mode: InsertMode.insertOrReplace);
 
     return result;
+  }
+
+  // Backfill for subcategories created before color inheritance existed, so
+  // they pick up their main category's color too. Idempotent and local only,
+  // same shape as ensureMainCategoryBudgetsExist() in
+  // struct/mainCategoryBudgets.dart - safe to run on every launch.
+  Future<int> reconcileSubCategoryColors() async {
+    List<TransactionCategory> mainCategories = await getAllCategories();
+    int updatedCount = 0;
+    for (TransactionCategory mainCategory in mainCategories) {
+      List<TransactionCategory> subCategories =
+          await getAllSubCategoriesOfMainCategory(mainCategory.categoryPk);
+      List<TransactionCategory> mismatched = subCategories
+          .where((subCategory) => subCategory.colour != mainCategory.colour)
+          .toList();
+      if (mismatched.isEmpty) continue;
+      await updateBatchCategoriesOnly(mismatched
+          .map((subCategory) => subCategory.copyWith(
+                colour: Value(mainCategory.colour),
+                dateTimeModified: Value(DateTime.now()),
+              ))
+          .toList());
+      updatedCount += mismatched.length;
+    }
+    return updatedCount;
   }
 
   Future<List<Transaction>> getAllTransactionsFromCategory(String categoryPk) {
@@ -5457,6 +5511,7 @@ class FinanceDatabase extends _$FinanceDatabase {
       categoriesEdited.add(
         category.copyWith(
           mainCategoryPk: Value(categoryTo.categoryPk),
+          colour: Value(categoryTo.colour),
           dateTimeModified: Value(DateTime.now()),
           order: order,
         ),
