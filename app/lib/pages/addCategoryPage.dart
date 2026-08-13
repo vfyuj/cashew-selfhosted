@@ -87,6 +87,23 @@ class _AddCategoryPageState extends State<AddCategoryPage>
     return;
   }
 
+  // Subcategories don't have their own color picker - they always take on
+  // whatever color their main category currently has.
+  Future<void> refreshInheritedColorFromMainCategory(
+      String? mainCategoryPk) async {
+    if (mainCategoryPk == null) return;
+    TransactionCategory? mainCategory =
+        await database.getCategoryInstanceOrNull(mainCategoryPk);
+    if (mainCategory != null) {
+      setSelectedColor(HexColor(mainCategory.colour));
+    }
+  }
+
+  bool get willBeSubCategory =>
+      isSubCategory ||
+      (canSelectIfSubCategoryOrMainCategory() &&
+          isMainCategoryWhenCreating == false);
+
   void setSelectedImage(String? image) {
     setState(() {
       selectedImage = (image ?? "").replaceFirst("assets/categories/", "");
@@ -262,6 +279,12 @@ class _AddCategoryPageState extends State<AddCategoryPage>
             mainCategoryPkIfSubCategoryOrderFixing:
                 widget.category!.categoryPk);
       });
+    }
+
+    if (willBeSubCategory) {
+      refreshInheritedColorFromMainCategory(
+          widget.mainCategoryPkWhenSubCategory ??
+              widget.category?.mainCategoryPk);
     }
 
     if (selectedIncome == true) {
@@ -603,21 +626,22 @@ class _AddCategoryPageState extends State<AddCategoryPage>
                     ),
                   ],
                 ),
-                Container(
-                  height: 65,
-                  child: SelectColor(
-                    horizontalList: true,
-                    selectedColor: selectedColor,
-                    setSelectedColor: setSelectedColor,
-                    previewBuilder: (color) => IconPreview(
-                      selectedImage: selectedImage,
-                      selectedEmoji: selectedEmoji,
-                      selectedColor: color,
-                      switcherDuration: Duration.zero,
-                      smallPreview: true,
+                if (!willBeSubCategory)
+                  Container(
+                    height: 65,
+                    child: SelectColor(
+                      horizontalList: true,
+                      selectedColor: selectedColor,
+                      setSelectedColor: setSelectedColor,
+                      previewBuilder: (color) => IconPreview(
+                        selectedImage: selectedImage,
+                        selectedEmoji: selectedEmoji,
+                        selectedColor: color,
+                        switcherDuration: Duration.zero,
+                        smallPreview: true,
+                      ),
                     ),
                   ),
-                ),
                 if (widget.category?.categoryPk == "0")
                   balanceCorrectionCategorySettings,
                 widget.category?.categoryPk == "0" ||
@@ -722,6 +746,7 @@ class _AddCategoryPageState extends State<AddCategoryPage>
                 },
                 setMainCategoryPkForSubcategoryWhenCreating: (value) {
                   mainCategoryPkForSubcategoryWhenCreating = value;
+                  refreshInheritedColorFromMainCategory(value);
                 },
               ),
             )),
