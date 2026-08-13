@@ -1200,5 +1200,17 @@
   "personal-budget": "Orçamento pessoal",
   "share-household-data": "Compartilhar o orçamento da casa",
   "share-household-data-description": "Esta conta vê e edita as mesmas transações, orçamentos e contas que você. Deixe desligado para dar a ela um orçamento próprio e separado. Isso só pode ser definido agora, enquanto a conta está sendo criada.",
-  "shares-household-data": "Compartilha este orçamento"
+  "shares-household-data": "Compartilha este orçamento",
+  "changelog-1-0-3-shared-budgets-title": "Orçamentos compartilhados da casa",
+  "changelog-1-0-3-shared-budgets-body": "Agora duas contas podem compartilhar um mesmo orçamento. Quando um administrador adiciona uma conta, um interruptor decide se ela compartilha as transações, orçamentos e contas da casa, ou se recebe um orçamento próprio e separado. Contas adicionadas sem essa opção continuam completamente separadas, exatamente como antes.",
+  "changelog-1-0-3-subcategory-budgets-title": "Orçamentos para uma única subcategoria",
+  "changelog-1-0-3-subcategory-budgets-body": "Os orçamentos agora podem cobrir apenas uma subcategoria em vez de uma categoria inteira. Toque em uma categoria na lista de categorias de um orçamento para abrir uma linha só dela, onde você pode escolher a categoria inteira ou apenas as partes que quiser.",
+  "changelog-1-0-3-personal-budgets-title": "Orçamentos pessoais",
+  "changelog-1-0-3-personal-budgets-body": "Os orçamentos que você cria são seus por padrão e não aparecem para mais ninguém. Um interruptor em cada orçamento o compartilha com a casa. Orçamentos de categorias principais são sempre compartilhados.",
+  "changelog-1-0-3-overspending-warnings-title": "Avisos de gastos acima do orçamento",
+  "changelog-1-0-3-overspending-warnings-body": "A página Orçamentos avisa quando os orçamentos dentro de uma categoria principal somam mais do que o planejado para ela, e oferece aumentar o plano para compensar. Ela conta os orçamentos de todos, incluindo os que você não pode ver, então o número é sempre o real.",
+  "changelog-1-0-3-hide-accounts-title": "Ocultar contas por aparelho",
+  "changelog-1-0-3-hide-accounts-body": "Você pode ocultar contas da sua própria página inicial sem alterar a de mais ninguém, e essa escolha te acompanha nos seus outros aparelhos.",
+  "changelog-1-0-3-sharing-semantics-title": "Como funciona o compartilhamento",
+  "changelog-1-0-3-sharing-semantics-body": "Compartilhar um orçamento significa compartilhá-lo de verdade: quem edita algo por último vence, e restaurar um backup substitui os dados de todos que o compartilham."
 }

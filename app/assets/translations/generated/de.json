@@ -1200,5 +1200,17 @@
   "personal-budget": "Persönliches Budget",
   "share-household-data": "Haushaltsbudget teilen",
   "share-household-data-description": "Dieses Konto sieht und bearbeitet dieselben Transaktionen, Budgets und Konten wie du. Lass es aus, um ihm ein eigenes, getrenntes Budget zu geben. Das lässt sich nur jetzt festlegen, während das Konto erstellt wird.",
-  "shares-household-data": "Teilt dieses Budget"
+  "shares-household-data": "Teilt dieses Budget",
+  "changelog-1-0-3-shared-budgets-title": "Gemeinsame Haushaltsbudgets",
+  "changelog-1-0-3-shared-budgets-body": "Zwei Konten können sich jetzt ein Budget teilen. Wenn ein Administrator ein Konto hinzufügt, entscheidet ein Schalter, ob es die Transaktionen, Budgets und Konten des Haushalts teilt oder ein eigenes, separates Budget erhält. Ohne diese Einstellung hinzugefügte Konten bleiben vollständig getrennt, genau wie zuvor.",
+  "changelog-1-0-3-subcategory-budgets-title": "Budgets für eine einzelne Unterkategorie",
+  "changelog-1-0-3-subcategory-budgets-body": "Budgets können jetzt eine einzelne Unterkategorie statt einer ganzen Kategorie abdecken. Tippe in der Kategorienliste eines Budgets auf eine Kategorie, und es öffnet sich eine Zeile dafür, in der du die ganze Kategorie oder nur die gewünschten Teile davon auswählen kannst.",
+  "changelog-1-0-3-personal-budgets-title": "Persönliche Budgets",
+  "changelog-1-0-3-personal-budgets-body": "Von dir erstellte Budgets gehören standardmäßig nur dir und sind für niemand anderen sichtbar. Ein Schalter in jedem Budget teilt es mit dem Haushalt. Budgets für Hauptkategorien sind immer geteilt.",
+  "changelog-1-0-3-overspending-warnings-title": "Warnungen bei Budgetüberschreitung",
+  "changelog-1-0-3-overspending-warnings-body": "Die Budgetseite warnt dich, wenn die Budgets innerhalb einer Hauptkategorie zusammen mehr ergeben, als für diese Kategorie geplant ist, und bietet an, den Plan entsprechend anzuheben. Dabei werden die Budgets aller berücksichtigt, auch die, die du nicht sehen kannst — die Zahl stimmt also wirklich.",
+  "changelog-1-0-3-hide-accounts-title": "Konten pro Gerät ausblenden",
+  "changelog-1-0-3-hide-accounts-body": "Du kannst Konten von deiner eigenen Startseite ausblenden, ohne die Ansicht anderer zu ändern, und diese Wahl gilt auf all deinen Geräten.",
+  "changelog-1-0-3-sharing-semantics-title": "So funktioniert das Teilen",
+  "changelog-1-0-3-sharing-semantics-body": "Ein geteiltes Budget ist wirklich geteilt: Wer zuletzt etwas ändert, gewinnt, und das Wiederherstellen eines Backups ersetzt die Daten für alle, die das Budget teilen."
 }
