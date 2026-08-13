@@ -79,3 +79,26 @@ Quicker for pure UI iteration, but there is **no server at this origin**, so the
 connectivity check will fail — that's expected, not a bug. Tap **Use without an account** to get
 past it, or use `docker compose up --build -d` (above) instead when you need the account/sync
 flows to actually work.
+
+### `flutter run -d web-server` on a custom port: always pass `--release`
+
+Needed to preview on a port other than whatever `-d chrome` opens (e.g. to avoid clashing with
+another instance already running), or to make the page reachable from another device:
+
+```bash
+cd app && flutter run -d web-server --web-port=<port> --web-hostname=0.0.0.0 --release
+```
+
+**The `--release` is not optional.** Without it, `flutter run -d web-server` starts in debug mode,
+which needs the Dart Debug Chrome Extension to finish its JS bootstrap handshake. Neither a plain
+browser nor the sandboxed preview browser has that extension installed, so the bootstrap throws an
+uncaught promise rejection before Flutter paints a single frame — the page sits on the splash
+spinner forever and then goes fully blank, on every port and every hostname. It looks exactly like
+the app is broken; it isn't reachability, it's this. `--release` skips the whole
+debug/hot-reload/extension chain, so the page loads normally and — with no backend at this origin —
+lands on the documented "Couldn't reach that server" screen above, not a blank one.
+
+Also use `--web-hostname=0.0.0.0`, not `--web-hostname=localhost`: on this Flutter/Dart version
+`localhost` binds IPv6 loopback only (`[::1]`), which some browsers fail to reach even though the
+server is up (they try `127.0.0.1` first and give up). `0.0.0.0` binds every interface, including
+IPv4 loopback, and is also what makes the page reachable from another device on the LAN.
