@@ -43,7 +43,17 @@ String getDeviceFromSyncBackupFileName(String? backupFileName) {
 }
 
 String getCurrentDeviceName() {
-  return (clientID).split("-")[0];
+  return sanitizeFilenameComponent((clientID).split("-")[0]);
+}
+
+/// Strips everything but alphanumerics/underscores from a device name before
+/// it goes into a backup filename. Device names (e.g. macOS's "Macintosh
+/// intel m") often contain spaces, and the self-hosted server's file routes
+/// store whatever raw path segment they're given rather than URL-decoding
+/// it -- so an un-sanitized name round-trips back as a filename with a
+/// literal "%20" in it instead of a space.
+String sanitizeFilenameComponent(String value) {
+  return value.replaceAll(RegExp(r'[^A-Za-z0-9_]+'), '_');
 }
 
 Future<DateTime> getDateOfLastSyncedWithClient(String clientIDForSync) async {
