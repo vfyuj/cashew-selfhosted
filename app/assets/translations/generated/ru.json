@@ -416,6 +416,8 @@
   "lets-go": "Поехали!",
   "transactions-for-selected-category": "Показаны транзакции выбранной категории",
   "select-start-date": "Выбрать дату начала",
+  "select-date": "Выберите дату",
+  "select-time": "Выберите время",
   "all-time": "За всё время",
   "icon-suggestion-details": "Не нашёл нужную иконку? Предложи свою — её могут добавить!",
   "suggestion": "Предложение",

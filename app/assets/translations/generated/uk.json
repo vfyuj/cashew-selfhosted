@@ -397,6 +397,8 @@
   "lets-go": "Поїхали!",
   "transactions-for-selected-category": "Показати транзакції з вибраної категорії",
   "select-start-date": "Виберіть дату початку",
+  "select-date": "Виберіть дату",
+  "select-time": "Виберіть час",
   "all-time": "Весь час",
   "icon-suggestion-details": "Не можете знайти потрібну іконку? Запропонуйте їх, і вони можуть бути додані!",
   "suggestion": "Пропозиція",

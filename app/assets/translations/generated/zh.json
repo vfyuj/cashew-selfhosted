@@ -397,6 +397,8 @@
   "lets-go": "我们开始吧！",
   "transactions-for-selected-category": "显示选定类别中的交易",
   "select-start-date": "选择开始日期",
+  "select-date": "选择日期",
+  "select-time": "选择时间",
   "all-time": "全部时间",
   "icon-suggestion-details": "找不到你想要的图标？提交一些建议它们就能被添加进来了！",
   "suggestion": "建议",

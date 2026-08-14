@@ -350,7 +350,11 @@ Future<T?> openPopupCustom<T extends Object?>(
   bool barrierDismissible = true,
   EdgeInsetsDirectional padding =
       const EdgeInsetsDirectional.symmetric(horizontal: 25, vertical: 20),
-  BorderRadius? borderRadius,
+  BorderRadiusGeometry? borderRadius,
+  AlignmentGeometry alignment = Alignment.center,
+  // Matches the slide-up-from-bottom entrance used by the sliding_sheet
+  // bottom sheets (openBottomSheet) elsewhere in the app.
+  bool slideFromBottom = false,
   required Widget child,
 }) {
   return showGeneralDialog(
@@ -360,6 +364,17 @@ Future<T?> openPopupCustom<T extends Object?>(
     barrierColor: Colors.black.withOpacity(0.4),
     barrierLabel: '',
     transitionBuilder: (_, anim, __, child) {
+      if (slideFromBottom) {
+        return SlideTransition(
+          position: Tween<Offset>(begin: Offset(0, 1), end: Offset.zero)
+              .animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+          child: FadeTransition(
+            opacity: anim,
+            child: child,
+          ),
+        );
+      }
       Tween<double> tween;
       if (anim.status == AnimationStatus.reverse) {
         tween = Tween(begin: 0.9, end: 1);
@@ -375,12 +390,15 @@ Future<T?> openPopupCustom<T extends Object?>(
         ),
       );
     },
-    transitionDuration: Duration(milliseconds: 200),
+    transitionDuration: slideFromBottom
+        ? Duration(milliseconds: 300)
+        : Duration(milliseconds: 200),
     pageBuilder: (_, __, ___) {
       return WillPopScope(
         //Stop back button
         onWillPop: () async => barrierDismissible,
-        child: Center(
+        child: Align(
+          alignment: alignment,
           child: Container(
             margin: EdgeInsetsDirectional.only(
               start: 20,
@@ -388,6 +406,7 @@ Future<T?> openPopupCustom<T extends Object?>(
               top: MediaQuery.paddingOf(context).top,
               bottom: MediaQuery.paddingOf(context).bottom,
             ),
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: appStateSettings["materialYou"]
                   ? dynamicPastel(

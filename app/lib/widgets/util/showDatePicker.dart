@@ -10,6 +10,7 @@ import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
 import 'package:cashew_selfhosted/widgets/fab.dart';
 import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
 import 'package:cashew_selfhosted/widgets/globalSnackbar.dart';
+import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/openSnackbar.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
@@ -32,38 +33,117 @@ Future<DateTime?> showCustomDatePicker(
   String? confirmText,
 }) async {
   minimizeKeyboard(context);
-  return await showDatePicker(
-    context: context,
-    useRootNavigator: false,
-    initialDate: initialDate,
-    initialEntryMode: initialEntryMode,
-    firstDate: DateTime(DateTime.now().year - 1000),
-    lastDate: DateTime(DateTime.now().year + 1000),
-    helpText: helpText,
-    cancelText: cancelText,
-    confirmText: confirmText,
-    builder: (BuildContext context, Widget? child) {
-      return ApplyStartOfTheWeekSetting(
-        child: Theme(
-          data: Theme.of(context).copyWith(
-            // ignore: deprecated_member_use
-            useMaterial3: appStateSettings["materialYou"],
-            datePickerTheme: DatePickerTheme.of(context).copyWith(
-              headerHeadlineStyle: const TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
+  return await openPopupCustom<DateTime>(
+    context,
+    alignment: AlignmentDirectional.bottomCenter,
+    slideFromBottom: true,
+    padding: EdgeInsetsDirectional.zero,
+    borderRadius: BorderRadiusDirectional.vertical(
+      top: Radius.circular(getPlatform() == PlatformOS.isIOS ? 10 : 20),
+    ),
+    child: ScrollDatePickerPopup(
+      initialDate: initialDate,
+      cancelText: cancelText,
+      confirmText: confirmText,
+    ),
+  );
+}
+
+class ScrollDatePickerPopup extends StatefulWidget {
+  const ScrollDatePickerPopup({
+    required this.initialDate,
+    this.cancelText,
+    this.confirmText,
+    super.key,
+  });
+  final DateTime initialDate;
+  final String? cancelText;
+  final String? confirmText;
+
+  @override
+  State<ScrollDatePickerPopup> createState() => _ScrollDatePickerPopupState();
+}
+
+class _ScrollDatePickerPopupState extends State<ScrollDatePickerPopup> {
+  late DateTime selectedDate = widget.initialDate;
+
+  @override
+  Widget build(BuildContext context) {
+    bool materialYou = appStateSettings["materialYou"] == true;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: getWidthBottomSheet(context)),
+      child: PopupFramework(
+        title: "select-date".tr(),
+        showCloseButton: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 210,
+              child: CupertinoTheme(
+                data: CupertinoThemeData(
+                  brightness: Theme.of(context).brightness,
+                  textTheme: CupertinoTextThemeData(
+                    dateTimePickerTextStyle: TextStyle(
+                      color: getColor(context, "black"),
+                      fontSize: 21,
+                    ),
+                  ),
+                ),
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: selectedDate,
+                  minimumYear: DateTime.now().year - 100,
+                  maximumYear: DateTime.now().year + 100,
+                  backgroundColor: Colors.transparent,
+                  onDateTimeChanged: (DateTime newDate) {
+                    selectedDate = newDate;
+                  },
+                ),
               ),
             ),
-            shadowColor: getPlatform() == PlatformOS.isIOS &&
-                    appStateSettings["materialYou"]
-                ? Theme.of(context).colorScheme.secondaryContainer
-                : null,
-          ),
-          child: child ?? SizedBox.shrink(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Tappable(
+                  onTap: () => Navigator.pop(context),
+                  color: Colors.transparent,
+                  borderRadius: materialYou ? 15 : 7,
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.symmetric(
+                        horizontal: 15, vertical: 10),
+                    child: TextFont(
+                      fontSize: materialYou ? 15 : 13,
+                      textColor: Theme.of(context).colorScheme.primary,
+                      text: materialYou
+                          ? (widget.cancelText ?? "cancel".tr())
+                          : (widget.cancelText ?? "cancel".tr()).allCaps,
+                    ),
+                  ),
+                ),
+                Tappable(
+                  onTap: () => Navigator.pop(context, selectedDate),
+                  color: Colors.transparent,
+                  borderRadius: materialYou ? 15 : 7,
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.symmetric(
+                        horizontal: 15, vertical: 10),
+                    child: TextFont(
+                      fontSize: materialYou ? 15 : 13,
+                      textColor: Theme.of(context).colorScheme.primary,
+                      text: materialYou
+                          ? (widget.confirmText ?? "ok".tr())
+                          : (widget.confirmText ?? "ok".tr()).allCaps,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
 
 class DateTimeRangeOrAllTime {

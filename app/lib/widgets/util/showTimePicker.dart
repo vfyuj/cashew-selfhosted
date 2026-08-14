@@ -1,108 +1,136 @@
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/dateTimePickerLocalizationsDelegate.dart';
+import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
+import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
+import 'package:cashew_selfhosted/widgets/openPopup.dart';
+import 'package:cashew_selfhosted/widgets/tappable.dart';
 import 'package:cashew_selfhosted/widgets/textInput.dart';
+import 'package:cashew_selfhosted/widgets/textWidgets.dart';
 import 'package:cashew_selfhosted/widgets/timeDigits.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 Future<TimeOfDay?> showCustomTimePicker(
     BuildContext context, TimeOfDay initialTime,
     {String? confirmText}) async {
   minimizeKeyboard(context);
-  TimeOfDay? newTime = await showTimePicker(
-    context: context,
-    useRootNavigator: false,
-    initialTime: initialTime,
-    initialEntryMode: TimePickerEntryMode.dial,
-    helpText: "",
-    confirmText: confirmText,
-    builder: (BuildContext context, Widget? child) {
-      child = Apply24HourFormatSetting(
-          materialLocalizations: MaterialLocalizations.of(context),
-          child: child ?? SizedBox.shrink());
-
-      if (appStateSettings["materialYou"]) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            // ignore: deprecated_member_use
-            useMaterial3: appStateSettings["materialYou"],
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-                  tertiaryContainer:
-                      Theme.of(context).colorScheme.primaryContainer,
-                  onTertiaryContainer:
-                      Theme.of(context).colorScheme.onPrimaryContainer,
-                ),
-            shadowColor: getPlatform() == PlatformOS.isIOS &&
-                    appStateSettings["materialYou"]
-                ? Theme.of(context).colorScheme.secondaryContainer
-                : null,
-            textTheme: TextTheme(
-              displayLarge: TextStyle(
-                fontSize: 65,
-                fontWeight: FontWeight.w300,
-              ),
-              bodySmall: TextStyle(
-                color: getColor(context, "textLight"),
-              ),
-            ),
-          ),
-          child: child,
-        );
-      }
-      return Theme(
-        data: Theme.of(context).brightness == Brightness.light
-            ? ThemeData.light().copyWith(
-                // ignore: deprecated_member_use
-                useMaterial3: appStateSettings["materialYou"],
-                primaryColor: Theme.of(context).colorScheme.primary,
-                colorScheme: ColorScheme.light(
-                    primary: Theme.of(context).colorScheme.primary),
-                buttonTheme:
-                    ButtonThemeData(textTheme: ButtonTextTheme.primary),
-              )
-            : ThemeData.dark().copyWith(
-                // ignore: deprecated_member_use
-                useMaterial3: appStateSettings["materialYou"],
-                primaryColor: Theme.of(context).colorScheme.secondary,
-                colorScheme: ColorScheme.dark(
-                    primary: Theme.of(context).colorScheme.secondary),
-                buttonTheme:
-                    ButtonThemeData(textTheme: ButtonTextTheme.primary),
-              ),
-        child: child,
-      );
-    },
+  return await openPopupCustom<TimeOfDay>(
+    context,
+    alignment: AlignmentDirectional.bottomCenter,
+    slideFromBottom: true,
+    padding: EdgeInsetsDirectional.zero,
+    borderRadius: BorderRadiusDirectional.vertical(
+      top: Radius.circular(getPlatform() == PlatformOS.isIOS ? 10 : 20),
+    ),
+    child: ScrollTimePickerPopup(
+      initialTime: initialTime,
+      confirmText: confirmText,
+    ),
   );
-
-  return newTime;
 }
 
-class Apply24HourFormatSetting extends StatelessWidget {
-  const Apply24HourFormatSetting(
-      {required this.child, super.key, required this.materialLocalizations});
-  final Widget child;
-  final MaterialLocalizations materialLocalizations;
+class ScrollTimePickerPopup extends StatefulWidget {
+  const ScrollTimePickerPopup({
+    required this.initialTime,
+    this.confirmText,
+    super.key,
+  });
+  final TimeOfDay initialTime;
+  final String? confirmText;
+
+  @override
+  State<ScrollTimePickerPopup> createState() => _ScrollTimePickerPopupState();
+}
+
+class _ScrollTimePickerPopupState extends State<ScrollTimePickerPopup> {
+  late DateTime selectedDateTime = DateTime(
+    2020,
+    1,
+    1,
+    widget.initialTime.hour,
+    widget.initialTime.minute,
+  );
 
   @override
   Widget build(BuildContext context) {
-    if (isSetting24HourFormat() == null) return child;
-    DateTimePickerLocalizationsDelegate delegate =
-        DateTimePickerLocalizationsDelegate(
-      materialLocalizations: materialLocalizations,
-    );
-    return Localizations.override(
-      context: context,
-      // We have to force the locale to english. If it is "fr" it will always be 24 hours :(
-      // See: https://github.com/flutter/flutter/issues/54839 which is slightly incorrect in its implementation
-      // We apply the translations to the actual time picker when opened
-      // Only issue: AM and PM is not correctly translated... so we fix that with a custom delegate
-      locale: Locale("en", "US"),
-      delegates: [delegate],
-      child: MediaQuery(
-        child: child,
-        data: MediaQuery.of(context).copyWith(
-          alwaysUse24HourFormat: isSetting24HourFormat(),
+    bool materialYou = appStateSettings["materialYou"] == true;
+    bool use24HourFormat =
+        isSetting24HourFormat() ?? isSystem24HourFormat(context);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: getWidthBottomSheet(context)),
+      child: PopupFramework(
+        title: "select-time".tr(),
+        showCloseButton: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 210,
+              child: CupertinoTheme(
+                data: CupertinoThemeData(
+                  brightness: Theme.of(context).brightness,
+                  textTheme: CupertinoTextThemeData(
+                    dateTimePickerTextStyle: TextStyle(
+                      color: getColor(context, "black"),
+                      fontSize: 21,
+                    ),
+                  ),
+                ),
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.time,
+                  initialDateTime: selectedDateTime,
+                  use24hFormat: use24HourFormat,
+                  backgroundColor: Colors.transparent,
+                  onDateTimeChanged: (DateTime newDateTime) {
+                    selectedDateTime = newDateTime;
+                  },
+                ),
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Tappable(
+                  onTap: () => Navigator.pop(context),
+                  color: Colors.transparent,
+                  borderRadius: materialYou ? 15 : 7,
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.symmetric(
+                        horizontal: 15, vertical: 10),
+                    child: TextFont(
+                      fontSize: materialYou ? 15 : 13,
+                      textColor: Theme.of(context).colorScheme.primary,
+                      text:
+                          materialYou ? "cancel".tr() : "cancel".tr().allCaps,
+                    ),
+                  ),
+                ),
+                Tappable(
+                  onTap: () => Navigator.pop(
+                    context,
+                    TimeOfDay(
+                        hour: selectedDateTime.hour,
+                        minute: selectedDateTime.minute),
+                  ),
+                  color: Colors.transparent,
+                  borderRadius: materialYou ? 15 : 7,
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.symmetric(
+                        horizontal: 15, vertical: 10),
+                    child: TextFont(
+                      fontSize: materialYou ? 15 : 13,
+                      textColor: Theme.of(context).colorScheme.primary,
+                      text: materialYou
+                          ? (widget.confirmText ?? "ok".tr())
+                          : (widget.confirmText ?? "ok".tr()).allCaps,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
