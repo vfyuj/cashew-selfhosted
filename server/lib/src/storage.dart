@@ -41,13 +41,19 @@ class UserFileStore {
     return p.join(_ensureDir().path, filename);
   }
 
+  /// Newest first. `listSync()` returns filesystem order, which is
+  /// unspecified and not chronological -- callers (the backups dialog in
+  /// particular) rely on this method to hand back a stable, time-ordered
+  /// list rather than sorting it themselves.
   List<FileMetadata> list() {
     final dir = _ensureDir();
     final entries = dir.listSync().whereType<File>();
-    return entries.map((file) {
+    final files = entries.map((file) {
       final stat = file.statSync();
       return FileMetadata(p.basename(file.path), stat.modified, stat.size);
     }).toList();
+    files.sort((a, b) => b.modifiedTime.compareTo(a.modifiedTime));
+    return files;
   }
 
   void write(String filename, List<int> bytes) {
