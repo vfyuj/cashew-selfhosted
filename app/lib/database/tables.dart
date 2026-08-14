@@ -2527,19 +2527,21 @@ class FinanceDatabase extends _$FinanceDatabase {
     final totalCount = transactions.transactionPk.count();
     final totalSpent =
         transactions.amount.sum(filter: transactions.paid.equals(true));
-    // hiddenWalletPks layers this member's own choices on top of the
-    // household's shared pinning: homePageWidgetDisplay still decides which
-    // accounts belong on the home page, and this removes some of them from one
-    // person's view of it. Only applied to the home-page widget queries, so an
-    // account hidden from the home page is still fully usable everywhere else.
+    // Home-page account visibility (WalletSwitcher/WalletList, the only
+    // callers that pass homePageWidgetDisplay here) is decided solely by
+    // hiddenWalletPks, this member's own eye-toggle choices. The
+    // homePageWidgetDisplay column is intentionally NOT consulted for that:
+    // it's upstream's old household-wide pin field, it has no surviving UI
+    // that can re-add a wallet to it, and honoring it here made accounts
+    // hidden via that dead control unrecoverable. The column is still live
+    // for the Net Worth/income-expense/pie-chart calculation-scope pickers
+    // (see getAllPinnedWallets), which keep their own checkmark UI.
+    // Only applied to the home-page widget queries, so an account hidden
+    // from the home page is still fully usable everywhere else.
     final Set<String> hiddenForThisMember =
         homePageWidgetDisplay == null ? const {} : hiddenWalletPks;
     query = (select(wallets)
-          ..where((w) => ((homePageWidgetDisplay != null
-                  ? w.homePageWidgetDisplay
-                      .contains(homePageWidgetDisplay.index.toString())
-                  : Constant(true)) &
-              (hiddenForThisMember.isEmpty
+          ..where((w) => ((hiddenForThisMember.isEmpty
                   ? Constant(true)
                   : w.walletPk.isNotIn(hiddenForThisMember.toList())) &
               (searchFor == null
