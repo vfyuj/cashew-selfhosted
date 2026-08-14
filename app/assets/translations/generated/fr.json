@@ -1218,5 +1218,11 @@
   "changelog-1-0-4-subcategory-colors-title": "Les sous-catégories reprennent la couleur de leur catégorie",
   "changelog-1-0-4-subcategory-colors-body": "Les sous-catégories n'ont plus de sélecteur de couleur propre : elles utilisent toujours la couleur de leur catégorie principale, et les sous-catégories existantes ont été mises à jour en conséquence.",
   "changelog-1-0-4-account-dedupe-title": "Fini les comptes en double",
-  "changelog-1-0-4-account-dedupe-body": "Corrige les comptes qui apparaissaient deux fois lors du choix de ceux à afficher sur la page d'accueil."
+  "changelog-1-0-4-account-dedupe-body": "Corrige les comptes qui apparaissaient deux fois lors du choix de ceux à afficher sur la page d'accueil.",
+  "changelog-1-1-0-date-time-picker-title": "Les sélecteurs de date et d'heure correspondent désormais au reste de l'app",
+  "changelog-1-1-0-date-time-picker-body": "Toucher une date ou une heure ouvre désormais le même sélecteur à molette utilisé ailleurs dans l'app, au lieu d'une boîte de dialogue de calendrier ou d'horloge centrée.",
+  "changelog-1-1-0-backup-naming-title": "Noms de fichiers de sauvegarde et de synchronisation plus propres, les plus récents en premier",
+  "changelog-1-1-0-backup-naming-body": "Les noms d'appareil contenant des espaces (comme \"Macintosh Intel M\") ne produisent plus de noms de fichiers codés en %20, et les listes de sauvegardes, de synchronisation et de pièces jointes sont désormais triées avec l'élément le plus récent en premier.",
+  "changelog-1-1-0-wallet-visibility-title": "Correction : certains comptes masqués ne pouvaient plus être réaffichés",
+  "changelog-1-1-0-wallet-visibility-body": "Les comptes masqués depuis l'écran d'accueil avant l'existence du nouvel interrupteur dans \"Sélectionner les comptes\" pouvaient rester bloqués sans moyen de les réafficher. Cet ancien interrupteur ne prime plus sur le nouveau."
 }

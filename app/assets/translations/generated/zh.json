@@ -1218,5 +1218,11 @@
   "changelog-1-0-4-subcategory-colors-title": "子类别使用其类别的颜色",
   "changelog-1-0-4-subcategory-colors-body": "子类别不再有独立的颜色选择——它们始终使用主类别的颜色，已有的子类别也已相应更新。",
   "changelog-1-0-4-account-dedupe-title": "账户不再重复出现",
-  "changelog-1-0-4-account-dedupe-body": "修复了在选择主页显示哪些账户时，账户会重复出现的问题。"
+  "changelog-1-0-4-account-dedupe-body": "修复了在选择主页显示哪些账户时，账户会重复出现的问题。",
+  "changelog-1-1-0-date-time-picker-title": "日期和时间选择器现在与应用其他部分保持一致",
+  "changelog-1-1-0-date-time-picker-body": "点击日期或时间时，现在会打开与应用其他部分相同的可滑动滚轮选择器，而不是居中的日历或时钟对话框。",
+  "changelog-1-1-0-backup-naming-title": "备份与同步文件名更整洁，最新的排在最前",
+  "changelog-1-1-0-backup-naming-body": "包含空格的设备名（如“Macintosh Intel M”）不再生成带 %20 编码的奇怪文件名，备份、同步和附件列表现在也会按最新在前排序。",
+  "changelog-1-1-0-wallet-visibility-title": "修复：部分已隐藏的账户无法重新显示",
+  "changelog-1-1-0-wallet-visibility-body": "在新的“选择账户”显示开关出现之前被隐藏在主屏幕的账户，可能会卡在隐藏状态且无法恢复显示。旧开关不再覆盖新开关。"
 }

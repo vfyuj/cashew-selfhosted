@@ -1218,5 +1218,11 @@
   "changelog-1-0-4-subcategory-colors-title": "Unterkategorien übernehmen die Farbe ihrer Kategorie",
   "changelog-1-0-4-subcategory-colors-body": "Unterkategorien haben keine eigene Farbauswahl mehr -- sie verwenden immer die Farbe ihrer Hauptkategorie, und bestehende Unterkategorien wurden entsprechend aktualisiert.",
   "changelog-1-0-4-account-dedupe-title": "Keine doppelten Konten mehr",
-  "changelog-1-0-4-account-dedupe-body": "Behebt einen Fehler, bei dem Konten beim Auswählen der auf der Startseite angezeigten Konten doppelt erschienen."
+  "changelog-1-0-4-account-dedupe-body": "Behebt einen Fehler, bei dem Konten beim Auswählen der auf der Startseite angezeigten Konten doppelt erschienen.",
+  "changelog-1-1-0-date-time-picker-title": "Datums- und Uhrzeitauswahl passt jetzt zum Rest der App",
+  "changelog-1-1-0-date-time-picker-body": "Beim Antippen eines Datums oder einer Uhrzeit öffnet sich jetzt derselbe schiebbare Scroll-Picker wie im Rest der App, statt eines zentrierten Kalender- oder Uhr-Dialogs.",
+  "changelog-1-1-0-backup-naming-title": "Sauberere Namen für Backup- und Sync-Dateien, neueste zuerst",
+  "changelog-1-1-0-backup-naming-body": "Gerätenamen mit Leerzeichen (wie \"Macintosh Intel M\") erzeugen keine seltsamen %20-codierten Dateinamen mehr, und die Listen für Backups, Sync und Anhänge sind jetzt nach dem neuesten Eintrag zuerst sortiert.",
+  "changelog-1-1-0-wallet-visibility-title": "Behoben: Manche ausgeblendeten Konten ließen sich nicht mehr einblenden",
+  "changelog-1-1-0-wallet-visibility-body": "Konten, die vor dem neuen Sichtbarkeits-Schalter in \"Konten auswählen\" ausgeblendet wurden, konnten ohne Möglichkeit zum Wiedereinblenden hängen bleiben. Der alte Schalter überschreibt den neuen nicht mehr."
 }

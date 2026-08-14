@@ -1218,5 +1218,11 @@
   "changelog-1-0-4-subcategory-colors-title": "As subcategorias usam a cor da categoria",
   "changelog-1-0-4-subcategory-colors-body": "As subcategorias não têm mais um seletor de cor próprio: elas sempre usam a cor da categoria principal, e as subcategorias existentes foram atualizadas para corresponder.",
   "changelog-1-0-4-account-dedupe-title": "Fim das contas duplicadas",
-  "changelog-1-0-4-account-dedupe-body": "Corrige contas que apareciam duas vezes ao escolher quais mostrar na página inicial."
+  "changelog-1-0-4-account-dedupe-body": "Corrige contas que apareciam duas vezes ao escolher quais mostrar na página inicial.",
+  "changelog-1-1-0-date-time-picker-title": "Os seletores de data e hora agora combinam com o resto do app",
+  "changelog-1-1-0-date-time-picker-body": "Tocar em uma data ou hora agora abre o mesmo seletor deslizante usado no resto do app, em vez de uma caixa de diálogo de calendário ou relógio centralizada.",
+  "changelog-1-1-0-backup-naming-title": "Nomes de arquivos de backup e sincronização mais limpos, mais recentes primeiro",
+  "changelog-1-1-0-backup-naming-body": "Nomes de dispositivo com espaços (como \"Macintosh Intel M\") não geram mais nomes de arquivo codificados com %20, e as listas de backups, sincronização e anexos agora são ordenadas com o item mais recente primeiro.",
+  "changelog-1-1-0-wallet-visibility-title": "Corrigido: algumas contas ocultas não podiam ser exibidas novamente",
+  "changelog-1-1-0-wallet-visibility-body": "Contas ocultadas da tela inicial antes de existir o novo botão em \"Selecionar contas\" podiam ficar presas sem forma de reexibi-las. Esse botão antigo não sobrepõe mais o novo."
 }
