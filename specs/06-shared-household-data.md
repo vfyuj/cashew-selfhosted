@@ -148,10 +148,25 @@ from the feed — that exclusion is the safety property that makes syncing this
 table acceptable at all, since row 0 holds the server URL, the signed-in email
 and the cached exchange rates.
 
-Wallet hiding is layered *on top of* `homePageWidgetDisplay` rather than
-replacing it: the household still decides which accounts are pinned where, and
-this drops some of them from one person's view. Additive, so every existing
-query keeps its meaning.
+Wallet hiding was originally layered *on top of* `homePageWidgetDisplay`
+rather than replacing it: the household still decided which accounts were
+pinned where, and this dropped some of them from one person's view. That
+turned out to be a dead end for the home page specifically (WalletSwitcher
+and WalletList): upstream's old pin UI for those two was a per-account
+checkmark that this feature's popup redesign replaced with the eye toggle
+above, and nothing was left that could write `WalletSwitcher`/`WalletList`
+back into a wallet's `homePageWidgetDisplay` once removed. Any account
+hidden via the old pin — which, before this feature shipped, was the *only*
+way to hide an account — became permanently stuck off the home page, with
+`hiddenWalletPks` unable to reach it since it only ever subtracts.
+`watchAllWalletsWithDetails` (`app/lib/database/tables.dart`) now ignores
+`homePageWidgetDisplay` entirely when asked for `WalletSwitcher`/`WalletList`
+and gates on `hiddenWalletPks` alone, so it is the sole visibility control for
+the home page and every account is reachable through it. The column is still
+live and unchanged for the Net Worth / income-expense / pie-chart
+calculation-scope pickers (`getAllPinnedWallets`), which is a different
+question — which accounts feed a total — and keeps its original
+household-wide checkmark UI.
 
 **The restore carve-out is load-bearing.** A backup holds every member's rows,
 and `bumpAllModifiedTimestampsForResync` would stamp them as newest and push
