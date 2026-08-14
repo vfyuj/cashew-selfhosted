@@ -416,6 +416,8 @@
   "lets-go": "Let's Go!",
   "transactions-for-selected-category": "Showing transactions from selected category",
   "select-start-date": "Select Start Date",
+  "select-date": "Select Date",
+  "select-time": "Select Time",
   "all-time": "All Time",
   "icon-suggestion-details": "Can't find an icon you want? Suggest some and they can be added!",
   "suggestion": "Suggestion",

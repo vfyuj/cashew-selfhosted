@@ -397,6 +397,8 @@
   "lets-go": "Los geht's!",
   "transactions-for-selected-category": "Zeige Transaktionen aus der gewählten Kategorie",
   "select-start-date": "Start-Datum wählen",
+  "select-date": "Datum auswählen",
+  "select-time": "Uhrzeit auswählen",
   "all-time": "Immer",
   "icon-suggestion-details": "Du kannst kein passendes Symbol finden? Schlage welche vor und wir können sie hinzufügen!",
   "suggestion": "Vorschlag",
