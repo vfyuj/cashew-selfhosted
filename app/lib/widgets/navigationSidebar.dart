@@ -270,6 +270,10 @@ class NavigationSidebarState extends State<NavigationSidebar> {
                                 currentPageIndex: selectedIndex,
                               ),
                               NavigationSidebarButtonWithNavBarIconData(
+                                navBarIconDataKey: "envelopes",
+                                currentPageIndex: selectedIndex,
+                              ),
+                              NavigationSidebarButtonWithNavBarIconData(
                                 navBarIconDataKey: "goals",
                                 currentPageIndex: selectedIndex,
                               ),

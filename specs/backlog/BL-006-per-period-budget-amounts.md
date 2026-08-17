@@ -1,13 +1,23 @@
 # BL-006 — Per-period budget amounts
 
-**Status:** Implemented 2026-08-10. Not yet acceptance-tested by the owner.
+**Status: SUPERSEDED 2026-08-17 by the Envelopes feature (release 1.2.0).** Implemented 2026-08-10,
+withdrawn before it was ever acceptance-tested.
+
+The problem in §1 was real and is still solved — a month that has ended keeps the amount it was
+planned with. What changed is where that lives. Envelopes store one row per category per month
+(`docs/app/envelopes.md`), so "what was April's target" is a row rather than an effective-from
+history packed into `Budgets.sharedAllMembersEver`, and there is no second parser to keep strict
+against an original-Cashew backup's member IDs. Budgets themselves are upstream's again and no longer
+record per-period amounts at all.
+
+The one-shot conversion reads the old packed history and writes one envelope row per recorded month
+(`database/envelopeMigration.dart`), so nothing the household set is lost.
+
+**Kept for the reasoning.** §3 in particular is still the best statement of why a dead column looked
+like the right home at the time, and `docs/app/database.md` now records why it wasn't.
 
 **Origin:** owner question (2026-08-10) — *"Can I adjust monthly budgets each month? Will it overwrite
 the budget limits for previous months?"* The answer was yes to both, and the second yes was the bug.
-
-Local Drift reads/writes only, no new column or table — `schemaVersionGlobal` is still 46 and the
-`CLAUDE.md` compatibility diff still prints nothing. Backwards compatibility with upstream was in fact
-the owner's stated criterion for this whole feature; §3 has the full reasoning.
 
 ---
 

@@ -1,20 +1,29 @@
 # BL-001 — Category budgets, percent-of-income entry, and share-of-plan labels
 
-**Status:** Implemented 2026-08-09 on branch `claude/new-budgeting-system-88283e`. Not yet
-acceptance-tested by the owner. Extended the same day: the Planned vs. Actual summary (§9) shipped
-after this document was first written, then got a second home on the Budgets page (§7); the
-balance-correction/transfer category is now excluded from the envelope system entirely (§4); and an
-envelope's income/expense flag now tracks its category's instead of going stale (§4, §10).
+**Status: SUPERSEDED 2026-08-17 by the Envelopes feature (release 1.2.0).** Implemented 2026-08-09,
+then withdrawn before it was ever acceptance-tested. What it delivered is now a feature of its own
+with its own table — `docs/app/envelopes.md` — and the budget pages are upstream Cashew's again.
+
+**Why it was withdrawn.** The design constraint below ("no schema change, therefore derive
+everything") is what made it unmaintainable, not the idea. Deriving "this budget is category X's
+envelope" from `categoryFks` meant a reconciler that had to create envelopes, de-duplicate them,
+delete the ones for categories that stopped being eligible, and force each one's income flag back
+into agreement with its category — every launch, forever. Storing the amount history in a dead column
+(BL-006) added a second parser that had to defend itself against an upstream backup's member IDs. And
+the budget pages carried ~800 lines of divergence across seven files, so every upstream fix became a
+merge exercise.
+
+The replacement keeps the parts the owner asked for — one amount per category per month, per-month
+history, "% of planned income", Planned vs Actual, the balance-correction category excluded — and
+drops the parts that only existed to avoid a table: the reconciler, the Main Categories / Custom tab
+split, the derived "is this an envelope" test, and the dead-column storage. The one-shot conversion
+carries the data across (`database/envelopeMigration.dart`).
+
+**Kept for the reasoning, not as a description of the code.** Nothing below §1 still matches what is
+in the app.
 
 **Origin:** owner-submitted feature request (2026-08-09), reviewed against the fork source, then
-**redesigned by the owner** the same day around a hard "no schema changes" constraint. This document
-describes what was built. The earlier schema-based design is summarised in §8 for context — it is
-superseded, not deferred.
-
-Everything here is local Drift reads/writes with no schema change — `app/lib/database/tables.dart` is
-untouched, `schemaVersionGlobal` is still 46 — so it costs nothing against either
-`specs/01-local-first-invariant.md` or `CLAUDE.md`'s upstream compatibility goal; see §2 for why that
-was the load-bearing constraint on the whole design.
+redesigned by the owner the same day around a hard "no schema changes" constraint.
 
 ---
 

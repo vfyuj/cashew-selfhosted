@@ -77,62 +77,60 @@ dataset was close to mechanical. What was not mechanical:
 already hold: it carries a `millisecondsSinceEpoch` suffix. The collision was
 in the *backup* filename instead, which the decision above avoids.
 
-## Privacy: on budgets, not on transactions
+## Privacy: on budgets, not on transactions — CANCELLED 2026-08-17
 
-The original design put privacy on **transactions** and flagged its own flaw —
-hiding a transaction makes the other person's wallet balance and totals
-disagree with reality, which is worse than the problem being solved. It then
-recommended wallet-level privacy instead.
+**This shipped and was then withdrawn in release 1.2.0. Recorded because the
+reasoning still stands; the code is gone.** Every budget is the household's
+again, `Budgets.sharedMembers` is a dead column once more, and the conversion in
+`database/envelopeMigration.dart` nulls it out.
 
-What shipped puts it on **budgets**, which is better than either. A budget is a
-target and a grouping, not an amount in a balance: hide one and every remaining
-number stays correct. It also needed no schema change, because `Budgets` has a
-dead column to borrow and `Wallets` does not.
+What was decided, and why it was still the right shape of answer: the original
+design put privacy on **transactions** and flagged its own flaw — hiding a
+transaction makes the other person's wallet balance and totals disagree with
+reality, which is worse than the problem being solved. Putting it on **budgets**
+avoided that: a budget is a target and a grouping, not an amount in a balance,
+so hiding one leaves every remaining number correct. Custom budgets belonged to
+whoever created them; main-category envelopes were always the household's.
+Everything still synced, and hiding happened only at draw time — stated openly,
+because the over-allocation check below had to count budgets the viewer could
+not see.
 
-- Custom budgets default to belonging to whoever created them. Main-category
-  envelopes are always the household's — they are the shared plan, and the
-  over-allocation check measures against them.
-- Stored in `Budgets.sharedMembers` via `app/lib/struct/budgetVisibility.dart`,
-  the same borrowed-dead-column trick and the same single-owner discipline as
-  `budgetPeriodAmounts.dart` next door.
-- `sharedMembers` rather than `sharedKey` deliberately: the two surviving bits
-  of Firestore UI that would render this are both gated on `sharedKey`, and
-  nothing writes it. Borrowing `sharedMembers` leaves those dead paths dead.
+**Why it was cancelled.** Three things, none of them the privacy idea itself:
 
-**Everything syncs, including hidden budgets; hiding is at the UI layer only.**
-This is a deliberate call, not a shortcut. The over-allocation check below has
-to count budgets the viewer cannot see, or a household can silently
-over-commit a category. State the consequence honestly wherever it matters:
-this hides a budget from the app, not from anyone with a SQLite browser.
+- It rested on the same dead-column storage as the per-period amounts (BL-006),
+  with the same "this column's name lies" tax on every reader, and the same
+  parser that had to stay strict against an original-Cashew backup's real member
+  IDs arriving in it.
+- "Hidden from the app, not from a SQLite browser" is a genuinely awkward thing
+  to have to keep saying, and the one screen that had to admit another member's
+  budget existed — nameless, half opacity, completely inert — was the shape of a
+  feature arguing with itself.
+- It was never asked for twice. The household that motivated Stage 4 shares its
+  data; the budgets it kept apart were a nice-to-have, and the fork paid for it
+  in every budget screen at once.
 
-The one place another member's budget is admitted is the manage-budgets screen,
-where it appears without its name, at half opacity, and completely inert — no
-rename, reorder, delete, open or unhide — so it can never be promoted onto this
-device's budgets page.
+Personal *views* — which is what people actually notice — are being answered
+separately, by their own channel rather than by the dataset feed. See the
+per-user views section below.
 
-## Subcategory budgets sum to their main category
+## Subcategory budgets sum to their main category — CANCELLED 2026-08-17
 
-New in this stage, and the reason personal budgets sync. Budgets for a main
-category's subcategories could be created without limit and none of them
-touched the envelope they sit under, so a household could plan 1200 of spending
-inside a category budgeted at 1000 and find out at the end of the month.
+**Also withdrawn in 1.2.0, together with personal budgets, which it was the
+reason for syncing.**
 
-`app/lib/struct/subCategoryBudgetAllocation.dart` measures each main category's
-subcategory budgets against its envelope and warns when they exceed it, offering
-to raise the envelope so they fit. Under-allocating is fine and never warns.
+The problem it addressed was real: budgets for a main category's subcategories
+could be created without limit while none of them touched the envelope they sit
+under, so a household could plan 1200 of spending inside a category budgeted at
+1000 and find out at the end of the month. The check summed subcategory budgets
+per parent — normalising periods so a weekly and a monthly budget could be added
+— and offered to raise the envelope to fit.
 
-- Amounts are converted to the envelope's period before summing, so a weekly
-  budget and a monthly one can be added together. Nothing in the app normalized
-  periods before this, so it is established locally rather than retrofitted onto
-  `totalPlannedExpenses`.
-- Both sides go through `budgetAmountToPrimaryCurrency`.
-- Raising the envelope goes through `withUpdatedAmountHistory`, so finished
-  periods keep the target they were set to at the time (BL-006).
-- Expenses only. Budgets spanning several categories, or none, cannot be
-  attributed to one parent and are left out rather than guessed at.
-
-Because hidden budgets count, the figures will not always add up against the
-cards on screen. The copy says so when it applies.
+**Why it was cancelled.** It only existed because envelopes *were* budgets. Now
+that an envelope is a row in its own table with one amount per month, a budget
+underneath a category is just a budget: it is not part of the plan and there is
+nothing for it to over-allocate. The warning would have had nothing coherent to
+measure. Reintroducing an over-allocation check on top of envelopes is a
+sensible future request, but it would be a new design, not this one restored.
 
 ## Per-user views
 
@@ -201,6 +199,8 @@ that lets a resetting device see its own re-upload.
 ## Non-goals
 
 - Multi-tenant hosting. Unchanged from `00-overview.md`.
-- Cryptographic privacy. Explicitly rejected in favour of UI-level hiding.
+- Cryptographic privacy. Explicitly rejected in favour of UI-level hiding — and
+  since 1.2.0 there is no per-budget hiding either, so nothing in the household's
+  data is hidden from anyone in the household.
 - A general permission system.
 - Moving an existing account into a household, or splitting one back out.

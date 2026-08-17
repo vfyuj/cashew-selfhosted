@@ -19,6 +19,7 @@ import 'package:cashew_selfhosted/pages/editObjectivesPage.dart';
 import 'package:cashew_selfhosted/pages/editWalletsPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePage.dart';
 import 'package:cashew_selfhosted/pages/notificationsPage.dart';
+import 'package:cashew_selfhosted/pages/envelopesPage.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
 import 'package:cashew_selfhosted/pages/onBoardingPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
@@ -290,6 +291,7 @@ GlobalKey<SubscriptionsPageState> subscriptionsPageStateKey = GlobalKey();
 GlobalKey<WalletDetailsPageState> walletDetailsAllSpendingPageStateKey =
     GlobalKey();
 GlobalKey<ObjectivesListPageState> objectivesListPageStateKey = GlobalKey();
+GlobalKey<EnvelopesPageState> envelopesPageStateKey = GlobalKey();
 GlobalKey<UpcomingOverdueTransactionsState>
     upcomingOverdueTransactionsStateKey = GlobalKey();
 GlobalKey<CreditDebtTransactionsState> creditDebtTransactionsKey = GlobalKey();
@@ -370,6 +372,7 @@ class PageNavigationFrameworkState extends State<PageNavigationFramework> {
         key: upcomingOverdueTransactionsStateKey,
         overdueTransactions: null), //16
     CreditDebtTransactions(key: creditDebtTransactionsKey, isCredit: null), //17
+    EnvelopesPage(key: envelopesPageStateKey, backButton: false), //18
   ];
 
   late int currentPage = widget.widthSideNavigationBar <= 0

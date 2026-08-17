@@ -5,13 +5,8 @@ import 'package:cashew_selfhosted/pages/addWalletPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetLimitsPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/settingsPage.dart';
-import 'package:cashew_selfhosted/struct/budgetPeriodAmounts.dart';
-import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
-import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
-import 'package:cashew_selfhosted/struct/subCategoryBudgetAllocation.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
-import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
@@ -29,7 +24,6 @@ import 'package:cashew_selfhosted/widgets/radioItems.dart';
 import 'package:cashew_selfhosted/widgets/saveBottomButton.dart';
 import 'package:cashew_selfhosted/widgets/selectAmount.dart';
 import 'package:cashew_selfhosted/widgets/selectCategory.dart';
-import 'package:cashew_selfhosted/widgets/selectCategoryWithSubCategories.dart';
 import 'package:cashew_selfhosted/widgets/selectColor.dart';
 import 'package:cashew_selfhosted/widgets/settingsContainers.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
@@ -132,16 +126,6 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
   FocusNode _titleFocusNode = FocusNode();
   bool increaseBudgetWarningShown = false;
   List<String>? selectedWalletFks = null;
-
-  /// Which household member this budget belongs to, or null for the whole
-  /// household. New budgets start out personal; see struct/budgetVisibility.
-  int? selectedOwnerUserId = defaultOwnerForNewBudget;
-
-  /// Main-category envelopes are the household's shared plan and the
-  /// over-allocation check measures against them, so they are never personal
-  /// and the switch is not offered for them. Resolved once, asynchronously,
-  /// because deciding it needs the set of main category pks.
-  bool isEnvelopeBudget = false;
   String selectedWalletPk = appStateSettings["selectedWalletPk"];
 
   // BudgetsCompanion budget = BudgetsCompanion();
@@ -242,149 +226,15 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
     });
   }
 
-  // "% of planned income" is a one shot convenience, not a stored setting. The
-  // percentage is resolved against planned income here and the resulting plain
-  // amount is written into the amount field above, indistinguishable from a
-  // number typed by hand. Nothing about the percentage is persisted.
-  Future<void> setAmountFromPercentOfPlannedIncome() async {
-    final AllWallets allWallets =
-        Provider.of<AllWallets>(context, listen: false);
-    final PlannedBudgetTotals totals = await getPlannedBudgetTotals();
-    if (!mounted) return;
-    final double plannedIncome = totals.totalPlannedIncome(allWallets);
-    if (plannedIncome <= 0) {
-      openPopup(
-        context,
-        title: "no-planned-income".tr(),
-        description: "no-planned-income-description".tr(),
-        icon: appStateSettings["outlinedIcons"]
-            ? Icons.info_outlined
-            : Icons.info_rounded,
-        onSubmit: () {
-          popRoute(context);
-        },
-        onSubmitLabel: "ok".tr(),
-      );
-      return;
-    }
-
-    double selectedPercent = 0;
-    await openBottomSheet(
-      context,
-      PopupFramework(
-        title: "set-as-percent-of-planned-income".tr(),
-        subtitle: "planned-income".tr() +
-            ": " +
-            convertToMoney(allWallets, plannedIncome),
-        child: SelectAmountValue(
-          amountPassed: "",
-          allowZero: true,
-          suffix: "%",
-          setSelectedAmount: (double amount, _) {
-            selectedPercent = amount.abs() > 100 ? 100 : amount.abs();
-          },
-          next: () async {
-            popRoute(context);
-          },
-          nextLabel: "set-amount".tr(),
-        ),
-      ),
-    );
-    _budgetDetailsStateKey.currentState
-        ?.applyAmount(selectedPercent / 100 * plannedIncome);
-  }
-
   Future addBudget() async {
-    Budget createdBudget = await createBudget();
-    if (await confirmClearingAmountHistory(createdBudget) == false) return;
     loadingIndeterminateKey.currentState?.setVisibility(true);
+    Budget createdBudget = await createBudget();
     print("Added budget");
     await database.createOrUpdateBudget(
         insert: widget.budget == null, createdBudget);
     loadingIndeterminateKey.currentState?.setVisibility(false);
     savingHapticFeedback();
-    // Checked after the write, not from BudgetDetails' amount-dismissed
-    // callback: that fires while the new amount is still only on screen, so
-    // the sum would be measured against the previous saved value.
-    await _warnIfMainCategoryOverAllocated(createdBudget);
     popRoute(context);
-  }
-
-  // If this budget targets one subcategory, re-measure that subcategory's
-  // parent: the household may now have committed more inside the parent
-  // category than the parent's envelope holds. Offers to raise the envelope to
-  // match, which is the whole point - keeping the main category's number
-  // honest rather than just reporting that it isn't.
-  Future<void> _warnIfMainCategoryOverAllocated(Budget saved) async {
-    final List<String>? categoryFks = saved.categoryFks;
-    if (categoryFks == null || categoryFks.isEmpty) return;
-    if (!mounted) return;
-
-    final PlannedBudgetTotals totals = await getPlannedBudgetTotals();
-    // Null unless every category this budget targets is a subcategory of the
-    // same parent -- so a main-category envelope, or a budget spanning two
-    // categories, checks nothing.
-    final String? mainCategoryPk =
-        totals.soleParentOfSubCategories(categoryFks);
-    if (mainCategoryPk == null || !mounted) return;
-
-    final AllWallets allWallets =
-        Provider.of<AllWallets>(context, listen: false);
-    final SubCategoryAllocation? allocation =
-        allocationForMainCategory(totals, allWallets, mainCategoryPk);
-    if (allocation == null || !allocation.isOver || !mounted) return;
-
-    final dynamic raise = await openPopup(
-      context,
-      title: "over-allocated".tr(),
-      description: "over-allocated-description".tr(namedArgs: {
-            "category": allocation.envelope.name,
-            "allocated": convertToMoney(allWallets, allocation.allocated),
-            "budgeted": convertToMoney(allWallets, allocation.envelopeAmount),
-          }) +
-          (allocation.hasHidden
-              ? " " + "over-allocated-includes-hidden".tr()
-              : ""),
-      icon: appStateSettings["outlinedIcons"]
-          ? Icons.warning_outlined
-          : Icons.warning_rounded,
-      onSubmitLabel: "raise-budget-to-fit".tr(),
-      onSubmit: () => popRoute(context, true),
-      onCancelLabel: "keep".tr(),
-      onCancel: () => popRoute(context, false),
-    );
-    if (raise == true) {
-      await raiseEnvelopeToFitAllocation(allocation, allWallets);
-    }
-  }
-
-  // Changing a budget's cycle discards the per-period amounts it has recorded,
-  // because the stored period boundaries stop lining up with real ones (see
-  // struct/budgetPeriodAmounts.dart). It is the one edit here that destroys
-  // data, so it asks first. Returns false to abandon the save.
-  //
-  // Raw English, not .tr() keys - see BL-003.
-  Future<bool> confirmClearingAmountHistory(Budget createdBudget) async {
-    if (widget.budget == null) return true;
-    final Budget previous =
-        await database.getBudgetInstance(widget.budget!.budgetPk);
-    if (amountHistoryWouldBeCleared(
-            previous: previous, updated: createdBudget) ==
-        false) return true;
-    final dynamic result = await openPopup(
-      context,
-      title: "Clear this budget's history?",
-      description:
-          "Changing how often this budget repeats also clears the amounts it recorded for past periods, because they no longer line up with the new periods. Those periods will go back to showing the current amount.",
-      icon: appStateSettings["outlinedIcons"]
-          ? Icons.warning_outlined
-          : Icons.warning_rounded,
-      onSubmitLabel: "Change anyway",
-      onSubmit: () => popRoute(context, true),
-      onCancelLabel: "Cancel",
-      onCancel: () => popRoute(context, false),
-    );
-    return result == true;
   }
 
   Future<Budget> createBudget() async {
@@ -393,7 +243,7 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
       currentInstance =
           await database.getBudgetInstance(widget.budget!.budgetPk);
     }
-    final Budget budget = Budget(
+    return await Budget(
       budgetPk: widget.budget != null ? widget.budget!.budgetPk : "-1",
       name: selectedTitle ?? "",
       amount: selectedAmount ?? 0,
@@ -420,10 +270,8 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
           widget.budget != null ? currentInstance!.sharedOwnerMember : null,
       sharedDateUpdated:
           widget.budget != null ? currentInstance!.sharedDateUpdated : null,
-      // Owned via struct/budgetVisibility.dart -- this column no longer holds
-      // members. Set below by withBudgetOwner rather than here, so there is
-      // exactly one place that encodes it.
-      sharedMembers: null,
+      sharedMembers:
+          widget.budget != null ? currentInstance!.sharedMembers : null,
       sharedAllMembersEver:
           widget.budget != null ? currentInstance!.sharedAllMembersEver : null,
       budgetTransactionFilters: widget.budget?.addedTransactionsOnly == true ||
@@ -442,13 +290,6 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
           currentInstance?.isAbsoluteSpendingLimit ?? false,
       income: selectedIncome,
       walletFks: selectedWalletFks,
-    );
-    // Records the outgoing amount against the periods it applied to, so
-    // changing the target here does not rewrite what finished periods are
-    // measured against.
-    return withUpdatedAmountHistory(
-      previous: currentInstance,
-      updated: withBudgetOwner(budget, selectedOwnerUserId),
     );
   }
 
@@ -502,16 +343,6 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
         setAddedTransactionsOnly(true);
         setSelectedShared(false);
       }
-      if (widget.budget != null) {
-        final Set<String> mainCategoryPks =
-            (await database.getAllCategories(includeSubCategories: false))
-                .map((TransactionCategory category) => category.categoryPk)
-                .toSet();
-        final List<String> categoryFks = widget.budget!.categoryFks ?? const [];
-        isEnvelopeBudget = categoryFks.length == 1 &&
-            mainCategoryPks.contains(categoryFks.first);
-        if (isEnvelopeBudget) selectedOwnerUserId = null;
-      }
       setState(() {});
     });
 
@@ -551,10 +382,6 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
 
       selectedCategoryPks = widget.budget!.categoryFks;
       selectedCategoryPksExclude = widget.budget!.categoryFksExclude;
-      // Whoever already owns it keeps owning it -- editing somebody's budget
-      // must not quietly reassign it, and editing a shared one must not
-      // quietly make it personal.
-      selectedOwnerUserId = budgetOwner(widget.budget!);
       //Set to false because we can't save until we made some changes
       setState(() {
         canAddBudget = false;
@@ -963,78 +790,6 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
           //           ),
           //         ),
           // ),
-          // Raw English, not a .tr() key - see BL-003.
-          SliverToBoxAdapter(
-            child: widget.budget == null ||
-                    mapRecurrence(selectedRecurrence) ==
-                        BudgetReoccurence.custom
-                ? SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsetsDirectional.only(
-                      start: 24,
-                      end: 24,
-                      bottom: 15,
-                    ),
-                    child: TextFont(
-                      text:
-                          "Periods that have already ended keep the amount they were set to at the time.",
-                      fontSize: 14,
-                      textColor: getColor(context, "textLight"),
-                      maxLines: 3,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-          ),
-          // Only shown to an account that actually shares its data, and never
-          // for a main-category envelope: those are the household's shared
-          // plan, and the over-allocation check measures subcategory budgets
-          // against them.
-          SliverToBoxAdapter(
-            child: !budgetVisibilityApplies || isEnvelopeBudget
-                ? SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsetsDirectional.only(
-                      start: 24,
-                      end: 24,
-                      bottom: 15,
-                    ),
-                    child: SettingsContainerSwitch(
-                      title: "share-budget-with-household".tr(),
-                      compactSwitch: true,
-                      initialValue: selectedOwnerUserId == null,
-                      onSwitched: (bool shared) {
-                        selectedOwnerUserId =
-                            shared ? null : currentBudgetViewerId;
-                        determineBottomButton();
-                      },
-                      enableBorderRadius: true,
-                      isOutlined: true,
-                    ),
-                  ),
-          ),
-          SliverToBoxAdapter(
-            child: selectedIncome
-                ? SizedBox.shrink()
-                : Padding(
-                    padding: const EdgeInsetsDirectional.only(
-                      start: 24,
-                      end: 24,
-                      bottom: 15,
-                    ),
-                    child: SettingsContainer(
-                      isOutlined: true,
-                      onTap: () async {
-                        await setAmountFromPercentOfPlannedIncome();
-                      },
-                      title: "set-as-percent-of-planned-income".tr(),
-                      icon: appStateSettings["outlinedIcons"]
-                          ? Icons.percent_outlined
-                          : Icons.percent_rounded,
-                      iconScale: 1,
-                      isWideOutlined: true,
-                    ),
-                  ),
-          ),
           SliverToBoxAdapter(
             child: widget.budget == null
                 ? SizedBox.shrink()
@@ -1392,15 +1147,10 @@ class _AddBudgetPageState extends State<AddBudgetPage> {
                   child: AnimatedExpanded(
                     expand: !(selectedShared == true ||
                         selectedAddedTransactionsOnly),
-                    // Unlike the exclude picker below, this one can go down to
-                    // individual subcategories -- see
-                    // widgets/selectCategoryWithSubCategories.dart. A budget
-                    // targeting subcategories needs no schema or query change;
-                    // categoryFks is already matched against both a
-                    // transaction's category and its subcategory.
-                    child: SelectCategoryWithSubCategories(
-                      selectedCategoryPks: selectedCategoryPks,
-                      setSelectedCategoryPks: (categories) {
+                    child: SelectCategory(
+                      horizontalList: true,
+                      selectedCategories: selectedCategoryPks,
+                      setSelectedCategories: (categories) {
                         checkPopupBalanceCorrectionSelectedWarning(
                             context, categories);
                         setSelectedCategories(categories);
@@ -1674,19 +1424,6 @@ class _BudgetDetailsState extends State<BudgetDetails> {
       selectedRecurrenceDisplay = namesRecurrence[selectedRecurrence];
     }
     super.initState();
-  }
-
-  // Writes an amount in as if it had been typed. Used by the
-  // "% of planned income" button, which resolves the percentage to a plain
-  // number before it ever reaches the budget.
-  void applyAmount(double amount) {
-    final double amountAbsolute = amount.abs();
-    widget.setSelectedAmount(
-        amountAbsolute, removeTrailingZeroes(amountAbsolute.toString()));
-    setState(() {
-      selectedAmount = amountAbsolute;
-    });
-    widget.determineBottomButton();
   }
 
   Future<void> selectAmount(BuildContext context) async {

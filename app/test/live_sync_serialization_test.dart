@@ -197,12 +197,39 @@ void main() {
         settingsJSON: '{"hiddenWalletPks":["0"]}',
         dateUpdated: DateTime.now(),
       ),
+      // The fork's own table -- no upstream counterpart, and the only one whose
+      // primary key is derived rather than generated.
+      CategoryEnvelope(
+        envelopePk: '1:2026-08',
+        categoryFk: '1',
+        periodStart: DateTime(2026, 8, 1),
+        amount: 400,
+        dateTimeModified: DateTime.now(),
+      ),
     ];
 
     for (final row in rows) {
       expect(() => jsonEncode(row.toJson()), returnsNormally,
           reason: '${row.runtimeType}.toJson() is not JSON-encodable');
     }
+  });
+
+  test('an envelope survives a full push -> pull round trip', () {
+    final envelope = CategoryEnvelope(
+      envelopePk: '1:2026-08',
+      categoryFk: '1',
+      periodStart: DateTime(2026, 8, 1),
+      amount: 400,
+      dateTimeModified: DateTime.fromMillisecondsSinceEpoch(1786150106000),
+    );
+
+    final restored = CategoryEnvelope.fromJson(
+        jsonDecode(jsonEncode(envelope.toJson())) as Map<String, dynamic>);
+
+    expect(restored.envelopePk, envelope.envelopePk);
+    expect(restored.periodStart, envelope.periodStart);
+    expect(restored.amount, envelope.amount);
+    expect(restored.toJson(), envelope.toJson());
   });
 
   test('a per-user settings row survives a full push -> pull round trip', () {

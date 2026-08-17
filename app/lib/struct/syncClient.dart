@@ -367,6 +367,21 @@ Future<bool> _syncData(BuildContext context) async {
       print("NEW CATEGORY LIMITS");
       print(newCategoryBudgetLimits);
 
+      // Fork-owned table -- see the CategoryEnvelopes comment in tables.dart.
+      // Collected here as well as in liveSyncClient because this legacy
+      // whole-database path is still reachable from "manage synced devices".
+      List<CategoryEnvelope> newCategoryEnvelopes =
+          await databaseSync.getAllNewCategoryEnvelopes(lastSynced);
+      for (CategoryEnvelope newEntry in newCategoryEnvelopes) {
+        syncLogs.add(SyncLog(
+          deleteLogType: null,
+          updateLogType: UpdateLogType.CategoryEnvelope,
+          pk: newEntry.envelopePk,
+          itemToUpdate: newEntry,
+          transactionDateTime: newEntry.dateTimeModified,
+        ));
+      }
+
       List<Transaction> newTransactions =
           await databaseSync.getAllNewTransactions(lastSynced);
       for (Transaction newEntry in newTransactions) {

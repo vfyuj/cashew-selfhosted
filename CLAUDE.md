@@ -16,9 +16,9 @@ Break one of these and it usually fails silently. One line each; the reasoning i
 - **Local data is always readable and writable**, regardless of network or auth state. Sync and auth sit on top and never gate it, and a sync failure never becomes a blocked screen or an error the user must dismiss. `specs/01-local-first-invariant.md` (cited from 8 places in the app code).
 - **`is_admin` is a role; dataset membership is what data you see.** Independent axes — never use one as a proxy for the other. `docs/server/auth.md`
 - **Backups are per-user; sync and attachments follow the dataset.** Deliberate, with a test pinning it. `docs/server/storage.md`
-- **A personal budget is hidden at draw time only, never in a query that feeds a total** — the over-allocation check must count budgets the viewer cannot see. `docs/app/budgets.md`
 - **`AppSettings` row 0 is device-local and excluded from the change feed.** That exclusion is what makes syncing the table safe at all. `docs/app/settings.md`
-- **`Budgets.sharedAllMembersEver` and `sharedMembers` are fork storage in dead upstream columns** — their names lie. Read and write them only through `struct/budgetPeriodAmounts.dart` and `struct/budgetVisibility.dart`, and parse strictly. `docs/app/database.md`
+- **`CategoryEnvelopes` is the fork's own table and the only one that may be.** Every other table is upstream's and must not change, column for column. `docs/app/database.md`
+- **An envelope's income/expense comes from `Categories.income`, never from the envelope row.** Storing a second copy is what the previous implementation spent its life reconciling. `docs/app/envelopes.md`
 
 ## Checks
 
@@ -32,8 +32,9 @@ cd server && dart analyze && dart test
 `--no-fatal-infos/--no-fatal-warnings` because the fork carries ~260 pre-existing warning/info issues, zero errors — real errors still fail.
 
 ```bash
-# Upstream schema still identical? Empty output = yes.
-diff <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" app/lib/database/tables.dart) <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
+# Upstream's tables still identical? Empty output = yes. (The sed drops the
+# fork's own CategoryEnvelopes table; every other difference is a finding.)
+diff <(sed '/^@DataClassName..CategoryEnvelope../,/^}/d' app/lib/database/tables.dart | grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column") <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
 
 # Still de-Googled? Must print nothing.
 grep -iE "google|firebase|firestore|gms|play" app/pubspec.lock
@@ -88,7 +89,7 @@ The owner has time to test and wants to do it themselves — **do not spend agen
 
 ## Upstream database compatibility
 
-An original-Cashew backup should stay importable for as long as reasonably possible. Today that costs nothing — the app's Drift tables are identical to upstream's — so don't drift by accident. Deliberate divergence is an acceptable trade when a feature needs it (compatibility can then be carried by a conversion step); *incidental* drift is what to avoid.
+An original-Cashew backup should stay importable for as long as reasonably possible. Upstream's tables are unchanged, column for column, and must stay that way; the fork owns exactly one table of its own (`CategoryEnvelopes`), which an upstream backup simply doesn't have. Adding a table is the cheap kind of divergence, changing an existing one is not. *Incidental* drift is what to avoid.
 
 Mechanics, the dead-column convention, and why the diff pattern is narrowed: `docs/app/database.md`.
 
@@ -104,10 +105,10 @@ Stage docs carry the authoritative checkboxes; this is the map.
 | De-Googling — Firebase, Sign-In, Drive, Play all gone; attachments replaced server-side | complete | `specs/03-*`; the one gap with no replacement is `backlog/BL-005` |
 | Accounts, first-run setup wizard, admin provisioning | shipped | `specs/05-*` |
 | Stage 2 live sync — row feed, WebSocket wake-up, Reset Sync | implemented end to end; owner's acceptance pass outstanding | `specs/04-*` |
-| Stage 4 shared household data — datasets, personal budgets, per-user views | shipped | `specs/06-*` |
+| Stage 4 shared household data — datasets, per-user views | shipped; personal budgets withdrawn in 1.2.0 | `specs/06-*` |
 | Releases — signed APK, multi-arch GHCR image, tag workflow | working | `specs/09-*` |
-| Per-period budget amounts | shipped | `backlog/BL-006` |
-| Category-locked envelope budgets, Planned vs Actual | shipped | `backlog/BL-001` |
+| Per-period budget amounts | withdrawn in 1.2.0 — envelopes store one row per month instead | `backlog/BL-006` |
+| Envelopes (monthly plan per category), Planned vs Actual | shipped; replaced the budget-shaped version in 1.2.0 | `backlog/BL-001`, `docs/app/envelopes.md` |
 | Onboarding rework | shipped | `backlog/BL-002` |
 | Fork-owned translations + in-app editor | shipped | `backlog/BL-007` |
 | Real home-server deployment, and every acceptance pass | the owner's, not an agent task | `DEPLOYMENT.md` |

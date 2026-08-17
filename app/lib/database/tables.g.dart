@@ -367,6 +367,29 @@ class TransactionWallet extends DataClass
             ? homePageWidgetDisplay.value
             : this.homePageWidgetDisplay,
       );
+  TransactionWallet copyWithCompanion(WalletsCompanion data) {
+    return TransactionWallet(
+      walletPk: data.walletPk.present ? data.walletPk.value : this.walletPk,
+      name: data.name.present ? data.name.value : this.name,
+      colour: data.colour.present ? data.colour.value : this.colour,
+      iconName: data.iconName.present ? data.iconName.value : this.iconName,
+      dateCreated:
+          data.dateCreated.present ? data.dateCreated.value : this.dateCreated,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+      order: data.order.present ? data.order.value : this.order,
+      currency: data.currency.present ? data.currency.value : this.currency,
+      currencyFormat: data.currencyFormat.present
+          ? data.currencyFormat.value
+          : this.currencyFormat,
+      decimals: data.decimals.present ? data.decimals.value : this.decimals,
+      homePageWidgetDisplay: data.homePageWidgetDisplay.present
+          ? data.homePageWidgetDisplay.value
+          : this.homePageWidgetDisplay,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('TransactionWallet(')
@@ -944,6 +967,31 @@ class TransactionCategory extends DataClass
         mainCategoryPk:
             mainCategoryPk.present ? mainCategoryPk.value : this.mainCategoryPk,
       );
+  TransactionCategory copyWithCompanion(CategoriesCompanion data) {
+    return TransactionCategory(
+      categoryPk:
+          data.categoryPk.present ? data.categoryPk.value : this.categoryPk,
+      name: data.name.present ? data.name.value : this.name,
+      colour: data.colour.present ? data.colour.value : this.colour,
+      iconName: data.iconName.present ? data.iconName.value : this.iconName,
+      emojiIconName: data.emojiIconName.present
+          ? data.emojiIconName.value
+          : this.emojiIconName,
+      dateCreated:
+          data.dateCreated.present ? data.dateCreated.value : this.dateCreated,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+      order: data.order.present ? data.order.value : this.order,
+      income: data.income.present ? data.income.value : this.income,
+      methodAdded:
+          data.methodAdded.present ? data.methodAdded.value : this.methodAdded,
+      mainCategoryPk: data.mainCategoryPk.present
+          ? data.mainCategoryPk.value
+          : this.mainCategoryPk,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('TransactionCategory(')
@@ -1600,6 +1648,32 @@ class Objective extends DataClass implements Insertable<Objective> {
         archived: archived ?? this.archived,
         walletFk: walletFk ?? this.walletFk,
       );
+  Objective copyWithCompanion(ObjectivesCompanion data) {
+    return Objective(
+      objectivePk:
+          data.objectivePk.present ? data.objectivePk.value : this.objectivePk,
+      type: data.type.present ? data.type.value : this.type,
+      name: data.name.present ? data.name.value : this.name,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      order: data.order.present ? data.order.value : this.order,
+      colour: data.colour.present ? data.colour.value : this.colour,
+      dateCreated:
+          data.dateCreated.present ? data.dateCreated.value : this.dateCreated,
+      endDate: data.endDate.present ? data.endDate.value : this.endDate,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+      iconName: data.iconName.present ? data.iconName.value : this.iconName,
+      emojiIconName: data.emojiIconName.present
+          ? data.emojiIconName.value
+          : this.emojiIconName,
+      income: data.income.present ? data.income.value : this.income,
+      pinned: data.pinned.present ? data.pinned.value : this.pinned,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      walletFk: data.walletFk.present ? data.walletFk.value : this.walletFk,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('Objective(')
@@ -2859,6 +2933,82 @@ class Transaction extends DataClass implements Insertable<Transaction> {
             ? budgetFksExclude.value
             : this.budgetFksExclude,
       );
+  Transaction copyWithCompanion(TransactionsCompanion data) {
+    return Transaction(
+      transactionPk: data.transactionPk.present
+          ? data.transactionPk.value
+          : this.transactionPk,
+      pairedTransactionFk: data.pairedTransactionFk.present
+          ? data.pairedTransactionFk.value
+          : this.pairedTransactionFk,
+      name: data.name.present ? data.name.value : this.name,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      note: data.note.present ? data.note.value : this.note,
+      categoryFk:
+          data.categoryFk.present ? data.categoryFk.value : this.categoryFk,
+      subCategoryFk: data.subCategoryFk.present
+          ? data.subCategoryFk.value
+          : this.subCategoryFk,
+      walletFk: data.walletFk.present ? data.walletFk.value : this.walletFk,
+      dateCreated:
+          data.dateCreated.present ? data.dateCreated.value : this.dateCreated,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+      originalDateDue: data.originalDateDue.present
+          ? data.originalDateDue.value
+          : this.originalDateDue,
+      income: data.income.present ? data.income.value : this.income,
+      periodLength: data.periodLength.present
+          ? data.periodLength.value
+          : this.periodLength,
+      reoccurrence: data.reoccurrence.present
+          ? data.reoccurrence.value
+          : this.reoccurrence,
+      endDate: data.endDate.present ? data.endDate.value : this.endDate,
+      upcomingTransactionNotification:
+          data.upcomingTransactionNotification.present
+              ? data.upcomingTransactionNotification.value
+              : this.upcomingTransactionNotification,
+      type: data.type.present ? data.type.value : this.type,
+      paid: data.paid.present ? data.paid.value : this.paid,
+      createdAnotherFutureTransaction:
+          data.createdAnotherFutureTransaction.present
+              ? data.createdAnotherFutureTransaction.value
+              : this.createdAnotherFutureTransaction,
+      skipPaid: data.skipPaid.present ? data.skipPaid.value : this.skipPaid,
+      methodAdded:
+          data.methodAdded.present ? data.methodAdded.value : this.methodAdded,
+      transactionOwnerEmail: data.transactionOwnerEmail.present
+          ? data.transactionOwnerEmail.value
+          : this.transactionOwnerEmail,
+      transactionOriginalOwnerEmail: data.transactionOriginalOwnerEmail.present
+          ? data.transactionOriginalOwnerEmail.value
+          : this.transactionOriginalOwnerEmail,
+      sharedKey: data.sharedKey.present ? data.sharedKey.value : this.sharedKey,
+      sharedOldKey: data.sharedOldKey.present
+          ? data.sharedOldKey.value
+          : this.sharedOldKey,
+      sharedStatus: data.sharedStatus.present
+          ? data.sharedStatus.value
+          : this.sharedStatus,
+      sharedDateUpdated: data.sharedDateUpdated.present
+          ? data.sharedDateUpdated.value
+          : this.sharedDateUpdated,
+      sharedReferenceBudgetPk: data.sharedReferenceBudgetPk.present
+          ? data.sharedReferenceBudgetPk.value
+          : this.sharedReferenceBudgetPk,
+      objectiveFk:
+          data.objectiveFk.present ? data.objectiveFk.value : this.objectiveFk,
+      objectiveLoanFk: data.objectiveLoanFk.present
+          ? data.objectiveLoanFk.value
+          : this.objectiveLoanFk,
+      budgetFksExclude: data.budgetFksExclude.present
+          ? data.budgetFksExclude.value
+          : this.budgetFksExclude,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('Transaction(')
@@ -4245,6 +4395,64 @@ class Budget extends DataClass implements Insertable<Budget> {
         isAbsoluteSpendingLimit:
             isAbsoluteSpendingLimit ?? this.isAbsoluteSpendingLimit,
       );
+  Budget copyWithCompanion(BudgetsCompanion data) {
+    return Budget(
+      budgetPk: data.budgetPk.present ? data.budgetPk.value : this.budgetPk,
+      name: data.name.present ? data.name.value : this.name,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      colour: data.colour.present ? data.colour.value : this.colour,
+      startDate: data.startDate.present ? data.startDate.value : this.startDate,
+      endDate: data.endDate.present ? data.endDate.value : this.endDate,
+      walletFks: data.walletFks.present ? data.walletFks.value : this.walletFks,
+      categoryFks:
+          data.categoryFks.present ? data.categoryFks.value : this.categoryFks,
+      categoryFksExclude: data.categoryFksExclude.present
+          ? data.categoryFksExclude.value
+          : this.categoryFksExclude,
+      income: data.income.present ? data.income.value : this.income,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      addedTransactionsOnly: data.addedTransactionsOnly.present
+          ? data.addedTransactionsOnly.value
+          : this.addedTransactionsOnly,
+      periodLength: data.periodLength.present
+          ? data.periodLength.value
+          : this.periodLength,
+      reoccurrence: data.reoccurrence.present
+          ? data.reoccurrence.value
+          : this.reoccurrence,
+      dateCreated:
+          data.dateCreated.present ? data.dateCreated.value : this.dateCreated,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+      pinned: data.pinned.present ? data.pinned.value : this.pinned,
+      order: data.order.present ? data.order.value : this.order,
+      walletFk: data.walletFk.present ? data.walletFk.value : this.walletFk,
+      budgetTransactionFilters: data.budgetTransactionFilters.present
+          ? data.budgetTransactionFilters.value
+          : this.budgetTransactionFilters,
+      memberTransactionFilters: data.memberTransactionFilters.present
+          ? data.memberTransactionFilters.value
+          : this.memberTransactionFilters,
+      sharedKey: data.sharedKey.present ? data.sharedKey.value : this.sharedKey,
+      sharedOwnerMember: data.sharedOwnerMember.present
+          ? data.sharedOwnerMember.value
+          : this.sharedOwnerMember,
+      sharedDateUpdated: data.sharedDateUpdated.present
+          ? data.sharedDateUpdated.value
+          : this.sharedDateUpdated,
+      sharedMembers: data.sharedMembers.present
+          ? data.sharedMembers.value
+          : this.sharedMembers,
+      sharedAllMembersEver: data.sharedAllMembersEver.present
+          ? data.sharedAllMembersEver.value
+          : this.sharedAllMembersEver,
+      isAbsoluteSpendingLimit: data.isAbsoluteSpendingLimit.present
+          ? data.isAbsoluteSpendingLimit.value
+          : this.isAbsoluteSpendingLimit,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('Budget(')
@@ -4937,6 +5145,22 @@ class CategoryBudgetLimit extends DataClass
             : this.dateTimeModified,
         walletFk: walletFk ?? this.walletFk,
       );
+  CategoryBudgetLimit copyWithCompanion(CategoryBudgetLimitsCompanion data) {
+    return CategoryBudgetLimit(
+      categoryLimitPk: data.categoryLimitPk.present
+          ? data.categoryLimitPk.value
+          : this.categoryLimitPk,
+      categoryFk:
+          data.categoryFk.present ? data.categoryFk.value : this.categoryFk,
+      budgetFk: data.budgetFk.present ? data.budgetFk.value : this.budgetFk,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+      walletFk: data.walletFk.present ? data.walletFk.value : this.walletFk,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('CategoryBudgetLimit(')
@@ -5327,6 +5551,26 @@ class TransactionAssociatedTitle extends DataClass
         order: order ?? this.order,
         isExactMatch: isExactMatch ?? this.isExactMatch,
       );
+  TransactionAssociatedTitle copyWithCompanion(AssociatedTitlesCompanion data) {
+    return TransactionAssociatedTitle(
+      associatedTitlePk: data.associatedTitlePk.present
+          ? data.associatedTitlePk.value
+          : this.associatedTitlePk,
+      categoryFk:
+          data.categoryFk.present ? data.categoryFk.value : this.categoryFk,
+      title: data.title.present ? data.title.value : this.title,
+      dateCreated:
+          data.dateCreated.present ? data.dateCreated.value : this.dateCreated,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+      order: data.order.present ? data.order.value : this.order,
+      isExactMatch: data.isExactMatch.present
+          ? data.isExactMatch.value
+          : this.isExactMatch,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('TransactionAssociatedTitle(')
@@ -5615,6 +5859,18 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
         settingsJSON: settingsJSON ?? this.settingsJSON,
         dateUpdated: dateUpdated ?? this.dateUpdated,
       );
+  AppSetting copyWithCompanion(AppSettingsCompanion data) {
+    return AppSetting(
+      settingsPk:
+          data.settingsPk.present ? data.settingsPk.value : this.settingsPk,
+      settingsJSON: data.settingsJSON.present
+          ? data.settingsJSON.value
+          : this.settingsJSON,
+      dateUpdated:
+          data.dateUpdated.present ? data.dateUpdated.value : this.dateUpdated,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('AppSetting(')
@@ -6101,6 +6357,40 @@ class ScannerTemplate extends DataClass implements Insertable<ScannerTemplate> {
         walletFk: walletFk ?? this.walletFk,
         ignore: ignore ?? this.ignore,
       );
+  ScannerTemplate copyWithCompanion(ScannerTemplatesCompanion data) {
+    return ScannerTemplate(
+      scannerTemplatePk: data.scannerTemplatePk.present
+          ? data.scannerTemplatePk.value
+          : this.scannerTemplatePk,
+      dateCreated:
+          data.dateCreated.present ? data.dateCreated.value : this.dateCreated,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+      templateName: data.templateName.present
+          ? data.templateName.value
+          : this.templateName,
+      contains: data.contains.present ? data.contains.value : this.contains,
+      titleTransactionBefore: data.titleTransactionBefore.present
+          ? data.titleTransactionBefore.value
+          : this.titleTransactionBefore,
+      titleTransactionAfter: data.titleTransactionAfter.present
+          ? data.titleTransactionAfter.value
+          : this.titleTransactionAfter,
+      amountTransactionBefore: data.amountTransactionBefore.present
+          ? data.amountTransactionBefore.value
+          : this.amountTransactionBefore,
+      amountTransactionAfter: data.amountTransactionAfter.present
+          ? data.amountTransactionAfter.value
+          : this.amountTransactionAfter,
+      defaultCategoryFk: data.defaultCategoryFk.present
+          ? data.defaultCategoryFk.value
+          : this.defaultCategoryFk,
+      walletFk: data.walletFk.present ? data.walletFk.value : this.walletFk,
+      ignore: data.ignore.present ? data.ignore.value : this.ignore,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('ScannerTemplate(')
@@ -6503,6 +6793,18 @@ class DeleteLog extends DataClass implements Insertable<DeleteLog> {
         type: type ?? this.type,
         dateTimeModified: dateTimeModified ?? this.dateTimeModified,
       );
+  DeleteLog copyWithCompanion(DeleteLogsCompanion data) {
+    return DeleteLog(
+      deleteLogPk:
+          data.deleteLogPk.present ? data.deleteLogPk.value : this.deleteLogPk,
+      entryPk: data.entryPk.present ? data.entryPk.value : this.entryPk,
+      type: data.type.present ? data.type.value : this.type,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+    );
+  }
+
   @override
   String toString() {
     return (StringBuffer('DeleteLog(')
@@ -6613,6 +6915,340 @@ class DeleteLogsCompanion extends UpdateCompanion<DeleteLog> {
   }
 }
 
+class $CategoryEnvelopesTable extends CategoryEnvelopes
+    with TableInfo<$CategoryEnvelopesTable, CategoryEnvelope> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CategoryEnvelopesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _envelopePkMeta =
+      const VerificationMeta('envelopePk');
+  @override
+  late final GeneratedColumn<String> envelopePk = GeneratedColumn<String>(
+      'envelope_pk', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _categoryFkMeta =
+      const VerificationMeta('categoryFk');
+  @override
+  late final GeneratedColumn<String> categoryFk = GeneratedColumn<String>(
+      'category_fk', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: true,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES categories (category_pk)'));
+  static const VerificationMeta _periodStartMeta =
+      const VerificationMeta('periodStart');
+  @override
+  late final GeneratedColumn<DateTime> periodStart = GeneratedColumn<DateTime>(
+      'period_start', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _amountMeta = const VerificationMeta('amount');
+  @override
+  late final GeneratedColumn<double> amount = GeneratedColumn<double>(
+      'amount', aliasedName, false,
+      type: DriftSqlType.double, requiredDuringInsert: true);
+  static const VerificationMeta _dateTimeModifiedMeta =
+      const VerificationMeta('dateTimeModified');
+  @override
+  late final GeneratedColumn<DateTime> dateTimeModified =
+      GeneratedColumn<DateTime>('date_time_modified', aliasedName, true,
+          type: DriftSqlType.dateTime,
+          requiredDuringInsert: false,
+          defaultValue: Constant(DateTime.now()));
+  @override
+  List<GeneratedColumn> get $columns =>
+      [envelopePk, categoryFk, periodStart, amount, dateTimeModified];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'category_envelopes';
+  @override
+  VerificationContext validateIntegrity(Insertable<CategoryEnvelope> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('envelope_pk')) {
+      context.handle(
+          _envelopePkMeta,
+          envelopePk.isAcceptableOrUnknown(
+              data['envelope_pk']!, _envelopePkMeta));
+    } else if (isInserting) {
+      context.missing(_envelopePkMeta);
+    }
+    if (data.containsKey('category_fk')) {
+      context.handle(
+          _categoryFkMeta,
+          categoryFk.isAcceptableOrUnknown(
+              data['category_fk']!, _categoryFkMeta));
+    } else if (isInserting) {
+      context.missing(_categoryFkMeta);
+    }
+    if (data.containsKey('period_start')) {
+      context.handle(
+          _periodStartMeta,
+          periodStart.isAcceptableOrUnknown(
+              data['period_start']!, _periodStartMeta));
+    } else if (isInserting) {
+      context.missing(_periodStartMeta);
+    }
+    if (data.containsKey('amount')) {
+      context.handle(_amountMeta,
+          amount.isAcceptableOrUnknown(data['amount']!, _amountMeta));
+    } else if (isInserting) {
+      context.missing(_amountMeta);
+    }
+    if (data.containsKey('date_time_modified')) {
+      context.handle(
+          _dateTimeModifiedMeta,
+          dateTimeModified.isAcceptableOrUnknown(
+              data['date_time_modified']!, _dateTimeModifiedMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {envelopePk};
+  @override
+  CategoryEnvelope map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CategoryEnvelope(
+      envelopePk: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}envelope_pk'])!,
+      categoryFk: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}category_fk'])!,
+      periodStart: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}period_start'])!,
+      amount: attachedDatabase.typeMapping
+          .read(DriftSqlType.double, data['${effectivePrefix}amount'])!,
+      dateTimeModified: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}date_time_modified']),
+    );
+  }
+
+  @override
+  $CategoryEnvelopesTable createAlias(String alias) {
+    return $CategoryEnvelopesTable(attachedDatabase, alias);
+  }
+}
+
+class CategoryEnvelope extends DataClass
+    implements Insertable<CategoryEnvelope> {
+  final String envelopePk;
+  final String categoryFk;
+  final DateTime periodStart;
+  final double amount;
+  final DateTime? dateTimeModified;
+  const CategoryEnvelope(
+      {required this.envelopePk,
+      required this.categoryFk,
+      required this.periodStart,
+      required this.amount,
+      this.dateTimeModified});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['envelope_pk'] = Variable<String>(envelopePk);
+    map['category_fk'] = Variable<String>(categoryFk);
+    map['period_start'] = Variable<DateTime>(periodStart);
+    map['amount'] = Variable<double>(amount);
+    if (!nullToAbsent || dateTimeModified != null) {
+      map['date_time_modified'] = Variable<DateTime>(dateTimeModified);
+    }
+    return map;
+  }
+
+  CategoryEnvelopesCompanion toCompanion(bool nullToAbsent) {
+    return CategoryEnvelopesCompanion(
+      envelopePk: Value(envelopePk),
+      categoryFk: Value(categoryFk),
+      periodStart: Value(periodStart),
+      amount: Value(amount),
+      dateTimeModified: dateTimeModified == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dateTimeModified),
+    );
+  }
+
+  factory CategoryEnvelope.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CategoryEnvelope(
+      envelopePk: serializer.fromJson<String>(json['envelopePk']),
+      categoryFk: serializer.fromJson<String>(json['categoryFk']),
+      periodStart: serializer.fromJson<DateTime>(json['periodStart']),
+      amount: serializer.fromJson<double>(json['amount']),
+      dateTimeModified:
+          serializer.fromJson<DateTime?>(json['dateTimeModified']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'envelopePk': serializer.toJson<String>(envelopePk),
+      'categoryFk': serializer.toJson<String>(categoryFk),
+      'periodStart': serializer.toJson<DateTime>(periodStart),
+      'amount': serializer.toJson<double>(amount),
+      'dateTimeModified': serializer.toJson<DateTime?>(dateTimeModified),
+    };
+  }
+
+  CategoryEnvelope copyWith(
+          {String? envelopePk,
+          String? categoryFk,
+          DateTime? periodStart,
+          double? amount,
+          Value<DateTime?> dateTimeModified = const Value.absent()}) =>
+      CategoryEnvelope(
+        envelopePk: envelopePk ?? this.envelopePk,
+        categoryFk: categoryFk ?? this.categoryFk,
+        periodStart: periodStart ?? this.periodStart,
+        amount: amount ?? this.amount,
+        dateTimeModified: dateTimeModified.present
+            ? dateTimeModified.value
+            : this.dateTimeModified,
+      );
+  CategoryEnvelope copyWithCompanion(CategoryEnvelopesCompanion data) {
+    return CategoryEnvelope(
+      envelopePk:
+          data.envelopePk.present ? data.envelopePk.value : this.envelopePk,
+      categoryFk:
+          data.categoryFk.present ? data.categoryFk.value : this.categoryFk,
+      periodStart:
+          data.periodStart.present ? data.periodStart.value : this.periodStart,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      dateTimeModified: data.dateTimeModified.present
+          ? data.dateTimeModified.value
+          : this.dateTimeModified,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryEnvelope(')
+          ..write('envelopePk: $envelopePk, ')
+          ..write('categoryFk: $categoryFk, ')
+          ..write('periodStart: $periodStart, ')
+          ..write('amount: $amount, ')
+          ..write('dateTimeModified: $dateTimeModified')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      envelopePk, categoryFk, periodStart, amount, dateTimeModified);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CategoryEnvelope &&
+          other.envelopePk == this.envelopePk &&
+          other.categoryFk == this.categoryFk &&
+          other.periodStart == this.periodStart &&
+          other.amount == this.amount &&
+          other.dateTimeModified == this.dateTimeModified);
+}
+
+class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
+  final Value<String> envelopePk;
+  final Value<String> categoryFk;
+  final Value<DateTime> periodStart;
+  final Value<double> amount;
+  final Value<DateTime?> dateTimeModified;
+  final Value<int> rowid;
+  const CategoryEnvelopesCompanion({
+    this.envelopePk = const Value.absent(),
+    this.categoryFk = const Value.absent(),
+    this.periodStart = const Value.absent(),
+    this.amount = const Value.absent(),
+    this.dateTimeModified = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CategoryEnvelopesCompanion.insert({
+    required String envelopePk,
+    required String categoryFk,
+    required DateTime periodStart,
+    required double amount,
+    this.dateTimeModified = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : envelopePk = Value(envelopePk),
+        categoryFk = Value(categoryFk),
+        periodStart = Value(periodStart),
+        amount = Value(amount);
+  static Insertable<CategoryEnvelope> custom({
+    Expression<String>? envelopePk,
+    Expression<String>? categoryFk,
+    Expression<DateTime>? periodStart,
+    Expression<double>? amount,
+    Expression<DateTime>? dateTimeModified,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (envelopePk != null) 'envelope_pk': envelopePk,
+      if (categoryFk != null) 'category_fk': categoryFk,
+      if (periodStart != null) 'period_start': periodStart,
+      if (amount != null) 'amount': amount,
+      if (dateTimeModified != null) 'date_time_modified': dateTimeModified,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CategoryEnvelopesCompanion copyWith(
+      {Value<String>? envelopePk,
+      Value<String>? categoryFk,
+      Value<DateTime>? periodStart,
+      Value<double>? amount,
+      Value<DateTime?>? dateTimeModified,
+      Value<int>? rowid}) {
+    return CategoryEnvelopesCompanion(
+      envelopePk: envelopePk ?? this.envelopePk,
+      categoryFk: categoryFk ?? this.categoryFk,
+      periodStart: periodStart ?? this.periodStart,
+      amount: amount ?? this.amount,
+      dateTimeModified: dateTimeModified ?? this.dateTimeModified,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (envelopePk.present) {
+      map['envelope_pk'] = Variable<String>(envelopePk.value);
+    }
+    if (categoryFk.present) {
+      map['category_fk'] = Variable<String>(categoryFk.value);
+    }
+    if (periodStart.present) {
+      map['period_start'] = Variable<DateTime>(periodStart.value);
+    }
+    if (amount.present) {
+      map['amount'] = Variable<double>(amount.value);
+    }
+    if (dateTimeModified.present) {
+      map['date_time_modified'] = Variable<DateTime>(dateTimeModified.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryEnvelopesCompanion(')
+          ..write('envelopePk: $envelopePk, ')
+          ..write('categoryFk: $categoryFk, ')
+          ..write('periodStart: $periodStart, ')
+          ..write('amount: $amount, ')
+          ..write('dateTimeModified: $dateTimeModified, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$FinanceDatabase extends GeneratedDatabase {
   _$FinanceDatabase(QueryExecutor e) : super(e);
   late final $WalletsTable wallets = $WalletsTable(this);
@@ -6628,6 +7264,8 @@ abstract class _$FinanceDatabase extends GeneratedDatabase {
   late final $ScannerTemplatesTable scannerTemplates =
       $ScannerTemplatesTable(this);
   late final $DeleteLogsTable deleteLogs = $DeleteLogsTable(this);
+  late final $CategoryEnvelopesTable categoryEnvelopes =
+      $CategoryEnvelopesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6642,6 +7280,7 @@ abstract class _$FinanceDatabase extends GeneratedDatabase {
         associatedTitles,
         appSettings,
         scannerTemplates,
-        deleteLogs
+        deleteLogs,
+        categoryEnvelopes
       ];
 }
