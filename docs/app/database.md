@@ -54,6 +54,34 @@ instead.
 Before borrowing a third column, check the same two things: that nothing reads it today, and that
 writing it does not re-animate UI that was left in place.
 
+## Sync writes must carry nulls
+
+Every branch of `processSyncLogs` (`database/tables.dart`) converts the incoming row with
+`toCompanion(false)` before writing it. That is load bearing.
+
+`Batch.update` calls `entity.toColumns(nullToAbsent: true)`. A generated **data class** honours that
+flag and omits every null column from the SET clause; a **companion** ignores it and emits all
+columns, and `toCompanion(false)` fills each nullable field with an explicit `Value(null)`. Handed a
+data class, an `UPDATE` simply never mentioned the cleared column, and the `insertOrIgnore` that
+follows is a no-op for a row that already exists. **Clearing a column was therefore invisible to
+every other device.**
+
+That is not a cosmetic gap. Promoting a subcategory to a main category clears
+`Categories.mainCategoryPk`. The promotion never landed on peers, so they still read the category as
+a subcategory, and `deleteWanderingTransactions` — which back then deleted *and* wrote tombstones —
+broadcast the removal of that category's transactions to the whole household, including back to the
+device that had made the change. See `specs/04-stage-2-instant-sync.md`.
+
+Upstream got this property for free from `InsertMode.insertOrReplace`, which reinserted the whole
+row so absent columns fell back to their null defaults. This fork replaced that with a guarded
+update plus `insertOrIgnore` to stop a primary-key conflict from overwriting a newer local row. Both
+properties are required — nulls must cross **and** the timestamp guard must hold — and the companion
+is what gives the first without giving up the second.
+
+`test/sync_null_propagation_test.dart` pins it per column. Note that a `toJson()` round trip does
+**not** cover this: the null travels over the wire perfectly well, and is lost one layer further in,
+when the received row is turned into SQL.
+
 ---
 
 Why: `specs/backlog/BL-006-per-period-budget-amounts.md` (the first borrowing, and how upstream

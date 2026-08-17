@@ -1219,6 +1219,7 @@
   "changelog-1-0-4-subcategory-colors-body": "子类别不再有独立的颜色选择——它们始终使用主类别的颜色，已有的子类别也已相应更新。",
   "changelog-1-0-4-account-dedupe-title": "账户不再重复出现",
   "changelog-1-0-4-account-dedupe-body": "修复了在选择主页显示哪些账户时，账户会重复出现的问题。",
+  "changelog-1-1-1-category-transactions-body": "修复了一个会删除交易的问题。将子分类转为主分类时，该更改未能完整同步到其他设备，这些设备随后会在所有位置删除该分类下的交易，包括做出更改的那台设备。现在这类交易会被修复而不是删除，任何设备都不能把自己单方面判定的删除同步给其他设备。",
   "changelog-1-1-0-date-time-picker-title": "日期和时间选择器现在与应用其他部分保持一致",
   "changelog-1-1-0-date-time-picker-body": "点击日期或时间时，现在会打开与应用其他部分相同的可滑动滚轮选择器，而不是居中的日历或时钟对话框。",
   "changelog-1-1-0-backup-naming-title": "备份与同步文件名更整洁，最新的排在最前",

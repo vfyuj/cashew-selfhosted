@@ -1219,6 +1219,7 @@
   "changelog-1-0-4-subcategory-colors-body": "Las subcategorías ya no tienen un selector de color propio: siempre usan el color de su categoría principal, y las subcategorías existentes se actualizaron para coincidir.",
   "changelog-1-0-4-account-dedupe-title": "Se acabaron las cuentas duplicadas",
   "changelog-1-0-4-account-dedupe-body": "Corrige que las cuentas aparecieran duplicadas al elegir cuáles mostrar en tu página de inicio.",
+  "changelog-1-1-1-category-transactions-body": "Corrige un error que borraba transacciones. Convertir una subcategoría en categoría principal no llegaba por completo a tus otros dispositivos, que entonces eliminaban las transacciones de esa categoría en todas partes, incluido el dispositivo donde se hizo el cambio. Ahora esas transacciones se reparan en lugar de borrarse, y ningún dispositivo puede propagar una eliminación que decidió por su cuenta.",
   "changelog-1-1-0-date-time-picker-title": "Los selectores de fecha y hora ahora coinciden con el resto de la app",
   "changelog-1-1-0-date-time-picker-body": "Al tocar una fecha o una hora ahora se abre el mismo selector deslizante con desplazamiento que se usa en el resto de la app, en lugar de un diálogo de calendario o reloj centrado.",
   "changelog-1-1-0-backup-naming-title": "Nombres de archivo de copia de seguridad y sincronización más limpios, los más recientes primero",

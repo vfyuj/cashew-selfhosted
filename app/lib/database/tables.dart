@@ -317,6 +317,39 @@ enum UpdateLogType {
   AppSetting,
 }
 
+/// What to do about a transaction whose `categoryFk` is not a main category.
+///
+/// See [FinanceDatabase.deleteWanderingTransactions]. Split out as a pure
+/// function because the destructive bug it replaces was never in the deleting,
+/// it was in the decision: every violation, however transient, was answered
+/// with "delete and tell everyone".
+enum WanderingTransactionAction { keep, repair, delete }
+
+WanderingTransactionAction decideWanderingTransaction({
+  required String categoryFk,
+  required Map<String, TransactionCategory> categoriesByPk,
+}) {
+  final TransactionCategory? category = categoriesByPk[categoryFk];
+  // No such category on this device. It may be genuinely gone, or it may
+  // simply not have arrived yet -- the caller handles that by deleting without
+  // a tombstone, so a wrong guess here stays local and is undone by the next
+  // pull.
+  if (category == null) return WanderingTransactionAction.delete;
+
+  final String? parentPk = category.mainCategoryPk;
+  // Already a main category: the invariant holds and there is nothing to do.
+  // Reached when the caller's SQL and this map disagree, which is exactly what
+  // happened while a promoted subcategory had not yet synced.
+  if (parentPk == null) return WanderingTransactionAction.keep;
+
+  // A subcategory whose parent is missing too: nothing to repair it into.
+  if (!categoriesByPk.containsKey(parentPk)) {
+    return WanderingTransactionAction.delete;
+  }
+
+  return WanderingTransactionAction.repair;
+}
+
 @DataClassName('DeleteLog')
 class DeleteLogs extends Table {
   TextColumn get deleteLogPk => text().clientDefault(() => uuid.v4())();
@@ -3717,10 +3750,32 @@ class FinanceDatabase extends _$FinanceDatabase {
   // ************************************************************
 
   Future<bool> processSyncLogs(List<SyncLog> syncLogs) async {
-    // We want InsertMode.insertOrReplace because
-    // if null values are inserted we want to overwrite it with a null
-    // For example when a transactions subCategoryPk is set to null
-    // We need to set it to null, nt keep the default when syncing!
+    // Every branch below converts the incoming row with toCompanion(false)
+    // before writing it. That is load bearing, not tidiness.
+    //
+    // Batch.update calls entity.toColumns(nullToAbsent: true), and a generated
+    // data class honours that flag by omitting every null column from the SET
+    // clause. A companion ignores it and emits all columns as present, and
+    // toCompanion(false) fills each nullable field with an explicit
+    // Value(null). Handed a data class, "this column is now null" therefore
+    // never crossed to another device: the UPDATE simply did not mention the
+    // column, and the insertOrIgnore below is a no-op for a row that already
+    // exists.
+    //
+    // That is how promoting a subcategory to a main category lost data. The
+    // promotion clears Categories.mainCategoryPk and repoints the affected
+    // transactions. The transactions crossed; the cleared mainCategoryPk did
+    // not. On every other device the category stayed a subcategory, so
+    // deleteWanderingTransactions judged its transactions orphaned and (before
+    // the fix there) broadcast their deletion back to everyone.
+    //
+    // Upstream got this for free from InsertMode.insertOrReplace, which
+    // re-inserted the whole row so absent columns fell back to their null
+    // defaults. This fork replaced that with a guarded update plus
+    // insertOrIgnore to stop a primary-key conflict from silently overwriting
+    // a newer local row -- see the comment on the first branch below. Both
+    // properties are required: nulls must cross AND the timestamp guard must
+    // hold. The companion gives the first without giving up the second.
 
     syncLogs.sort(
         (a, b) => a.transactionDateTime!.compareTo(b.transactionDateTime!));
@@ -3816,9 +3871,11 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
         } else if (syncLog.updateLogType == UpdateLogType.TransactionWallet) {
+          final WalletsCompanion incoming =
+              (syncLog.itemToUpdate as TransactionWallet).toCompanion(false);
           batch.update(
             wallets,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.walletPk.equals(syncLog.pk) &
                 tbl.dateTimeModified.isSmallerThanValue(
@@ -3830,110 +3887,121 @@ class FinanceDatabase extends _$FinanceDatabase {
           // unconditionally overwrite on primary-key conflict regardless of
           // timestamp, silently undoing that guard for any row that already
           // existed locally (see specs/04-stage-2-instant-sync.md).
-          batch.insert(wallets, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrIgnore);
+          batch.insert(wallets, incoming, mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.TransactionCategory) {
+          final CategoriesCompanion incoming =
+              (syncLog.itemToUpdate as TransactionCategory).toCompanion(false);
           batch.update(
             categories,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.categoryPk.equals(syncLog.pk) &
                 tbl.dateTimeModified.isSmallerThanValue(
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
-          batch.insert(categories, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrIgnore);
+          batch.insert(categories, incoming, mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.AppSetting) {
           // A household member's own view preferences, keyed by their server
           // user id. Row 0 -- the whole-settings backup blob -- is deliberately
           // never collected for sync, so it can never arrive here; see
           // getAllNewAppSettings. Guarded on dateUpdated rather than
           // dateTimeModified because that is the timestamp this table has.
+          final AppSettingsCompanion incoming =
+              (syncLog.itemToUpdate as AppSetting).toCompanion(false);
           batch.update(
             appSettings,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.settingsPk.equals(int.tryParse(syncLog.pk) ?? -1) &
                 tbl.dateUpdated.isSmallerThanValue(
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
-          batch.insert(appSettings, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrIgnore);
+          batch.insert(appSettings, incoming, mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.Budget) {
+          final BudgetsCompanion incoming =
+              (syncLog.itemToUpdate as Budget).toCompanion(false);
           batch.update(
             budgets,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.budgetPk.equals(syncLog.pk) &
                 tbl.dateTimeModified.isSmallerThanValue(
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
-          batch.insert(budgets, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrIgnore);
+          batch.insert(budgets, incoming, mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.CategoryBudgetLimit) {
+          final CategoryBudgetLimitsCompanion incoming =
+              (syncLog.itemToUpdate as CategoryBudgetLimit).toCompanion(false);
           batch.update(
             categoryBudgetLimits,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.categoryLimitPk.equals(syncLog.pk) &
                 tbl.dateTimeModified.isSmallerThanValue(
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
-          batch.insert(categoryBudgetLimits, syncLog.itemToUpdate,
+          batch.insert(categoryBudgetLimits, incoming,
               mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.Transaction) {
+          final TransactionsCompanion incoming =
+              (syncLog.itemToUpdate as Transaction).toCompanion(false);
           batch.update(
             transactions,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.transactionPk.equals(syncLog.pk) &
                 tbl.dateTimeModified.isSmallerThanValue(
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
-          batch.insert(transactions, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrIgnore);
+          batch.insert(transactions, incoming, mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType ==
             UpdateLogType.TransactionAssociatedTitle) {
+          final AssociatedTitlesCompanion incoming =
+              (syncLog.itemToUpdate as TransactionAssociatedTitle)
+                  .toCompanion(false);
           batch.update(
             associatedTitles,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.associatedTitlePk.equals(syncLog.pk) &
                 tbl.dateTimeModified.isSmallerThanValue(
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
-          batch.insert(associatedTitles, syncLog.itemToUpdate,
+          batch.insert(associatedTitles, incoming,
               mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.ScannerTemplate) {
+          final ScannerTemplatesCompanion incoming =
+              (syncLog.itemToUpdate as ScannerTemplate).toCompanion(false);
           batch.update(
             scannerTemplates,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.scannerTemplatePk.equals(syncLog.pk) &
                 tbl.dateTimeModified.isSmallerThanValue(
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
-          batch.insert(scannerTemplates, syncLog.itemToUpdate,
+          batch.insert(scannerTemplates, incoming,
               mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.Objective) {
+          final ObjectivesCompanion incoming =
+              (syncLog.itemToUpdate as Objective).toCompanion(false);
           batch.update(
             objectives,
-            syncLog.itemToUpdate,
+            incoming,
             where: (tbl) =>
                 tbl.objectivePk.equals(syncLog.pk) &
                 tbl.dateTimeModified.isSmallerThanValue(
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
-          batch.insert(objectives, syncLog.itemToUpdate,
-              mode: InsertMode.insertOrIgnore);
+          batch.insert(objectives, incoming, mode: InsertMode.insertOrIgnore);
         }
       }
     });
@@ -7565,20 +7633,89 @@ class FinanceDatabase extends _$FinanceDatabase {
     });
   }
 
-  // transactions not belonging to a category should be deleted
+  // Transactions whose categoryFk does not name a main category.
+  //
+  // The invariant is upstream's: Transactions.categoryFk always names a MAIN
+  // category, and a subcategory is recorded separately in subCategoryFk.
+  // createOrUpdateTransaction enforces it by swapping the two when a
+  // subcategory is handed in as the category -- see the comment there, which
+  // says outright that the swap exists so this function does not delete the
+  // row. This cleanup catches whatever got past that.
+  //
+  // It used to answer every violation the same way: delete the transaction AND
+  // write a DeleteLogType.Transaction tombstone. That turned a local, often
+  // transient, misjudgement into an authoritative deletion on every device in
+  // the household. It is how promoting a subcategory to a main category
+  // destroyed its transactions everywhere -- until the null-propagation fix in
+  // processSyncLogs, a peer never learned the category had been promoted, so
+  // it still saw a subcategory under categoryFk and tombstoned rows that were
+  // perfectly good on the device that made the change.
+  //
+  // Two different conditions, two different answers:
+  //
+  //   categoryFk names a subcategory whose parent exists
+  //     -> REPAIR, with the same swap createOrUpdateTransaction applies.
+  //   categoryFk resolves to no category at all
+  //     -> delete locally, with NO tombstone. The category row may simply not
+  //        have arrived yet, and a device must not pass sentence on data it
+  //        might be about to receive (specs/01-local-first-invariant.md).
   Future<bool> deleteWanderingTransactions() async {
-    List<TransactionCategory> allCategories = await getAllCategories();
-    List<String> categoryPks =
-        allCategories.map((category) => category.categoryPk).toList();
-    List<Transaction> wanderingTransactions = await (select(transactions)
-          ..where((t) => t.categoryFk.isNotIn(categoryPks)))
+    final List<TransactionCategory> allCategories =
+        await getAllCategories(includeSubCategories: true);
+    final Map<String, TransactionCategory> categoriesByPk = {
+      for (TransactionCategory category in allCategories)
+        category.categoryPk: category
+    };
+    final List<String> mainCategoryPks = [
+      for (TransactionCategory category in allCategories)
+        if (category.mainCategoryPk == null) category.categoryPk
+    ];
+
+    final List<Transaction> suspect = await (select(transactions)
+          ..where((t) => t.categoryFk.isNotIn(mainCategoryPks)))
         .get();
-    for (Transaction transaction in wanderingTransactions) {
-      await deleteTransaction(transaction.transactionPk);
+    if (suspect.isEmpty) return true;
+
+    final List<Transaction> toRepair = [];
+    final List<String> toDelete = [];
+    for (Transaction transaction in suspect) {
+      switch (decideWanderingTransaction(
+        categoryFk: transaction.categoryFk,
+        categoriesByPk: categoriesByPk,
+      )) {
+        case WanderingTransactionAction.repair:
+          toRepair.add(transaction.copyWith(
+            categoryFk: categoriesByPk[transaction.categoryFk]!.mainCategoryPk,
+            subCategoryFk: Value(transaction.categoryFk),
+          ));
+          break;
+        case WanderingTransactionAction.delete:
+          toDelete.add(transaction.transactionPk);
+          break;
+        case WanderingTransactionAction.keep:
+          break;
+      }
     }
-    if (wanderingTransactions.isNotEmpty) {
-      print(
-          "Deleted wandering transactions (transactions without an existing category)");
+
+    if (toRepair.isNotEmpty) {
+      // dateTimeModified is deliberately NOT bumped. This is one device's
+      // guess at what a row should look like, and a guess must never outrank
+      // the authoritative copy: leaving the timestamp alone means the repair
+      // loses last-write-wins against whatever the origin device actually
+      // holds, so a peer mid-sync cannot have this pushed onto it.
+      await updateBatchTransactionsOnly(toRepair);
+      print("Repaired " +
+          toRepair.length.toString() +
+          " transactions filed directly against a subcategory");
+    }
+    if (toDelete.isNotEmpty) {
+      // No createDeleteLog, on purpose -- see the note above.
+      await (delete(transactions)
+            ..where((t) => t.transactionPk.isIn(toDelete)))
+          .go();
+      print("Deleted " +
+          toDelete.length.toString() +
+          " wandering transactions (no such category on this device)");
     }
     return true;
   }

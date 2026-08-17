@@ -68,6 +68,9 @@ const String upstreamBaseVersion = "5.4.3";
 /// the read-only clone at `upstream/budget/lib/widgets/showChangelog.dart`.
 String getChangelogString() {
   return """
+    < 1.1.1
+    changelog-1-1-1-category-transactions-body
+
     < 1.1.0
     ## changelog-1-1-0-date-time-picker-title
     changelog-1-1-0-date-time-picker-body
