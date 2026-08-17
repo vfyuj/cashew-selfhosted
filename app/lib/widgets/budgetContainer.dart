@@ -8,7 +8,6 @@ import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/budgetPage.dart';
 import 'package:cashew_selfhosted/pages/pastBudgetsPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
-import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/countNumber.dart';
 import 'package:cashew_selfhosted/widgets/fadeIn.dart';
@@ -26,48 +25,6 @@ import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:async/async.dart' show StreamZip;
 import 'package:cashew_selfhosted/struct/randomConstants.dart';
-
-// This budget's share of every planned main category expense, shown on the card
-// header. Only appears on budgets locked to a single main expense category, so
-// custom and income budgets render nothing. Reads the shared totals cache
-// rather than opening a database stream per card.
-class BudgetSharePercentLabel extends StatelessWidget {
-  const BudgetSharePercentLabel({required this.budget, Key? key})
-      : super(key: key);
-
-  final Budget budget;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<PlannedBudgetTotals>(
-      stream: watchPlannedBudgetTotals(),
-      initialData: latestPlannedBudgetTotals,
-      builder: (context, snapshot) {
-        final double? sharePercent =
-            snapshot.data?.sharePercentOfPlannedExpenses(
-          Provider.of<AllWallets>(context),
-          budget,
-        );
-        if (sharePercent == null) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsetsDirectional.only(start: 8),
-          child: TextFont(
-            text: convertToPercent(
-                  sharePercent,
-                  numberDecimals: 1,
-                  shouldRemoveTrailingZeroes: true,
-                ) +
-                " " +
-                "of-plan".tr(),
-            fontSize: 13,
-            textAlign: TextAlign.end,
-            textColor: getColor(context, "black").withOpacity(0.6),
-          ),
-        );
-      },
-    );
-  }
-}
 
 class BudgetContainer extends StatelessWidget {
   BudgetContainer({
@@ -89,11 +46,10 @@ class BudgetContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    double budgetAmount = budgetAmountToPrimaryCurrency(
+        Provider.of<AllWallets>(context, listen: true), budget);
     DateTime dateForRangeLocal =
         dateForRange == null ? DateTime.now() : dateForRange!;
-    double budgetAmount = budgetAmountToPrimaryCurrency(
-        Provider.of<AllWallets>(context, listen: true), budget,
-        forDate: dateForRangeLocal);
     DateTimeRange budgetRange = getBudgetDate(budget, dateForRangeLocal);
     bool isOutOfRange = budgetRange.end.difference(DateTime.now()).inDays < 0 ||
         budgetRange.start.difference(DateTime.now()).inDays > 0;
@@ -154,7 +110,6 @@ class BudgetContainer extends StatelessWidget {
                                     textAlign: TextAlign.start,
                                   ),
                                 ),
-                                BudgetSharePercentLabel(budget: budget),
                               ],
                             ),
                             budgetAmount - totalSpent >= 0
@@ -466,8 +421,7 @@ class DaySpending extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double budgetAmount = budgetAmountToPrimaryCurrency(
-        Provider.of<AllWallets>(context, listen: true), budget,
-        forDate: budgetRange.start);
+        Provider.of<AllWallets>(context, listen: true), budget);
     bool isOutOfRange = budgetRange.end.difference(DateTime.now()).inDays < 0 ||
         budgetRange.start.difference(DateTime.now()).inDays > 0;
     Widget textWidget = Padding(

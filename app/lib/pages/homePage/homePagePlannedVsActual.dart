@@ -1,12 +1,13 @@
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
-import 'package:cashew_selfhosted/pages/budgetsListPage.dart';
+import 'package:cashew_selfhosted/pages/envelopesPage.dart';
 import 'package:cashew_selfhosted/pages/transactionFilters.dart';
 import 'package:cashew_selfhosted/pages/transactionsSearchPage.dart';
+import 'package:cashew_selfhosted/struct/categoryEnvelopes.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
-import 'package:cashew_selfhosted/struct/mainCategoryBudgets.dart';
 import 'package:cashew_selfhosted/widgets/countNumber.dart';
+import 'package:cashew_selfhosted/widgets/envelopePlanBuilder.dart';
 import 'package:cashew_selfhosted/widgets/openContainerNavigation.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
 import 'package:cashew_selfhosted/widgets/transactionEntry/incomeAmountArrow.dart';
@@ -16,11 +17,10 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// This month's cash flow, as two cards tagged Planned and Actual:
-//   Planned = planned income and planned main-category expenses
-//     (PlannedBudgetTotals, the same totals the budgets list and share-of-plan
-//     labels already read)
-//   Actual  = income and expenses recorded in the current calendar month
+// One month's cash flow, as two cards tagged Planned and Actual:
+//   Planned = the envelopes set for that month (struct/categoryEnvelopes.dart),
+//     income and expense side by side
+//   Actual  = income and expenses recorded in that calendar month
 //
 // Income and expenses are shown as two separate figures rather than pre-netted
 // into one: testers couldn't tell what a single "planned minus actual" number
@@ -30,30 +30,31 @@ import 'package:provider/provider.dart';
 //
 // "Actual" deliberately queries with an explicit forcedDateTimeRange rather than
 // following AllSpendingSummary's customisable period-cycle settings - this
-// widget is always "this calendar month", to match what the envelopes it
-// summarises default to.
+// widget is always one whole calendar month, because that is the only period an
+// envelope has.
 class HomePagePlannedVsActual extends StatelessWidget {
-  const HomePagePlannedVsActual({super.key});
+  const HomePagePlannedVsActual({this.month, super.key});
+
+  /// The month to summarise. Null means the current one, which is what the home
+  /// page wants; the envelopes page passes whichever month it is showing.
+  final DateTime? month;
 
   @override
   Widget build(BuildContext context) {
     final AllWallets allWallets = Provider.of<AllWallets>(context);
-    final DateTime now = DateTime.now();
+    final DateTime periodStart = envelopePeriodStart(month ?? DateTime.now());
     final DateTimeRange thisMonth = DateTimeRange(
-      start: now.firstDayOfMonth(),
-      end: DateTime(now.year, now.month + 1, 0),
+      start: periodStart,
+      end: DateTime(periodStart.year, periodStart.month + 1, 0),
     );
 
-    final Widget plannedCard = StreamBuilder<PlannedBudgetTotals>(
-      stream: watchPlannedBudgetTotals(),
-      initialData: latestPlannedBudgetTotals,
-      builder: (context, snapshot) {
-        final PlannedBudgetTotals? totals = snapshot.data;
+    final Widget plannedCard = EnvelopePlanBuilder(
+      builder: (context, plan) {
         return _CashFlowCard(
           tag: "planned".tr(),
-          expenses: totals?.totalPlannedExpenses(allWallets) ?? 0,
-          income: totals?.totalPlannedIncome(allWallets) ?? 0,
-          openPage: BudgetsListPage(enableBackButton: true),
+          expenses: plan.totalPlanned(income: false, periodStart: periodStart),
+          income: plan.totalPlanned(income: true, periodStart: periodStart),
+          openPage: EnvelopesPage(backButton: true),
         );
       },
     );

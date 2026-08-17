@@ -145,6 +145,18 @@ Future<List<Map<String, dynamic>>> _collectLocalChanges(DateTime cursor) async {
         payload: row.toJson(),
         deleted: false));
   }
+  // Fork-owned table: a category's plan for one month. Household data, so it
+  // rides the ordinary dataset feed like everything else; the server keys
+  // sync_records by (dataset_id, table_name, pk) and does not care that it has
+  // never heard of this table name.
+  for (final row in await database.getAllNewCategoryEnvelopes(cursor)) {
+    changes.add(_asChange(
+        table: UpdateLogType.CategoryEnvelope.name,
+        pk: row.envelopePk,
+        modifiedAt: row.dateTimeModified,
+        payload: row.toJson(),
+        deleted: false));
+  }
   for (final row in await database.getAllNewTransactions(cursor)) {
     changes.add(_asChange(
         table: UpdateLogType.Transaction.name,
@@ -260,6 +272,9 @@ SyncLog? _syncLogFromChange(Map<String, dynamic> change) {
       break;
     case UpdateLogType.AppSetting:
       itemToUpdate = AppSetting.fromJson(payload);
+      break;
+    case UpdateLogType.CategoryEnvelope:
+      itemToUpdate = CategoryEnvelope.fromJson(payload);
       break;
     case UpdateLogType.Unused:
       return null;

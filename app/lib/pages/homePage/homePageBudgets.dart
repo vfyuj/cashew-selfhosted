@@ -1,6 +1,5 @@
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
-import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addBudgetPage.dart';
 import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
@@ -35,11 +34,7 @@ class _HomePageBudgetsState extends State<HomePageBudgets> {
         stream: database.getAllPinnedBudgets().$1,
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            // Another household member's personal budgets never reach the home
-            // page, pinned or not.
-            final List<Budget> pinnedBudgets =
-                visibleBudgets(snapshot.data ?? []);
-            if (pinnedBudgets.length == 0) {
+            if (snapshot.data?.length == 0) {
               return AddButton(
                 onTap: () {
                   openBottomSheet(
@@ -68,15 +63,17 @@ class _HomePageBudgetsState extends State<HomePageBudgets> {
             //   );
             // }
             List<Widget> budgetItems = [
-              ...pinnedBudgets.map((Budget budget) {
-                return Padding(
-                  padding: const EdgeInsetsDirectional.symmetric(horizontal: 3),
-                  child: BudgetContainer(
-                    intermediatePadding: false,
-                    budget: budget,
-                  ),
-                );
-              }).toList(),
+              ...(snapshot.data?.map((Budget budget) {
+                    return Padding(
+                      padding:
+                          const EdgeInsetsDirectional.symmetric(horizontal: 3),
+                      child: BudgetContainer(
+                        intermediatePadding: false,
+                        budget: budget,
+                      ),
+                    );
+                  }).toList() ??
+                  []),
               Padding(
                 padding: const EdgeInsetsDirectional.only(start: 3, end: 3),
                 child: AddButton(
@@ -113,9 +110,7 @@ class _HomePageBudgetsState extends State<HomePageBudgets> {
                           });
                         },
                         child: BudgetContainer(
-                          // Measures a card that is actually rendered -- the
-                          // unfiltered list may start with another member's.
-                          budget: pinnedBudgets[0],
+                          budget: snapshot.data![0],
                         ),
                       ),
                     ),
@@ -184,7 +179,7 @@ class EditHomePagePinnedBudgetsPopup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Budget>>(
-        stream: visibleBudgetsStream(database.watchAllBudgets()),
+        stream: database.watchAllBudgets(),
         builder: (context, snapshot) {
           List<Budget> allBudgets = snapshot.data ?? [];
           return PopupFramework(

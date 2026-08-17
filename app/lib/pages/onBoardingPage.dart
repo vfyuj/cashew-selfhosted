@@ -3,13 +3,13 @@ import 'package:cashew_selfhosted/database/generatePreviewData.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/pages/addCategoryPage.dart';
 import 'package:cashew_selfhosted/pages/addWalletPage.dart';
-import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
+import 'package:cashew_selfhosted/struct/categoryEnvelopes.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/languageMap.dart';
-import 'package:cashew_selfhosted/struct/budgetVisibility.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/categoryIcon.dart';
+import 'package:cashew_selfhosted/widgets/envelopePlanBuilder.dart';
 import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
 import 'package:cashew_selfhosted/widgets/linearGradientFadedEdges.dart';
 import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
@@ -28,29 +28,9 @@ import 'package:cashew_selfhosted/database/initializeDefaultDatabase.dart';
 import 'package:cashew_selfhosted/widgets/pageIndicator.dart';
 
 /// The system-reserved balance-correction / transfer category. It deliberately
-/// has no envelope budget (`_isEnvelopeEligible` in
-/// struct/mainCategoryBudgets.dart) and is bookkeeping rather than something to
-/// plan, so onboarding never shows it.
-const String _balanceCorrectionCategoryPk = "0";
-
-/// The budget acting as [category]'s envelope, or null if reconciliation hasn't
-/// created it yet.
-///
-/// Matched on `categoryFks` rather than `budgetPk == categoryPk`, mirroring
-/// `PlannedBudgetTotals.isMainCategoryBudget`: an envelope auto-created by
-/// `ensureMainCategoryBudgetsExist()` is keyed by the category pk, but one
-/// adopted from a pre-existing hand-made budget keeps the pk it already had.
-Budget? _envelopeFor(TransactionCategory category, List<Budget> budgets) {
-  for (Budget budget in budgets) {
-    final List<String>? categoryFks = budget.categoryFks;
-    if (categoryFks != null &&
-        categoryFks.length == 1 &&
-        categoryFks.first == category.categoryPk) {
-      return budget;
-    }
-  }
-  return null;
-}
+/// gets no envelope (`isEnvelopeEligible` in struct/categoryEnvelopes.dart) and
+/// is bookkeeping rather than something to plan, so onboarding never shows it.
+const String _balanceCorrectionCategoryPk = balanceCorrectionCategoryPk;
 
 class OnBoardingPage extends StatelessWidget {
   const OnBoardingPage({
@@ -109,12 +89,10 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
 
   /// Finishes onboarding.
   ///
-  /// Deliberately creates no budget of its own. Every main category already has
-  /// exactly one budget -- its envelope, created by
-  /// `ensureMainCategoryBudgetsExist()` -- and the income and spending steps
-  /// edit those in place as the user goes. The catch-all budget this used to
-  /// create would now land as a stray extra row in the budgets list's Custom
-  /// tab, next to the envelopes that are the actual plan.
+  /// Deliberately creates no budget. What the income and spending steps fill in
+  /// are envelopes -- one amount per category for this month -- and a catch-all
+  /// budget on top of them would just be an extra row on a page this flow never
+  /// mentions.
   nextNavigation({bool generatePreview = false}) async {
     if (generatePreview) {
       openLoadingPopup(context);
@@ -152,8 +130,8 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
 
     Future.delayed(Duration.zero, () async {
       // Functions to run after entire UI loaded - landing page
-      // Run here too, so the user has an account, the default categories and
-      // their envelope budgets before the steps below try to show them
+      // Run here too, so the user has an account and the default categories
+      // before the steps below try to show them
       // We need to run this after the UI is loaded - after translations are loaded
       await initializeDefaultDatabase();
     });
@@ -183,14 +161,13 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
     );
   }
 
-  /// Sets a category's planned amount for the month by writing straight to its
-  /// envelope budget.
+  /// Sets a category's planned amount for this month by writing its envelope.
   ///
   /// Written once after the sheet closes rather than on every keystroke:
   /// `SelectAmount` reports each edit as it is typed, and every write is a row
   /// the sync feed then has to carry.
   Future<void> selectEnvelopeAmount(
-      TransactionCategory category, Budget envelope) async {
+      TransactionCategory category, double currentAmount) async {
     double? enteredAmount;
     await openBottomSheet(
       context,
@@ -202,7 +179,7 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
         child: SelectAmount(
           onlyShowCurrencyIcon: true,
           allowZero: true,
-          amountPassed: envelope.amount == 0 ? "" : envelope.amount.toString(),
+          amountPassed: currentAmount == 0 ? "" : currentAmount.toString(),
           setSelectedAmount: (amount, _) {
             enteredAmount = amount.abs();
           },
@@ -211,17 +188,15 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
           },
           nextLabel: "set-amount".tr(),
           padding: EdgeInsetsDirectional.symmetric(horizontal: 18),
-          walletPkForCurrency: envelope.walletFk,
         ),
       ),
     );
-    if (enteredAmount != null && enteredAmount != envelope.amount) {
-      await database.createOrUpdateBudget(
-        envelope.copyWith(amount: enteredAmount!),
-        // Never route an envelope write through the dead Firestore branch of
-        // createOrUpdateBudget -- same reasoning as
-        // ensureMainCategoryBudgetsExist().
-      );
+    if (enteredAmount != null && enteredAmount != currentAmount) {
+      await database.createOrUpdateCategoryEnvelope(newCategoryEnvelope(
+        categoryPk: category.categoryPk,
+        periodStart: DateTime.now(),
+        amount: enteredAmount!,
+      ));
     }
   }
 
@@ -392,19 +367,14 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
     );
   }
 
-  Widget envelopeRow(TransactionCategory category, Budget? envelope) {
+  Widget envelopeRow(TransactionCategory category, double amount) {
     final AllWallets allWallets = Provider.of<AllWallets>(context);
-    final double amount = envelope?.amount ?? 0;
     return Padding(
       padding: const EdgeInsetsDirectional.only(bottom: 6),
       child: Tappable(
         color: rowColor,
         borderRadius: 15,
-        // Null only in the moment before ensureMainCategoryBudgetsExist() has
-        // reconciled a newly added category -- the stream fills it in.
-        onTap: envelope == null
-            ? null
-            : () => selectEnvelopeAmount(category, envelope),
+        onTap: () => selectEnvelopeAmount(category, amount),
         child: Padding(
           padding: const EdgeInsetsDirectional.symmetric(
               horizontal: 12, vertical: 6),
@@ -427,12 +397,7 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
               ),
               SizedBox(width: 8),
               TextFont(
-                text: convertToMoney(
-                  allWallets,
-                  amount,
-                  currencyKey:
-                      allWallets.indexedByPk[envelope?.walletFk]?.currency,
-                ),
+                text: convertToMoney(allWallets, amount),
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
                 textColor: amount == 0
@@ -481,83 +446,63 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
   }
 
   /// One half of the plan -- income categories or expense categories -- as one
-  /// row per main category, each writing to that category's envelope budget.
+  /// row per main category, each writing that category's envelope for this
+  /// month.
   ///
-  /// [footerBuilder] receives the total of the rows shown and the planned income
-  /// across *every* income budget, matching how
-  /// `PlannedBudgetTotals.totalPlannedIncome` defines it.
+  /// [footerBuilder] receives the total of the rows shown and the whole of this
+  /// month's planned income.
   Widget envelopeList({
     required bool income,
     Widget Function(double listedTotal, double plannedIncome)? footerBuilder,
   }) {
-    return StreamBuilder<List<TransactionCategory>>(
-      stream: database.watchAllCategories(),
-      builder: (context, categoriesSnapshot) {
-        return StreamBuilder<List<Budget>>(
-          stream: visibleBudgetsStream(
-              database.watchAllBudgets(hideArchived: true)),
-          builder: (context, budgetsSnapshot) {
-            final AllWallets allWallets = Provider.of<AllWallets>(context);
-            final List<Budget> budgets = budgetsSnapshot.data ?? [];
-            final List<TransactionCategory> categories =
-                (categoriesSnapshot.data ?? [])
-                    .where((category) =>
-                        category.income == income &&
-                        category.categoryPk != _balanceCorrectionCategoryPk)
-                    .toList();
+    final DateTime thisMonth = envelopePeriodStart(DateTime.now());
+    return EnvelopePlanBuilder(
+      builder: (context, plan) {
+        final List<TransactionCategory> categories =
+            plan.categoriesOfType(income: income);
 
-            double listedTotal = 0;
-            final List<Widget> rows = [];
-            for (TransactionCategory category in categories) {
-              final Budget? envelope = _envelopeFor(category, budgets);
-              if (envelope != null) {
-                listedTotal +=
-                    budgetAmountToPrimaryCurrency(allWallets, envelope);
-              }
-              rows.add(envelopeRow(category, envelope));
-            }
+        double listedTotal = 0;
+        final List<Widget> rows = [];
+        for (TransactionCategory category in categories) {
+          final double amount =
+              plan.amountFor(category.categoryPk, thisMonth) ?? 0;
+          listedTotal += amount;
+          rows.add(envelopeRow(category, amount));
+        }
 
-            double plannedIncome = 0;
-            for (Budget budget in budgets) {
-              if (budget.income == true) {
-                plannedIncome +=
-                    budgetAmountToPrimaryCurrency(allWallets, budget);
-              }
-            }
+        final double plannedIncome =
+            plan.totalPlanned(income: true, periodStart: thisMonth);
 
-            // Deleting every income category on the previous step is allowed,
-            // and leaves this step with nothing to fill in and no explanation
-            // of why. Say so, and offer the way back rather than a blank space.
-            if (rows.isEmpty) {
-              return constrainedColumn([
-                onBoardingFootnote(income
-                    ? "onboarding-no-income-categories".tr()
-                    : "onboarding-no-expense-categories".tr()),
-                SizedBox(height: 12),
-                LowKeyButton(
-                  onTap: () {
-                    pushRoute(
-                      context,
-                      AddCategoryPage(
-                        routesToPopAfterDelete: RoutesToPopAfterDelete.None,
-                        initiallyIsExpense: income == false,
-                      ),
-                    );
-                  },
-                  text: income
-                      ? "onboarding-add-income-category".tr()
-                      : "onboarding-add-expense-category".tr(),
-                ),
-              ]);
-            }
+        // Deleting every income category on the previous step is allowed, and
+        // leaves this step with nothing to fill in and no explanation of why.
+        // Say so, and offer the way back rather than a blank space.
+        if (rows.isEmpty) {
+          return constrainedColumn([
+            onBoardingFootnote(income
+                ? "onboarding-no-income-categories".tr()
+                : "onboarding-no-expense-categories".tr()),
+            SizedBox(height: 12),
+            LowKeyButton(
+              onTap: () {
+                pushRoute(
+                  context,
+                  AddCategoryPage(
+                    routesToPopAfterDelete: RoutesToPopAfterDelete.None,
+                    initiallyIsExpense: income == false,
+                  ),
+                );
+              },
+              text: income
+                  ? "onboarding-add-income-category".tr()
+                  : "onboarding-add-expense-category".tr(),
+            ),
+          ]);
+        }
 
-            return constrainedColumn([
-              ...rows,
-              if (footerBuilder != null)
-                footerBuilder(listedTotal, plannedIncome),
-            ]);
-          },
-        );
+        return constrainedColumn([
+          ...rows,
+          if (footerBuilder != null) footerBuilder(listedTotal, plannedIncome),
+        ]);
       },
     );
   }

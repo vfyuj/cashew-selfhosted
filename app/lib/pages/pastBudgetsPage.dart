@@ -953,11 +953,10 @@ class PastBudgetContainer extends StatelessWidget {
     Color progressBackgroundColor =
         Theme.of(context).colorScheme.secondaryContainer;
     Color progressOverageColor = Theme.of(context).colorScheme.tertiary;
+    double budgetAmount = budgetAmountToPrimaryCurrency(
+        Provider.of<AllWallets>(context, listen: true), budget);
     DateTime dateForRangeLocal =
         dateForRange == null ? DateTime.now() : dateForRange!;
-    double budgetAmount = budgetAmountToPrimaryCurrency(
-        Provider.of<AllWallets>(context, listen: true), budget,
-        forDate: dateForRangeLocal);
     DateTimeRange budgetRange = getBudgetDate(budget, dateForRangeLocal);
     var widget = StreamBuilder<List<CategoryWithTotal>>(
       stream: database.watchTotalSpentInEachCategoryInTimeRangeFromCategories(

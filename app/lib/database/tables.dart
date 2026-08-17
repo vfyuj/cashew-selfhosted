@@ -24,7 +24,7 @@ import 'package:cashew_selfhosted/pages/activityPage.dart';
 import 'package:flutter/material.dart' show RangeValues;
 part 'tables.g.dart';
 
-int schemaVersionGlobal = 46;
+int schemaVersionGlobal = 47;
 
 // To update and migrate the database, check the README
 
@@ -296,6 +296,9 @@ enum DeleteLogType {
   ScannerTemplate,
   Objective,
   Unused, // Was for the scanner template, but is now unused
+  // A category's plan for one month. Appended, never inserted: these indices
+  // are stored as ints in DeleteLogs.type and are part of the on-disk format.
+  CategoryEnvelope,
 }
 
 enum UpdateLogType {
@@ -315,6 +318,9 @@ enum UpdateLogType {
   // DeleteLogType counterpart, because a per-user settings row is never
   // deleted.
   AppSetting,
+  // A category's plan for one month -- see the CategoryEnvelopes table.
+  // Appended for the same reason as its DeleteLogType counterpart.
+  CategoryEnvelope,
 }
 
 /// What to do about a transaction whose `categoryFk` is not a main category.
@@ -505,6 +511,41 @@ class CategoryBudgetLimits extends Table {
   Set<Column> get primaryKey => {categoryLimitPk};
 }
 
+// FORK-OWNED TABLE: this one has no counterpart in upstream Cashew.
+//
+// Every other table here is upstream's, byte for byte, so its backups keep
+// importing. Adding a table is the one shape of divergence that does not break
+// that: an original-Cashew backup simply has no envelopes in it, and restoring
+// one leaves this table empty rather than failing. Changing an existing table
+// would break it, and still must not happen. See docs/app/database.md.
+//
+// One row = "this category's plan for this month is this much". A row exists
+// only for a month whose amount was set by hand; months in between resolve by
+// carrying the nearest earlier row forward at read time (see
+// struct/categoryEnvelopes.dart). Nothing creates rows in the background.
+//
+// Expense or income is NOT stored here: it is read from Categories.income. The
+// previous envelopes-as-budgets implementation stored its own copy and spent
+// its life forcing the two back into agreement.
+@DataClassName('CategoryEnvelope')
+class CategoryEnvelopes extends Table {
+  // Deterministic: "<categoryPk>:<yyyy-MM>". Two devices that set an amount for
+  // the same category and month converge on one row instead of generating two
+  // uuids and doubling the plan once they sync. Same trick the old envelope
+  // budgets used with budgetPk == categoryPk, which is the one part of them
+  // that worked.
+  TextColumn get envelopePk => text()();
+  TextColumn get categoryFk => text().references(Categories, #categoryPk)();
+  // Always the first day of a month, at midnight.
+  DateTimeColumn get periodStart => dateTime()();
+  RealColumn get amount => real()();
+  DateTimeColumn get dateTimeModified =>
+      dateTime().withDefault(Constant(DateTime.now())).nullable()();
+
+  @override
+  Set<Column> get primaryKey => {envelopePk};
+}
+
 //If a title is in a smart label, automatically choose this category
 // For e.g. for Food category
 // smartLabels = ["apple", "pear"]
@@ -580,41 +621,19 @@ class Budgets extends Table {
   // Retained only to keep this schema byte-identical to upstream Cashew's so
   // its backups stay importable (see CLAUDE.md). The Firestore-backed shared
   // budgets they belonged to were removed with the rest of the Google
-  // integration. Two of them have since been given new jobs, and their names
-  // no longer describe their contents -- see sharedMembers just below and
-  // sharedAllMembersEver further down.
+  // integration, and nothing in this fork writes any of them.
+  //
+  // sharedMembers and sharedAllMembersEver were briefly borrowed as fork
+  // storage - a budget's owner and its per-period amount history. Both features
+  // were withdrawn: envelopes are their own table now (see CategoryEnvelopes),
+  // and budgets are plain upstream budgets again. Both columns are dead once
+  // more, and the envelope migration nulls out whatever the old features left
+  // in them. Do not give them a third job; add a fork-owned table instead.
   TextColumn get sharedKey => text().nullable()();
   IntColumn get sharedOwnerMember => intEnum<SharedOwnerMember>().nullable()();
   DateTimeColumn get sharedDateUpdated => dateTime().nullable()();
-  // WARNING: this column's name lies. It no longer holds members.
-  //
-  // It holds at most one entry: the server user id of the household member a
-  // budget is personal to, or nothing when the budget is shared by the whole
-  // household. Personal budgets still sync -- they are filtered out when
-  // drawing the screen, so that the over-allocation check can still count
-  // budgets the viewer cannot see.
-  //
-  // Read and write it ONLY through struct/budgetVisibility.dart. Entries are a
-  // bare `<userId>` and anything not matching that exact shape reads as
-  // "shared", which is what lets an original-Cashew backup's real member IDs
-  // arrive here harmlessly.
   TextColumn get sharedMembers =>
       text().map(const StringListInColumnConverter()).nullable()();
-  // WARNING: this column's name lies. It no longer holds members.
-  //
-  // It holds the budget's per-period amount history - what its target was from
-  // each period onward - so that changing a budget's amount does not rewrite
-  // what already-finished periods are measured against. The name is upstream's
-  // and cannot change without breaking the schema invariant above, which is the
-  // whole reason a dead column was borrowed instead of a new one added.
-  //
-  // Read and write it ONLY through struct/budgetPeriodAmounts.dart. Entries are
-  // `<periodStartEpochMillis>=<amount>` and anything not matching that exact
-  // shape is ignored, which is what lets an original-Cashew backup's real
-  // member IDs arrive here harmlessly.
-  //
-  // Full rationale, including how upstream Cashew behaves if it ever reads this
-  // back: specs/backlog/BL-006-per-period-budget-amounts.md.
   TextColumn get sharedAllMembersEver =>
       text().map(const StringListInColumnConverter()).nullable()();
   BoolColumn get isAbsoluteSpendingLimit =>
@@ -838,6 +857,7 @@ class CategoryWithTotal {
   ScannerTemplates,
   DeleteLogs,
   Objectives,
+  CategoryEnvelopes,
 ])
 class FinanceDatabase extends _$FinanceDatabase {
   // FinanceDatabase() : super(_openConnection());
@@ -1314,10 +1334,43 @@ class FinanceDatabase extends _$FinanceDatabase {
                         e.toString());
               }
             },
+            // The first fork-owned table. Everything above this line migrates
+            // upstream Cashew's schema; from here on the two diverge by exactly
+            // one added table. See docs/app/database.md.
+            from46To47: (m, schema) async {
+              print("46 to 47");
+              try {
+                await m.createTable(schema.categoryEnvelopes);
+              } catch (e) {
+                print(
+                    "Migration Error: Error creating table categoryEnvelopes " +
+                        e.toString());
+              }
+            },
           ),
         );
       },
       beforeOpen: (details) async {
+        // The fork's own table, created here rather than trusting the migration
+        // alone. Migrations only ever run *upward*: a database whose stored
+        // version is already at or above ours is opened as-is, and drift is
+        // right to do that. But upstream Cashew has carried on past the release
+        // this fork branched from, so its newer backups declare a schema
+        // version higher than 47 -- and none of them has this table, because
+        // it is ours. Importing one produced an envelopes screen where every
+        // read came back empty and every write was silently dropped on a table
+        // that did not exist.
+        //
+        // Creating it on every open costs one failed statement and makes the
+        // table an invariant rather than something a version number promises.
+        // Same idea, and the same shape, as the budgetFksExclude repair below.
+        try {
+          await createMigrator().createTable(categoryEnvelopes);
+          print("Created the categoryEnvelopes table outside a migration");
+        } catch (e) {
+          // Already there, which is the normal case.
+        }
+
         // This code exists because migration 42to43 may have not run correctly...
         // See explanation in 41to42
         try {
@@ -2712,6 +2765,15 @@ class FinanceDatabase extends _$FinanceDatabase {
         .get();
   }
 
+  Future<List<CategoryEnvelope>> getAllNewCategoryEnvelopes(
+      DateTime lastSynced) {
+    return (select(categoryEnvelopes)
+          ..where((tbl) =>
+              tbl.dateTimeModified.isBiggerOrEqualValue(lastSynced) |
+              tbl.dateTimeModified.isNull()))
+        .get();
+  }
+
   Future<List<TransactionAssociatedTitle>> getAllNewAssociatedTitles(
       DateTime lastSynced) {
     return (select(associatedTitles)
@@ -3053,6 +3115,58 @@ class FinanceDatabase extends _$FinanceDatabase {
 
     return into(categoryBudgetLimits)
         .insert((companionToInsert), mode: InsertMode.insertOrReplace);
+  }
+
+  // Every envelope row there is. There is one per category per month somebody
+  // actually set an amount in, so this stays small - a household that has been
+  // planning ten categories for five years has 600 rows. Resolving which row
+  // applies to a given month happens in Dart (struct/categoryEnvelopes.dart),
+  // because "carry the nearest earlier month forward" is not worth expressing
+  // once per query in SQL.
+  Stream<List<CategoryEnvelope>> watchAllCategoryEnvelopes() {
+    return (select(categoryEnvelopes)
+          ..orderBy([(e) => OrderingTerm.asc(e.periodStart)]))
+        .watch();
+  }
+
+  Future<List<CategoryEnvelope>> getAllCategoryEnvelopes() {
+    return (select(categoryEnvelopes)
+          ..orderBy([(e) => OrderingTerm.asc(e.periodStart)]))
+        .get();
+  }
+
+  Future<int> createOrUpdateCategoryEnvelope(
+    CategoryEnvelope envelope, {
+    // insertOrIgnore is for the one-shot migration, which must never overwrite
+    // an envelope another device already converted and edited.
+    InsertMode mode = InsertMode.insertOrReplace,
+    DateTime? customDateTimeModified,
+  }) async {
+    envelope = envelope.copyWith(
+        dateTimeModified: Value(customDateTimeModified ?? DateTime.now()));
+    return into(categoryEnvelopes)
+        .insert(envelope.toCompanion(true), mode: mode);
+  }
+
+  Future deleteCategoryEnvelope(String envelopePk) async {
+    await createDeleteLog(DeleteLogType.CategoryEnvelope, envelopePk);
+    return (delete(categoryEnvelopes)
+          ..where((e) => e.envelopePk.equals(envelopePk)))
+        .go();
+  }
+
+  Future deleteCategoryEnvelopesInCategory(String categoryPk) async {
+    final List<CategoryEnvelope> envelopesToDelete =
+        await (select(categoryEnvelopes)
+              ..where((e) => e.categoryFk.equals(categoryPk)))
+            .get();
+    await createDeleteLogs(
+      DeleteLogType.CategoryEnvelope,
+      envelopesToDelete.map((e) => e.envelopePk).toList(),
+    );
+    return (delete(categoryEnvelopes)
+          ..where((e) => e.categoryFk.equals(categoryPk)))
+        .go();
   }
 
   Stream<List<TransactionAssociatedTitleWithCategory>> watchAllAssociatedTitles(
@@ -3858,6 +3972,15 @@ class FinanceDatabase extends _$FinanceDatabase {
                   syncLog.transactionDateTime ?? DateTime.now(),
                 ),
           );
+        } else if (syncLog.deleteLogType == DeleteLogType.CategoryEnvelope) {
+          batch.deleteWhere(
+            categoryEnvelopes,
+            (tbl) =>
+                tbl.envelopePk.equals(syncLog.pk) &
+                tbl.dateTimeModified.isSmallerThanValue(
+                  syncLog.transactionDateTime ?? DateTime.now(),
+                ),
+          );
         } else if (syncLog.deleteLogType == DeleteLogType.ScannerTemplate) {
           batch.deleteWhere(scannerTemplates,
               (tbl) => tbl.scannerTemplatePk.equals(syncLog.pk));
@@ -3945,6 +4068,20 @@ class FinanceDatabase extends _$FinanceDatabase {
                 ),
           );
           batch.insert(categoryBudgetLimits, incoming,
+              mode: InsertMode.insertOrIgnore);
+        } else if (syncLog.updateLogType == UpdateLogType.CategoryEnvelope) {
+          final CategoryEnvelopesCompanion incoming =
+              (syncLog.itemToUpdate as CategoryEnvelope).toCompanion(false);
+          batch.update(
+            categoryEnvelopes,
+            incoming,
+            where: (tbl) =>
+                tbl.envelopePk.equals(syncLog.pk) &
+                tbl.dateTimeModified.isSmallerThanValue(
+                  syncLog.transactionDateTime ?? DateTime.now(),
+                ),
+          );
+          batch.insert(categoryEnvelopes, incoming,
               mode: InsertMode.insertOrIgnore);
         } else if (syncLog.updateLogType == UpdateLogType.Transaction) {
           final TransactionsCompanion incoming =
@@ -4268,9 +4405,8 @@ class FinanceDatabase extends _$FinanceDatabase {
   }
 
   // Backfill for subcategories created before color inheritance existed, so
-  // they pick up their main category's color too. Idempotent and local only,
-  // same shape as ensureMainCategoryBudgetsExist() in
-  // struct/mainCategoryBudgets.dart - safe to run on every launch.
+  // they pick up their main category's color too. Idempotent and local only -
+  // safe to run on every launch.
   Future<int> reconcileSubCategoryColors() async {
     List<TransactionCategory> mainCategories = await getAllCategories();
     int updatedCount = 0;
@@ -5135,6 +5271,7 @@ class FinanceDatabase extends _$FinanceDatabase {
     await deleteCategoryTransactions(categoryPk);
     await unAssignSubCategoryFromTransactions(categoryPk);
     await deleteCategoryBudgetLimitsInCategory(categoryPk);
+    await deleteCategoryEnvelopesInCategory(categoryPk);
     // List<Transaction> sharedTransactionsInCategory =
     //     await getAllTransactionsSharedInCategory(categoryPk);
     // print(sharedTransactionsInCategory);
@@ -5153,11 +5290,6 @@ class FinanceDatabase extends _$FinanceDatabase {
     // print("DELETING");
     // print(categoryPk);
     await createDeleteLog(DeleteLogType.TransactionCategory, categoryPk);
-    // A main category's envelope budget is keyed by the category's own pk, so
-    // it dies with the category. Same precedent as
-    // deleteCategoryBudgetLimitsInCategory above.
-    await createDeleteLog(DeleteLogType.Budget, categoryPk);
-    await (delete(budgets)..where((b) => b.budgetPk.equals(categoryPk))).go();
     // Delete any category with same key, or subcategory with that key
     return (delete(categories)
           ..where((c) =>

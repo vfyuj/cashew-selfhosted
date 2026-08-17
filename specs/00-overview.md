@@ -41,7 +41,7 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 2. `03-stage-1-kill-google.md` — self-hosted auth + repointed snapshot sync/backup. First real release.
 3. `04-stage-2-instant-sync.md` — incremental sync on top of Stage 1's snapshot-diff, triggered by the same user actions as today (not real-time push — see that file for why).
 4. `05-accounts-and-admin.md` — first-run setup wizard, account management, instance administration. Revises Stage 1's auth section.
-5. `06-shared-household-data.md` — Stage 4. **Implemented.** Shared dataset, personal budgets, subcategory-vs-envelope allocation checks, per-user views.
+5. `06-shared-household-data.md` — Stage 4. **Implemented.** Shared dataset and per-user views. Personal budgets and the subcategory allocation check shipped in it and were withdrawn in 1.2.0; both sections are kept there as cancelled decisions.
 6. Stage 3 (public-fork readiness) is intentionally **not yet written** — it depends on decisions we'll make while executing the earlier stages, and writing it now risks locking in guesses.
 
 `07-versioning.md` sits outside the stage sequence: it's the fork's release-numbering contract (`1.0.0-beta.<n>`, auto-bumped per commit, shown in the sidebar), which every stage from here on ships under. `08-release-notes-style.md` sits alongside it: not numbering mechanics but the editorial guideline for what to actually write in a changelog section (curate, don't narrate everything; scale effort to the release; call out breaking changes plainly).

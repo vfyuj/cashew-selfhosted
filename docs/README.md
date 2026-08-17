@@ -26,9 +26,10 @@ belongs to another page, this one links it.
 
 | Page | Open it when |
 |---|---|
-| [app/database.md](app/database.md) | Anything near the Drift schema. Explains the upstream-compatibility invariant and the dead columns the fork stores data in. |
+| [app/database.md](app/database.md) | Anything near the Drift schema. Explains the upstream-compatibility invariant and the one table the fork owns. |
 | [app/sync-client.md](app/sync-client.md) | The device side of sync: cursors, the cycle, triggers, rebootstrap. |
-| [app/budgets.md](app/budgets.md) | Per-period amounts, envelope budgets, personal budgets, the over-allocation check. |
+| [app/budgets.md](app/budgets.md) | Short: budgets are upstream's, unmodified. Read it to find out what used to be here and where it went. |
+| [app/envelopes.md](app/envelopes.md) | The monthly plan per category — the fork's own table, how a month resolves, and the one-shot conversion from the old envelope budgets. |
 | [app/settings.md](app/settings.md) | Which preferences follow a person between their devices, and why row 0 must never sync. |
 
 ## Operations

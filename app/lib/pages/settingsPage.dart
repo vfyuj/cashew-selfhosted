@@ -9,6 +9,7 @@ import 'package:cashew_selfhosted/pages/editHomePage.dart';
 import 'package:cashew_selfhosted/pages/translationEditorPage.dart';
 import 'package:cashew_selfhosted/pages/editObjectivesPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePageNetWorth.dart';
+import 'package:cashew_selfhosted/pages/envelopesPage.dart';
 import 'package:cashew_selfhosted/pages/objectivesListPage.dart';
 import 'package:cashew_selfhosted/pages/transactionsListPage.dart';
 import 'package:cashew_selfhosted/pages/upcomingOverdueTransactionsPage.dart';
@@ -230,6 +231,14 @@ class MorePages extends StatelessWidget {
               children: [
                 Expanded(
                   child: SettingsContainerOpenPage(
+                    openPage: EnvelopesPage(backButton: true),
+                    title: navBarIconsData["envelopes"]!.label.tr(),
+                    icon: navBarIconsData["envelopes"]!.iconData,
+                    isOutlined: true,
+                  ),
+                ),
+                Expanded(
+                  child: SettingsContainerOpenPage(
                     openPage: ObjectivesListPage(
                       backButton: true,
                     ),
@@ -238,6 +247,12 @@ class MorePages extends StatelessWidget {
                     isOutlined: true,
                   ),
                 ),
+              ],
+            ),
+          if (hasSideNavigation == false)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Expanded(
                   child: SettingsContainerOpenPage(
                     openPage: CreditDebtTransactions(isCredit: null),
