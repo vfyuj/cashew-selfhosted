@@ -348,6 +348,37 @@ any row that already existed locally. Changed to `InsertMode.insertOrIgnore` at 
 Inherited from upstream; not something row-level sync introduced, but automatic sync running every
 tens of seconds instead of on manual pull-to-refresh made it far more likely to actually bite.
 
+**That fix was necessary but not sufficient, and the gap destroyed user data (fixed in 1.1.1).**
+`insertOrReplace` had been carrying a second, undocumented property: it reinserted the whole row, so
+a column absent from the payload fell back to its null default. Swapping in `insertOrIgnore` kept
+the timestamp guard and silently dropped that. What remained was `batch.update(table, dataClass)`,
+and `Batch.update` calls `toColumns(nullToAbsent: true)` — a data class omits every null column from
+the SET clause, and the `insertOrIgnore` behind it cannot compensate for a row that already exists.
+**No nullable column could be cleared over sync at all.**
+
+The failure chain that surfaced it: promoting a subcategory to a main category clears
+`Categories.mainCategoryPk` and repoints the affected transactions. The transactions crossed;
+the cleared `mainCategoryPk` did not. Peers therefore still saw a subcategory under `categoryFk`,
+`deleteWanderingTransactions` judged those transactions orphaned, and — because it deleted *and*
+wrote `DeleteLogType.Transaction` tombstones — sentenced them on every device in the household,
+including the one that had made the change. Wallet balances rose accordingly.
+
+Two fixes, deliberately separate:
+
+- **`processSyncLogs`** converts each incoming row with `toCompanion(false)` first, so nulls are
+  written as explicit nulls while the guard stays exactly as it was. Pinned by
+  `test/sync_null_propagation_test.dart`.
+- **`deleteWanderingTransactions`** no longer answers every violation identically. A transaction
+  filed against a subcategory whose parent exists is now *repaired* with the same swap
+  `createOrUpdateTransaction` already applies; only a transaction whose category resolves to nothing
+  is deleted, and that deletion writes **no tombstone** — a device must not pass sentence on data it
+  may simply not have received yet (`specs/01-local-first-invariant.md`). The repair deliberately
+  does not bump `dateTimeModified`, so one device's guess can never outrank the authoritative copy.
+  Pinned by `test/wandering_transactions_test.dart`.
+
+The moral, which generalises past this bug: when replacing an upsert mode, enumerate every property
+it was providing, not just the one being fixed.
+
 ### Conflict notification
 
 Exactly a snackbar, nothing else — no archive table, no restore UI, no extra endpoints, per

@@ -7,6 +7,9 @@
 # Personal Claude Code permission grants, not shared config.
 .claude/settings.local.json
 
+# JetBrains IDE project files -- per-developer, not part of the fork.
+.idea/
+
 # Local test databases created by the runbook in TESTING.md.
 /.testdata*/
 

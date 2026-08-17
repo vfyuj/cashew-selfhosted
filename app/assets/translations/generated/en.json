@@ -1328,6 +1328,7 @@
   "changelog-1-0-4-subcategory-colors-body": "Subcategories no longer have a separate color picker -- they always use their main category's color, and existing subcategories are updated to match.",
   "changelog-1-0-4-account-dedupe-title": "No more duplicate accounts",
   "changelog-1-0-4-account-dedupe-body": "Fixes accounts appearing twice when choosing which ones show on your home page.",
+  "changelog-1-1-1-category-transactions-body": "Fixes a bug that deleted transactions. Turning a subcategory into a main category did not fully reach your other devices, which then removed that category's transactions everywhere - including on the device where the change was made. Such transactions are now repaired instead of deleted, and no device can hand down a deletion it decided on its own.",
   "changelog-1-1-0-date-time-picker-title": "Date and time pickers now match the rest of the app",
   "changelog-1-1-0-date-time-picker-body": "Tapping a date or time now opens the same sliding, scrollable picker used elsewhere in the app, instead of a centered calendar or clock dialog.",
   "changelog-1-1-0-backup-naming-title": "Cleaner backup and sync file names, newest first",
