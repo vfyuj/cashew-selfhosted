@@ -37,14 +37,29 @@ class _HomePageEnvelopesState extends State<HomePageEnvelopes> {
   // from its category's income flag, not from the query.
   Stream<List<CategoryWithTotal>>? _spent;
   AllWallets? _spentForWallets;
+  // The month the query was built for. build() reads "now" every frame, so
+  // without this an app left open across midnight on the 1st drew the new
+  // month's plan against the old month's spending until it was restarted.
+  DateTime? _spentForMonth;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final AllWallets allWallets = Provider.of<AllWallets>(context);
-    if (_spent != null && _spentForWallets == allWallets) return;
+    _ensureSpentStream(
+        Provider.of<AllWallets>(context), envelopePeriodStart(DateTime.now()));
+  }
+
+  // Called from build() as well, because nothing notifies a widget that the
+  // month has turned over -- the next rebuild for any other reason is where it
+  // is noticed. Assigning the field here is safe: it changes what the
+  // StreamBuilder below is handed in this same build, not what is on screen
+  // already, so it cannot schedule a rebuild of its own.
+  void _ensureSpentStream(AllWallets allWallets, DateTime month) {
+    if (_spent != null &&
+        _spentForWallets == allWallets &&
+        _spentForMonth == month) return;
     _spentForWallets = allWallets;
-    final DateTime month = envelopePeriodStart(DateTime.now());
+    _spentForMonth = month;
     try {
       _spent = database.watchTotalSpentInEachCategoryInTimeRangeFromCategories(
         allWallets: allWallets,
@@ -64,6 +79,7 @@ class _HomePageEnvelopesState extends State<HomePageEnvelopes> {
   @override
   Widget build(BuildContext context) {
     final DateTime month = envelopePeriodStart(DateTime.now());
+    _ensureSpentStream(Provider.of<AllWallets>(context), month);
 
     return KeepAliveClientMixin(
       child: EnvelopePlanBuilder(

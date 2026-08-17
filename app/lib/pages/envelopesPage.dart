@@ -478,6 +478,13 @@ Future<void> enterEnvelopeAmountPopup(
   final double? current = plan.amountFor(category.categoryPk, month);
   double amount = current ?? 0;
   bool setFromPercent = false;
+  // Only "Set amount" writes. Dismissing the sheet has to leave the plan
+  // exactly as it was, and the amount alone cannot say which happened: a
+  // category with no plan starts this function at 0, and 0 is also a perfectly
+  // ordinary amount to type. Without this flag, opening the sheet on an
+  // unplanned category and swiping it away stored a real "planned 0" row that
+  // then carried forward into every later month.
+  bool confirmed = false;
 
   await openBottomSheet(
     context,
@@ -515,6 +522,7 @@ Future<void> enterEnvelopeAmountPopup(
           amount = selectedAmount.abs();
         },
         next: () async {
+          confirmed = true;
           popRoute(context);
         },
         nextLabel: "set-amount".tr(),
@@ -547,6 +555,7 @@ Future<void> enterEnvelopeAmountPopup(
     await _setAmountFromPercentOfPlannedIncome(context, category, month, plan);
     return;
   }
+  if (confirmed == false) return;
   if (amount == current) return;
   await database.createOrUpdateCategoryEnvelope(newCategoryEnvelope(
     categoryPk: category.categoryPk,
@@ -584,6 +593,10 @@ Future<void> _setAmountFromPercentOfPlannedIncome(
   }
 
   double selectedPercent = 0;
+  // Same reason as the amount sheet above: dismissing must not write. A
+  // percentage that was never typed is 0, and writing that turned a swipe-away
+  // into "this category is planned at nothing this month".
+  bool confirmed = false;
   await openBottomSheet(
     context,
     PopupFramework(
@@ -599,6 +612,7 @@ Future<void> _setAmountFromPercentOfPlannedIncome(
           selectedPercent = amount.abs() > 100 ? 100 : amount.abs();
         },
         next: () async {
+          confirmed = true;
           popRoute(context);
         },
         nextLabel: "set-amount".tr(),
@@ -606,9 +620,12 @@ Future<void> _setAmountFromPercentOfPlannedIncome(
     ),
   );
 
+  if (confirmed == false) return;
+  final double newAmount = selectedPercent / 100 * plannedIncome;
+  if (newAmount == plan.amountFor(category.categoryPk, month)) return;
   await database.createOrUpdateCategoryEnvelope(newCategoryEnvelope(
     categoryPk: category.categoryPk,
     periodStart: month,
-    amount: selectedPercent / 100 * plannedIncome,
+    amount: newAmount,
   ));
 }

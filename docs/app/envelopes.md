@@ -133,7 +133,21 @@ Three details carry the weight:
   run forever. A budget that merely *targets* one main category (the old code
   could adopt one as an envelope) stays a budget: it is one somebody made by
   hand, deleting it would be the only irreversible thing here, and it is a
-  perfectly good upstream budget now.
+  perfectly good upstream budget now. The cost of that choice is real and is
+  accepted: the category it stood in for comes up with **no plan**, and its
+  amount history is gone with the dead column, so the household re-enters that
+  one amount by hand. The 1.2.0 changelog says so rather than promising a clean
+  sweep.
+- **The month a budget without history lands in is the budget's own start, not
+  the day the conversion happens** (`legacyBudgetMonth`, clamped so a hand-edited
+  future start cannot put the plan in a month nothing reads back). Two devices
+  converting the same household in different months would otherwise write the
+  same plan into two months, and both would count.
+- **Nothing here may throw.** The conversion is awaited on the startup path, and
+  everything after it — starting the first sync of the launch — is skipped if it
+  does. Each budget is converted inside its own `try`, with a second one around
+  the whole pass, so a row the conversion cannot make sense of costs that row
+  and nothing else (`specs/01-local-first-invariant.md`).
 - **No "this device has migrated" flag.** That was the first design and it was
   wrong: a flag is a statement about the device, and the data does not arrive
   with the device. It arrives when a backup is imported, when the first sync

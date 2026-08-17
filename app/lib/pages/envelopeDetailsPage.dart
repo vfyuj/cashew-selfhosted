@@ -46,13 +46,18 @@ class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
 
   // One subscription for the page: the header and the breakdown are two views
   // of the same numbers, and creating the stream in build() would resubscribe
-  // on every scroll frame.
+  // on every scroll frame. Rebuilt when the account set changes, because the
+  // query spans every wallet and converts each one to the primary currency.
   Stream<List<CategoryWithTotal>>? _totals;
+  AllWallets? _totalsForWallets;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _totals ??= _watchTotalsBySubCategory(Provider.of<AllWallets>(context));
+    final AllWallets allWallets = Provider.of<AllWallets>(context);
+    if (_totals != null && _totalsForWallets == allWallets) return;
+    _totalsForWallets = allWallets;
+    _totals = _watchTotalsBySubCategory(allWallets);
   }
 
   @override
@@ -117,10 +122,16 @@ class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
                       key: ValueKey(entry.category.categoryPk),
                       entry: entry,
                       // Its share of what this category spent, so the rows add
-                      // up to 100% rather than to the envelope.
+                      // up to 100% rather than to the envelope. Signed the same
+                      // way the amount beside it is: expenses are stored
+                      // negative and income positive, so flipping
+                      // unconditionally made every income envelope's rows read
+                      // as negative percentages.
                       percent: spent == 0
                           ? 0
-                          : (entry.total * -1) / spent * 100,
+                          : (entry.total * (widget.category.income ? 1 : -1)) /
+                              spent *
+                              100,
                       mainCategory: widget.category,
                     ),
                   SizedBox(height: 5),
@@ -157,6 +168,11 @@ class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
   // instead makes the main category match *every* transaction as well, and the
   // page then reports exactly double what was spent -- which is what the first
   // version of this did.
+  //
+  // `isIncome` matters as much: it is what the envelopes list filters its own
+  // "spent" by, and leaving it off here netted a refund off the total on this
+  // page while the card that opened it still counted the full amount. Two
+  // numbers for one month is worse than either of them being arguable.
   Stream<List<CategoryWithTotal>> _watchTotalsBySubCategory(
       AllWallets allWallets) {
     return database.watchTotalSpentInEachCategoryInTimeRangeFromCategories(
@@ -167,6 +183,7 @@ class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
       categoryFksExclude: null,
       budgetTransactionFilters: null,
       memberTransactionFilters: null,
+      isIncome: widget.category.income,
       includeAllSubCategories: true,
       countUnassignedTransactions: false,
     );

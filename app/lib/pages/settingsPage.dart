@@ -261,6 +261,10 @@ class MorePages extends StatelessWidget {
                     isOutlined: true,
                   ),
                 ),
+                // Five entries do not divide into pairs. The odd one keeps its
+                // half of the row rather than stretching across the whole
+                // width, so the block still reads as a grid.
+                Expanded(child: SizedBox.shrink()),
               ],
             ),
           if (hasSideNavigation == false)

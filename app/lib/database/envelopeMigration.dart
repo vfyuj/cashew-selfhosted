@@ -78,10 +78,42 @@ bool isLegacyEnvelopeBudget(Budget budget, Set<String> mainCategoryPks) {
   return mainCategoryPks.contains(budget.budgetPk);
 }
 
+/// Which category [budget]'s plan belongs to. Only meaningful for a budget
+/// [isLegacyEnvelopeBudget] has already accepted.
+///
+/// Exactly one category is the shape the old implementation created and the
+/// shape it recognised, so that one wins. Anything else - a budget somebody
+/// widened to several categories after it was auto-created, or one whose
+/// category list was lost - falls back to the pk, which
+/// [isLegacyEnvelopeBudget] has already proven is a main category's. Reading
+/// `categoryFks.single` here instead threw a StateError on a widened budget,
+/// and took the rest of the app's startup down with it.
+String legacyEnvelopeCategoryPk(Budget budget) {
+  final List<String> categoryFks = budget.categoryFks ?? const [];
+  return categoryFks.length == 1 ? categoryFks.first : budget.budgetPk;
+}
+
+/// The month a budget with no recorded history converts into.
+///
+/// The budget's own start, not "today". Two devices converting the same
+/// household's budgets in different months would otherwise write two rows in
+/// two months, and the plan would exist twice. The budget's start is a property
+/// of the row, so both devices land on the same one - and it is also the truer
+/// answer: the budget did apply from then, and carry-forward brings the amount
+/// up to the present anyway.
+///
+/// Clamped to [now] because a budget's period can be edited by hand: a start
+/// date in the future would put the plan in a month nothing reads back.
+DateTime legacyBudgetMonth(Budget budget, DateTime now) {
+  final DateTime start = envelopePeriodStart(budget.startDate);
+  final DateTime current = envelopePeriodStart(now);
+  return start.isAfter(current) ? current : start;
+}
+
 /// The envelope rows [budget]'s history and current amount become.
 ///
 /// Pure, so the conversion can be tested without a database. [now] is the
-/// month a budget with no recorded history lands in.
+/// upper bound for a budget with no recorded history - see [legacyBudgetMonth].
 List<CategoryEnvelope> envelopesForLegacyBudget(
   Budget budget,
   String categoryPk, {
@@ -96,7 +128,7 @@ List<CategoryEnvelope> envelopesForLegacyBudget(
     return [
       newCategoryEnvelope(
         categoryPk: categoryPk,
-        periodStart: now,
+        periodStart: legacyBudgetMonth(budget, now),
         amount: budget.amount,
       )
     ];
@@ -130,46 +162,69 @@ List<CategoryEnvelope> envelopesForLegacyBudget(
 /// are written insertOrIgnore. Once the conversion is done there is nothing
 /// left that matches, so the steady-state cost is two queries.
 Future<void> migrateEnvelopeBudgetsToCategoryEnvelopes() async {
-  final Set<String> mainCategoryPks = {
-    for (TransactionCategory category
-        in await database.getAllCategories(includeSubCategories: false))
-      if (isEnvelopeEligible(category)) category.categoryPk
-  };
-  final List<Budget> allBudgets = await database.getAllBudgets();
-  final DateTime now = DateTime.now();
+  // Nothing in here may throw out of this function. It is awaited on the app's
+  // startup path (initializeDefaultDatabase, called from navigationFramework's
+  // initState), and everything after it in that chain - starting the first
+  // sync - is skipped if it does. A conversion that cannot make progress has to
+  // fail quietly and be retried next launch, per
+  // specs/01-local-first-invariant.md.
+  try {
+    final Set<String> mainCategoryPks = {
+      for (TransactionCategory category
+          in await database.getAllCategories(includeSubCategories: false))
+        if (isEnvelopeEligible(category)) category.categoryPk
+    };
+    final List<Budget> allBudgets = await database.getAllBudgets();
+    final DateTime now = DateTime.now();
 
-  for (Budget budget in allBudgets) {
-    if (isLegacyEnvelopeBudget(budget, mainCategoryPks) == false) {
-      // A plain budget. It stays exactly as it is, minus whatever the withdrawn
-      // fork features left in the two dead columns - see the comment on them in
-      // tables.dart. Clearing them needs release A's sync fix to reach the
-      // other devices at all: an update carrying a null used to drop that
-      // column from the statement entirely.
-      if (budget.sharedMembers != null || budget.sharedAllMembersEver != null) {
-        await database.createOrUpdateBudget(budget.copyWith(
-          sharedMembers: const Value(null),
-          sharedAllMembersEver: const Value(null),
-        ));
+    for (Budget budget in allBudgets) {
+      // Per budget as well as around the whole thing: one row the conversion
+      // cannot make sense of must not stop the rest of the household's
+      // envelopes from arriving.
+      try {
+        await _convertOneBudget(budget, mainCategoryPks, now);
+      } catch (e) {
+        print("Error converting budget " + budget.budgetPk + ": " +
+            e.toString());
       }
-      continue;
     }
+  } catch (e) {
+    print("Error converting envelope budgets: " + e.toString());
+  }
+}
 
-    final String categoryPk = (budget.categoryFks?.isNotEmpty == true)
-        ? budget.categoryFks!.single
-        : budget.budgetPk;
-    for (CategoryEnvelope envelope
-        in envelopesForLegacyBudget(budget, categoryPk, now: now)) {
-      // insertOrIgnore: a device converting late must not overwrite an envelope
-      // the household has already edited on the new version. The pk is derived
-      // from the category and the month, so "already converted" is simply "the
-      // row is there".
-      await database.createOrUpdateCategoryEnvelope(
-        envelope,
-        mode: InsertMode.insertOrIgnore,
-      );
+Future<void> _convertOneBudget(
+  Budget budget,
+  Set<String> mainCategoryPks,
+  DateTime now,
+) async {
+  if (isLegacyEnvelopeBudget(budget, mainCategoryPks) == false) {
+    // A plain budget. It stays exactly as it is, minus whatever the withdrawn
+    // fork features left in the two dead columns - see the comment on them in
+    // tables.dart. Clearing them needs release A's sync fix to reach the
+    // other devices at all: an update carrying a null used to drop that
+    // column from the statement entirely.
+    if (budget.sharedMembers != null || budget.sharedAllMembersEver != null) {
+      await database.createOrUpdateBudget(budget.copyWith(
+        sharedMembers: const Value(null),
+        sharedAllMembersEver: const Value(null),
+      ));
     }
-    // Writes a tombstone, which is what removes it from the other devices too.
-    await database.deleteBudget(null, budget);
+    return;
   }
 
+  final String categoryPk = legacyEnvelopeCategoryPk(budget);
+  for (CategoryEnvelope envelope
+      in envelopesForLegacyBudget(budget, categoryPk, now: now)) {
+    // insertOrIgnore: a device converting late must not overwrite an envelope
+    // the household has already edited on the new version. The pk is derived
+    // from the category and the month, so "already converted" is simply "the
+    // row is there".
+    await database.createOrUpdateCategoryEnvelope(
+      envelope,
+      mode: InsertMode.insertOrIgnore,
+    );
+  }
+  // Writes a tombstone, which is what removes it from the other devices too.
+  await database.deleteBudget(null, budget);
 }

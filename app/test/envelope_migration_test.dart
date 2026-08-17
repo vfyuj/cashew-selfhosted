@@ -12,12 +12,13 @@ void main() {
     List<String>? categoryFks,
     double amount = 0,
     List<String>? sharedAllMembersEver,
+    DateTime? startDate,
   }) =>
       Budget(
         budgetPk: budgetPk,
         name: 'Budget $budgetPk',
         amount: amount,
-        startDate: DateTime(2026, 8, 1),
+        startDate: startDate ?? DateTime(2026, 8, 1),
         endDate: DateTime(2026, 8, 31),
         income: false,
         archived: false,
@@ -113,6 +114,34 @@ void main() {
     });
   });
 
+  group('which category the plan lands on', () {
+    test('the one category the budget targets', () {
+      expect(
+        legacyEnvelopeCategoryPk(budget(budgetPk: '1', categoryFks: ['2'])),
+        '2',
+      );
+    });
+
+    test('a budget with no category list falls back to its pk', () {
+      expect(legacyEnvelopeCategoryPk(budget(budgetPk: '1')), '1');
+      expect(
+        legacyEnvelopeCategoryPk(budget(budgetPk: '1', categoryFks: [])),
+        '1',
+      );
+    });
+
+    test('a budget widened to several categories falls back to its pk', () {
+      // The old UI never locked the category picker on an envelope budget, so
+      // this shape is reachable. Reading `.single` threw here, on the app's
+      // startup path, on every launch.
+      expect(
+        legacyEnvelopeCategoryPk(
+            budget(budgetPk: '1', categoryFks: ['1', '2'])),
+        '1',
+      );
+    });
+  });
+
   group('what a budget becomes', () {
     final DateTime now = DateTime(2026, 8, 17);
 
@@ -154,8 +183,7 @@ void main() {
       expect(envelopes.single.amount, 300);
     });
 
-    test('a budget with no history becomes this month at its current amount',
-        () {
+    test('a budget with no history becomes its own month at its amount', () {
       final List<CategoryEnvelope> envelopes = envelopesForLegacyBudget(
         budget(budgetPk: '1', categoryFks: ['1'], amount: 250),
         '1',
@@ -163,6 +191,41 @@ void main() {
       );
       expect(envelopes.single.envelopePk, '1:2026-08');
       expect(envelopes.single.amount, 250);
+    });
+
+    test('that month is the budget\'s start, not the day of the conversion',
+        () {
+      // Two devices converting the same household in different months would
+      // otherwise write the plan twice, in two months. The start date is a
+      // property of the row, so both land on the same one; carry-forward brings
+      // the amount up to the present either way.
+      final List<CategoryEnvelope> envelopes = envelopesForLegacyBudget(
+        budget(
+          budgetPk: '1',
+          categoryFks: ['1'],
+          amount: 250,
+          startDate: DateTime(2025, 3, 1),
+        ),
+        '1',
+        now: now,
+      );
+      expect(envelopes.single.envelopePk, '1:2025-03');
+    });
+
+    test('a start date in the future is clamped to the current month', () {
+      // A budget's period can be edited by hand. A plan written into a month
+      // nothing reads back is a plan the household has lost.
+      final List<CategoryEnvelope> envelopes = envelopesForLegacyBudget(
+        budget(
+          budgetPk: '1',
+          categoryFks: ['1'],
+          amount: 250,
+          startDate: DateTime(2027, 1, 1),
+        ),
+        '1',
+        now: now,
+      );
+      expect(envelopes.single.envelopePk, '1:2026-08');
     });
 
     test('a budget that was never filled in becomes nothing', () {
