@@ -24,7 +24,7 @@ import 'package:cashew_selfhosted/pages/activityPage.dart';
 import 'package:flutter/material.dart' show RangeValues;
 part 'tables.g.dart';
 
-int schemaVersionGlobal = 47;
+int schemaVersionGlobal = 48;
 
 // To update and migrate the database, check the README
 
@@ -541,6 +541,16 @@ class CategoryEnvelopes extends Table {
   RealColumn get amount => real()();
   DateTimeColumn get dateTimeModified =>
       dateTime().withDefault(Constant(DateTime.now())).nullable()();
+  // The account whose currency [amount] was entered in, exactly as budgets,
+  // objectives and category limits record theirs.
+  //
+  // Without it an envelope was a bare number whose meaning changed whenever the
+  // primary account did: plan 50,000 with a ruble account selected, switch the
+  // primary account to a dollar one, and the plan read $50,000 while the
+  // spending measured against it had been converted properly. Reading goes
+  // through envelopeAmountToPrimaryCurrency (struct/currencyFunctions.dart).
+  TextColumn get walletFk =>
+      text().references(Wallets, #walletPk).withDefault(const Constant("0"))();
 
   @override
   Set<Column> get primaryKey => {envelopePk};
@@ -1347,6 +1357,20 @@ class FinanceDatabase extends _$FinanceDatabase {
                         e.toString());
               }
             },
+            from47To48: (m, schema) async {
+              print("47 to 48");
+              try {
+                await m.addColumn(schema.categoryEnvelopes,
+                    schema.categoryEnvelopes.walletFk);
+              } catch (e) {
+                print(
+                    "Migration Error: Error creating column categoryEnvelopes.walletFk " +
+                        e.toString());
+              }
+              // Also see beforeOpen, which repairs a database that arrived
+              // already stamped 48 by a newer upstream Cashew and therefore
+              // never ran this step.
+            },
           ),
         );
       },
@@ -1369,6 +1393,18 @@ class FinanceDatabase extends _$FinanceDatabase {
           print("Created the categoryEnvelopes table outside a migration");
         } catch (e) {
           // Already there, which is the normal case.
+        }
+
+        // And the same for every column added to it since, for the same
+        // reason: a database already stamped 48 or above runs no migration, so
+        // from47To48 never touched it. A table that exists but is missing this
+        // column fails every read of it, which is the envelopes screen.
+        try {
+          await createMigrator()
+              .addColumn(categoryEnvelopes, categoryEnvelopes.walletFk);
+          print("Added categoryEnvelopes.walletFk outside a migration");
+        } catch (e) {
+          // The column already existed, which is the normal case.
         }
 
         // This code exists because migration 42to43 may have not run correctly...
@@ -1456,6 +1492,34 @@ class FinanceDatabase extends _$FinanceDatabase {
             } catch (e) {
               print(
                   "Migration Error: Error upgrading objectives.walletFk to current wallet " +
+                      e.toString());
+            }
+          }
+          if (details.versionBefore! < 48) {
+            // Migration 47to48. Every envelope written before this release was
+            // a bare number in whatever the primary account's currency was, so
+            // that is what its row is stamped with -- the same thing 44to45 did
+            // above for budgets, objectives and category limits, and what keeps
+            // an existing plan reading exactly as it did yesterday.
+            //
+            // Written straight to the column rather than through
+            // createOrUpdateCategoryEnvelope: this device is recording what its
+            // own rows already meant, not changing the plan, so it must not
+            // touch dateTimeModified or push anything at the rest of the
+            // household. Every device does the same on its own upgrade.
+            print(
+                "Migration updating categoryEnvelopes.walletFk to current wallet");
+            try {
+              final String? primaryWalletPk =
+                  appStateSettings["selectedWalletPk"];
+              if (primaryWalletPk != null) {
+                await update(categoryEnvelopes).write(
+                    CategoryEnvelopesCompanion(
+                        walletFk: Value(primaryWalletPk)));
+              }
+            } catch (e) {
+              print(
+                  "Migration Error: Error upgrading categoryEnvelopes.walletFk to current wallet " +
                       e.toString());
             }
           }

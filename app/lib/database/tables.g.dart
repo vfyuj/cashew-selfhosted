@@ -6955,9 +6955,19 @@ class $CategoryEnvelopesTable extends CategoryEnvelopes
           type: DriftSqlType.dateTime,
           requiredDuringInsert: false,
           defaultValue: Constant(DateTime.now()));
+  static const VerificationMeta _walletFkMeta =
+      const VerificationMeta('walletFk');
+  @override
+  late final GeneratedColumn<String> walletFk = GeneratedColumn<String>(
+      'wallet_fk', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES wallets (wallet_pk)'),
+      defaultValue: const Constant("0"));
   @override
   List<GeneratedColumn> get $columns =>
-      [envelopePk, categoryFk, periodStart, amount, dateTimeModified];
+      [envelopePk, categoryFk, periodStart, amount, dateTimeModified, walletFk];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -7004,6 +7014,10 @@ class $CategoryEnvelopesTable extends CategoryEnvelopes
           dateTimeModified.isAcceptableOrUnknown(
               data['date_time_modified']!, _dateTimeModifiedMeta));
     }
+    if (data.containsKey('wallet_fk')) {
+      context.handle(_walletFkMeta,
+          walletFk.isAcceptableOrUnknown(data['wallet_fk']!, _walletFkMeta));
+    }
     return context;
   }
 
@@ -7023,6 +7037,8 @@ class $CategoryEnvelopesTable extends CategoryEnvelopes
           .read(DriftSqlType.double, data['${effectivePrefix}amount'])!,
       dateTimeModified: attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime, data['${effectivePrefix}date_time_modified']),
+      walletFk: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}wallet_fk'])!,
     );
   }
 
@@ -7039,12 +7055,14 @@ class CategoryEnvelope extends DataClass
   final DateTime periodStart;
   final double amount;
   final DateTime? dateTimeModified;
+  final String walletFk;
   const CategoryEnvelope(
       {required this.envelopePk,
       required this.categoryFk,
       required this.periodStart,
       required this.amount,
-      this.dateTimeModified});
+      this.dateTimeModified,
+      required this.walletFk});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -7055,6 +7073,7 @@ class CategoryEnvelope extends DataClass
     if (!nullToAbsent || dateTimeModified != null) {
       map['date_time_modified'] = Variable<DateTime>(dateTimeModified);
     }
+    map['wallet_fk'] = Variable<String>(walletFk);
     return map;
   }
 
@@ -7067,6 +7086,7 @@ class CategoryEnvelope extends DataClass
       dateTimeModified: dateTimeModified == null && nullToAbsent
           ? const Value.absent()
           : Value(dateTimeModified),
+      walletFk: Value(walletFk),
     );
   }
 
@@ -7080,6 +7100,7 @@ class CategoryEnvelope extends DataClass
       amount: serializer.fromJson<double>(json['amount']),
       dateTimeModified:
           serializer.fromJson<DateTime?>(json['dateTimeModified']),
+      walletFk: serializer.fromJson<String>(json['walletFk']),
     );
   }
   @override
@@ -7091,6 +7112,7 @@ class CategoryEnvelope extends DataClass
       'periodStart': serializer.toJson<DateTime>(periodStart),
       'amount': serializer.toJson<double>(amount),
       'dateTimeModified': serializer.toJson<DateTime?>(dateTimeModified),
+      'walletFk': serializer.toJson<String>(walletFk),
     };
   }
 
@@ -7099,7 +7121,8 @@ class CategoryEnvelope extends DataClass
           String? categoryFk,
           DateTime? periodStart,
           double? amount,
-          Value<DateTime?> dateTimeModified = const Value.absent()}) =>
+          Value<DateTime?> dateTimeModified = const Value.absent(),
+          String? walletFk}) =>
       CategoryEnvelope(
         envelopePk: envelopePk ?? this.envelopePk,
         categoryFk: categoryFk ?? this.categoryFk,
@@ -7108,6 +7131,7 @@ class CategoryEnvelope extends DataClass
         dateTimeModified: dateTimeModified.present
             ? dateTimeModified.value
             : this.dateTimeModified,
+        walletFk: walletFk ?? this.walletFk,
       );
   CategoryEnvelope copyWithCompanion(CategoryEnvelopesCompanion data) {
     return CategoryEnvelope(
@@ -7121,6 +7145,7 @@ class CategoryEnvelope extends DataClass
       dateTimeModified: data.dateTimeModified.present
           ? data.dateTimeModified.value
           : this.dateTimeModified,
+      walletFk: data.walletFk.present ? data.walletFk.value : this.walletFk,
     );
   }
 
@@ -7131,14 +7156,15 @@ class CategoryEnvelope extends DataClass
           ..write('categoryFk: $categoryFk, ')
           ..write('periodStart: $periodStart, ')
           ..write('amount: $amount, ')
-          ..write('dateTimeModified: $dateTimeModified')
+          ..write('dateTimeModified: $dateTimeModified, ')
+          ..write('walletFk: $walletFk')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(
-      envelopePk, categoryFk, periodStart, amount, dateTimeModified);
+      envelopePk, categoryFk, periodStart, amount, dateTimeModified, walletFk);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -7147,7 +7173,8 @@ class CategoryEnvelope extends DataClass
           other.categoryFk == this.categoryFk &&
           other.periodStart == this.periodStart &&
           other.amount == this.amount &&
-          other.dateTimeModified == this.dateTimeModified);
+          other.dateTimeModified == this.dateTimeModified &&
+          other.walletFk == this.walletFk);
 }
 
 class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
@@ -7156,6 +7183,7 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
   final Value<DateTime> periodStart;
   final Value<double> amount;
   final Value<DateTime?> dateTimeModified;
+  final Value<String> walletFk;
   final Value<int> rowid;
   const CategoryEnvelopesCompanion({
     this.envelopePk = const Value.absent(),
@@ -7163,6 +7191,7 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
     this.periodStart = const Value.absent(),
     this.amount = const Value.absent(),
     this.dateTimeModified = const Value.absent(),
+    this.walletFk = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CategoryEnvelopesCompanion.insert({
@@ -7171,6 +7200,7 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
     required DateTime periodStart,
     required double amount,
     this.dateTimeModified = const Value.absent(),
+    this.walletFk = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : envelopePk = Value(envelopePk),
         categoryFk = Value(categoryFk),
@@ -7182,6 +7212,7 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
     Expression<DateTime>? periodStart,
     Expression<double>? amount,
     Expression<DateTime>? dateTimeModified,
+    Expression<String>? walletFk,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -7190,6 +7221,7 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
       if (periodStart != null) 'period_start': periodStart,
       if (amount != null) 'amount': amount,
       if (dateTimeModified != null) 'date_time_modified': dateTimeModified,
+      if (walletFk != null) 'wallet_fk': walletFk,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -7200,6 +7232,7 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
       Value<DateTime>? periodStart,
       Value<double>? amount,
       Value<DateTime?>? dateTimeModified,
+      Value<String>? walletFk,
       Value<int>? rowid}) {
     return CategoryEnvelopesCompanion(
       envelopePk: envelopePk ?? this.envelopePk,
@@ -7207,6 +7240,7 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
       periodStart: periodStart ?? this.periodStart,
       amount: amount ?? this.amount,
       dateTimeModified: dateTimeModified ?? this.dateTimeModified,
+      walletFk: walletFk ?? this.walletFk,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -7229,6 +7263,9 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
     if (dateTimeModified.present) {
       map['date_time_modified'] = Variable<DateTime>(dateTimeModified.value);
     }
+    if (walletFk.present) {
+      map['wallet_fk'] = Variable<String>(walletFk.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -7243,6 +7280,7 @@ class CategoryEnvelopesCompanion extends UpdateCompanion<CategoryEnvelope> {
           ..write('periodStart: $periodStart, ')
           ..write('amount: $amount, ')
           ..write('dateTimeModified: $dateTimeModified, ')
+          ..write('walletFk: $walletFk, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();

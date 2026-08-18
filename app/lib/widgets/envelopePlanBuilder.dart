@@ -2,6 +2,7 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/struct/categoryEnvelopes.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 /// Builds anything that needs the envelope plan, straight from the two queries
 /// it is made of.
@@ -48,6 +49,11 @@ class _EnvelopePlanBuilderState extends State<EnvelopePlanBuilder> {
               buildEnvelopePlan(
                 categoriesSnapshot.data ?? const <TransactionCategory>[],
                 envelopesSnapshot.data ?? const <CategoryEnvelope>[],
+                // Every amount the plan hands out comes back in the primary
+                // account's currency. Watched rather than read once: changing
+                // the primary account has to move the plan on screen the same
+                // way it moves everything else.
+                allWallets: Provider.of<AllWallets>(context),
               ),
             );
           },

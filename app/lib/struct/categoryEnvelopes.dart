@@ -1,4 +1,5 @@
 import 'package:cashew_selfhosted/database/tables.dart';
+import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 
 // Envelopes: how much a category is meant to get in a given month.
 //
@@ -49,10 +50,17 @@ String envelopePkFor(String categoryPk, DateTime periodStart) {
 }
 
 /// A brand new envelope row for [categoryPk]'s [periodStart] month.
+///
+/// [walletPk] is the account whose currency [amount] is counted in - normally
+/// the primary account, since that is the currency the number pad was showing.
+/// Required rather than defaulted: an envelope with the wrong account behind it
+/// is a plan that silently means something else, and there is no answer that is
+/// right for every caller.
 CategoryEnvelope newCategoryEnvelope({
   required String categoryPk,
   required DateTime periodStart,
   required double amount,
+  required String walletPk,
 }) {
   final DateTime month = envelopePeriodStart(periodStart);
   return CategoryEnvelope(
@@ -61,10 +69,11 @@ CategoryEnvelope newCategoryEnvelope({
     periodStart: month,
     amount: amount,
     dateTimeModified: null,
+    walletFk: walletPk,
   );
 }
 
-/// The amount that applies to [periodStart], given every envelope row of one
+/// The envelope row that applies to [periodStart], given every row of one
 /// category, or null when that category has no plan yet.
 ///
 /// Carrying the nearest earlier month forward is what makes "same amount every
@@ -72,44 +81,76 @@ CategoryEnvelope newCategoryEnvelope({
 /// read time rather than by a background job writing rows for months nobody has
 /// looked at. A later row never applies to an earlier month, so opening
 /// February after setting March's amount still shows February's own.
-double? envelopeAmountForPeriodStart(
+CategoryEnvelope? envelopeForPeriodStart(
     List<CategoryEnvelope> envelopesOfCategory, DateTime periodStart) {
   final DateTime month = envelopePeriodStart(periodStart);
-  double? resolved;
+  CategoryEnvelope? resolved;
   DateTime? resolvedFrom;
   for (CategoryEnvelope envelope in envelopesOfCategory) {
     final DateTime from = envelopePeriodStart(envelope.periodStart);
     if (from.isAfter(month)) continue;
     if (resolvedFrom == null || from.isAfter(resolvedFrom)) {
-      resolved = envelope.amount;
+      resolved = envelope;
       resolvedFrom = from;
     }
   }
   return resolved;
 }
 
+/// The stored amount that applies to [periodStart]. **In the row's own
+/// account's currency**, not necessarily the primary one - see [EnvelopePlan].
+double? envelopeAmountForPeriodStart(
+        List<CategoryEnvelope> envelopesOfCategory, DateTime periodStart) =>
+    envelopeForPeriodStart(envelopesOfCategory, periodStart)?.amount;
+
 /// Every envelope, indexed by category, plus the categories they belong to.
 ///
 /// One snapshot shared by every widget that needs a planned figure, so a screen
 /// full of envelope rows is two database reads rather than two per row.
+///
+/// **Every amount this hands out is in the primary account's currency**, the
+/// one everything else on screen is counted in. Each row carries the account
+/// its number was typed in ([CategoryEnvelope.walletFk]) and [allWallets] is
+/// what converts it, so switching the primary account to another currency moves
+/// the plan with the spending instead of leaving a ruble figure wearing a
+/// dollar sign. Read [resolvedEnvelopeFor] instead when you need the number as
+/// stored - the amount sheet does, because that is what it puts on the pad.
 class EnvelopePlan {
   const EnvelopePlan({
     required this.categories,
     required this.envelopesByCategoryPk,
+    this.allWallets,
   });
 
   /// Envelope-eligible main categories, in the order the query returned them.
   final List<TransactionCategory> categories;
   final Map<String, List<CategoryEnvelope>> envelopesByCategoryPk;
 
+  /// The accounts, for converting each row into the primary currency. Null only
+  /// where there is no such thing - the pure tests in
+  /// test/category_envelopes_test.dart - and amounts then come back as stored.
+  final AllWallets? allWallets;
+
   static const EnvelopePlan empty = EnvelopePlan(
     categories: <TransactionCategory>[],
     envelopesByCategoryPk: <String, List<CategoryEnvelope>>{},
   );
 
-  /// The plan for one category and month, or null when it has never been set.
-  double? amountFor(String categoryPk, DateTime periodStart) =>
-      envelopeAmountForPeriodStart(
+  /// The plan for one category and month **in the primary currency**, or null
+  /// when it has never been set.
+  double? amountFor(String categoryPk, DateTime periodStart) {
+    final CategoryEnvelope? envelope =
+        resolvedEnvelopeFor(categoryPk, periodStart);
+    if (envelope == null) return null;
+    if (allWallets == null) return envelope.amount;
+    return envelopeAmountToPrimaryCurrency(allWallets!, envelope);
+  }
+
+  /// The row that applies to that month, as stored - its own amount, in its own
+  /// account's currency. The month it came from may be an earlier one.
+  CategoryEnvelope? resolvedEnvelopeFor(
+          String categoryPk, DateTime periodStart) =>
+      envelopeForPeriodStart(
           envelopesByCategoryPk[categoryPk] ?? const <CategoryEnvelope>[],
           periodStart);
 
@@ -129,8 +170,9 @@ class EnvelopePlan {
           .where((TransactionCategory category) => category.income == income)
           .toList();
 
-  /// Everything planned for one month on one side of the ledger. Income or
-  /// expense comes from the category, which is the only place it is recorded.
+  /// Everything planned for one month on one side of the ledger, in the primary
+  /// currency. Income or expense comes from the category, which is the only
+  /// place it is recorded.
   double totalPlanned({required bool income, required DateTime periodStart}) {
     double total = 0;
     for (TransactionCategory category in categoriesOfType(income: income)) {
@@ -143,9 +185,11 @@ class EnvelopePlan {
 /// Groups envelopes under the categories that can have one.
 ///
 /// Pure, and the only place the two halves are put together: widgets/
-/// envelopePlanBuilder.dart feeds it two live queries, tests feed it lists.
+/// envelopePlanBuilder.dart feeds it two live queries and the accounts, tests
+/// feed it lists.
 EnvelopePlan buildEnvelopePlan(
-    List<TransactionCategory> categories, List<CategoryEnvelope> envelopes) {
+    List<TransactionCategory> categories, List<CategoryEnvelope> envelopes,
+    {AllWallets? allWallets}) {
   final List<TransactionCategory> eligible =
       categories.where(isEnvelopeEligible).toList();
   final Set<String> eligiblePks = {
@@ -160,5 +204,7 @@ EnvelopePlan buildEnvelopePlan(
     byCategory.putIfAbsent(envelope.categoryFk, () => []).add(envelope);
   }
   return EnvelopePlan(
-      categories: eligible, envelopesByCategoryPk: byCategory);
+      categories: eligible,
+      envelopesByCategoryPk: byCategory,
+      allWallets: allWallets);
 }

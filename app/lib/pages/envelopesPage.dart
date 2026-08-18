@@ -469,14 +469,25 @@ class EnvelopeEntry extends StatelessWidget {
 /// Written once, after the sheet closes, rather than on every keystroke:
 /// SelectAmount reports each edit as it is typed and every write is a row the
 /// sync feed then has to carry.
+///
+/// The number pad works in the amount **as stored**, in its own account's
+/// currency - not the converted figure the card shows. Anything else would
+/// re-round the plan through today's exchange rate every time the sheet was
+/// opened and closed.
 Future<void> enterEnvelopeAmountPopup(
   BuildContext context,
   TransactionCategory category,
   DateTime month,
   EnvelopePlan plan,
 ) async {
-  final double? current = plan.amountFor(category.categoryPk, month);
-  double amount = current ?? 0;
+  final CategoryEnvelope? current =
+      plan.resolvedEnvelopeFor(category.categoryPk, month);
+  double amount = current?.amount ?? 0;
+  // The account the plan is counted in. An amount already set keeps the account
+  // it was set in, even when that is not the primary one today; a new one is
+  // planned in the currency the pad is showing.
+  String selectedWalletPk =
+      current?.walletFk ?? appStateSettings["selectedWalletPk"];
   bool setFromPercent = false;
   // Only "Set amount" writes. Dismissing the sheet has to leave the plan
   // exactly as it was, and the amount alone cannot say which happened: a
@@ -521,6 +532,16 @@ Future<void> enterEnvelopeAmountPopup(
         setSelectedAmount: (double selectedAmount, _) {
           amount = selectedAmount.abs();
         },
+        // Only for a household that actually keeps more than one currency; with
+        // one, there is nothing to pick and the picker is hidden entirely. Same
+        // arrangement as a budget's per-category limit.
+        enableWalletPicker: true,
+        hideWalletPickerIfOneCurrency: true,
+        selectedWalletPk: selectedWalletPk,
+        walletPkForCurrency: selectedWalletPk,
+        setSelectedWalletPk: (String walletPkPassed) {
+          selectedWalletPk = walletPkPassed;
+        },
         next: () async {
           confirmed = true;
           popRoute(context);
@@ -556,11 +577,16 @@ Future<void> enterEnvelopeAmountPopup(
     return;
   }
   if (confirmed == false) return;
-  if (amount == current) return;
+  // Unchanged in both halves: the same number in the same currency. Changing
+  // only the account is a real change - it is what the amount means.
+  if (amount == current?.amount && selectedWalletPk == current?.walletFk) {
+    return;
+  }
   await database.createOrUpdateCategoryEnvelope(newCategoryEnvelope(
     categoryPk: category.categoryPk,
     periodStart: month,
     amount: amount,
+    walletPk: selectedWalletPk,
   ));
 }
 
@@ -627,5 +653,9 @@ Future<void> _setAmountFromPercentOfPlannedIncome(
     categoryPk: category.categoryPk,
     periodStart: month,
     amount: newAmount,
+    // A share of the planned income, and that total is in the primary currency
+    // like everything else the plan hands out - so this amount is too,
+    // whichever account the category was planned in before.
+    walletPk: appStateSettings["selectedWalletPk"],
   ));
 }

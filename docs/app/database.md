@@ -6,7 +6,7 @@ database is unrelated; see [../server/database.md](../server/database.md).
 
 ## Upstream's tables are identical to upstream's, on purpose
 
-`schemaVersionGlobal = 47`, 11 tables: upstream Cashew's 10, unchanged column for column, plus one
+`schemaVersionGlobal = 48`, 11 tables: upstream Cashew's 10, unchanged column for column, plus one
 the fork owns. An original-Cashew backup therefore imports as-is. Verify:
 
 ```bash
@@ -26,7 +26,7 @@ One, so far:
 
 | Table | Holds | Owner |
 |---|---|---|
-| `CategoryEnvelopes` | one category's planned amount for one month | `struct/categoryEnvelopes.dart` |
+| `CategoryEnvelopes` | one category's planned amount for one month, and the account whose currency it is in | `struct/categoryEnvelopes.dart` |
 
 Adding a table is the one shape of divergence that costs nothing in the direction we promised:
 restoring an original-Cashew backup just leaves it empty. Changing an existing table would break that
@@ -73,18 +73,22 @@ backup actually has.
 ## Version numbers are shared with upstream, and that bites
 
 The fork owns a table but not the counter: `schemaVersionGlobal` is upstream Cashew's, and upstream
-kept moving after the release this fork branched from. Its 6.x backups declare **48** — above the
-fork's 47, and with a different meaning. Importing one is a *downgrade* as far as drift is concerned,
-so it runs no migration at all, and the database then has upstream's newer schema with no
-`category_envelopes` in it, because that table is the fork's.
+kept moving after the release this fork branched from. Its 6.x backups declare **48** — the same
+number the fork now uses, with a different meaning, and until 1.2.1 a number *above* the fork's own.
+Importing one is at best a no-op and at worst a *downgrade* as far as drift is concerned, so it runs
+no migration at all, and the database then has upstream's newer schema with no `category_envelopes`
+in it, because that table is the fork's.
 
 That is not a hypothetical: an owner imported a 6.6.11 backup and got an envelopes screen that read
 empty and swallowed every amount typed into it, with `Migrating from: 48 to 47` the only clue.
 
 So the fork-owned table is created in **`beforeOpen`**, not only in the migration step — one failed
-statement per launch buys an invariant instead of a promise about version numbers. Any future
-fork-owned table must do the same. `test/schema_migration_test.dart` pins it with a database
-deliberately stamped 48.
+statement per launch buys an invariant instead of a promise about version numbers. **Every column
+added to it since gets the same treatment**, one `addColumn` per launch, for exactly the same reason:
+a database that arrives already stamped at or above our version never runs the step that would have
+added it, and a table missing a column fails every read of it. Any future fork-owned table or column
+must do the same. `test/schema_migration_test.dart` pins both with databases deliberately stamped by
+hand.
 
 Importing a *newer* upstream backup is otherwise outside what `CLAUDE.md` promises — that promise is
 about original-Cashew backups from the 5.4.3 line the fork branched from. Extra columns upstream adds

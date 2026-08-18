@@ -1,5 +1,6 @@
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/struct/categoryEnvelopes.dart';
+import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The decisions behind envelopes, tested without a database: which categories
@@ -22,9 +23,13 @@ void main() {
         methodAdded: MethodAdded.csv,
       );
 
-  CategoryEnvelope envelope(String categoryPk, DateTime month, double amount) =>
+  CategoryEnvelope envelope(String categoryPk, DateTime month, double amount,
+          {String walletPk = 'primary'}) =>
       newCategoryEnvelope(
-          categoryPk: categoryPk, periodStart: month, amount: amount);
+          categoryPk: categoryPk,
+          periodStart: month,
+          amount: amount,
+          walletPk: walletPk);
 
   group('envelope primary keys', () {
     test('are derived from the category and the month, not generated', () {
@@ -158,6 +163,82 @@ void main() {
       expect(plan.amountFor('2', DateTime(2026, 8, 1)), 200);
       expect(plan.storedEnvelopeFor('2', DateTime(2026, 8, 1)), isNull);
       expect(plan.storedEnvelopeFor('2', DateTime(2026, 7, 1))?.amount, 200);
+    });
+
+    test('the row that applies carries the account it was planned in', () {
+      // The amount sheet reopens on the number as typed, in the currency it was
+      // typed in, and that has to survive the carry-forward from July.
+      expect(plan.resolvedEnvelopeFor('2', DateTime(2026, 8, 1))?.amount, 200);
+      expect(plan.resolvedEnvelopeFor('2', DateTime(2026, 8, 1))?.walletFk,
+          'primary');
+    });
+  });
+
+  group('the currency an amount is counted in', () {
+    // An envelope is a bare number plus the account whose currency it is in.
+    // Without the second half, planning 50,000 with a ruble account selected
+    // and then making a dollar account primary left the plan reading $50,000
+    // while the spending it is measured against had been converted properly.
+    TransactionWallet wallet(String pk, String currency) => TransactionWallet(
+          walletPk: pk,
+          name: currency,
+          dateCreated: DateTime(2026, 1, 1),
+          order: 0,
+          currency: currency,
+          decimals: 2,
+        );
+
+    final AllWallets allWallets = AllWallets(
+      list: [wallet('rub', 'rub'), wallet('usd', 'usd')],
+      indexedByPk: {'rub': wallet('rub', 'rub'), 'usd': wallet('usd', 'usd')},
+    );
+
+    setUp(() {
+      // Fixed rates, so the test never reaches the network: 100 rubles to the
+      // dollar.
+      appStateSettings['customCurrencyAmounts'] = {'usd': 1.0, 'rub': 100.0};
+    });
+
+    tearDown(() {
+      appStateSettings.remove('customCurrencyAmounts');
+      appStateSettings.remove('selectedWalletPk');
+    });
+
+    EnvelopePlan planIn(String primaryWalletPk) {
+      appStateSettings['selectedWalletPk'] = primaryWalletPk;
+      return buildEnvelopePlan(
+        [category('1')],
+        [envelope('1', DateTime(2026, 8, 1), 50000, walletPk: 'rub')],
+        allWallets: allWallets,
+      );
+    }
+
+    test('is the primary account\'s, whichever account planned it', () {
+      expect(planIn('rub').amountFor('1', DateTime(2026, 8, 1)), 50000);
+      expect(planIn('usd').amountFor('1', DateTime(2026, 8, 1)), 500);
+    });
+
+    test('applies to the totals as well, not just the row', () {
+      expect(
+          planIn('usd')
+              .totalPlanned(income: false, periodStart: DateTime(2026, 8, 1)),
+          500);
+    });
+
+    test('leaves the stored row alone - that is what the number pad edits', () {
+      expect(
+          planIn('usd').resolvedEnvelopeFor('1', DateTime(2026, 8, 1))?.amount,
+          50000);
+    });
+
+    test('a plan built without accounts hands back what is stored', () {
+      // The pure case above, and the reason every other test in this file can
+      // ignore currency entirely.
+      expect(
+          buildEnvelopePlan([category('1')],
+                  [envelope('1', DateTime(2026, 8, 1), 50000, walletPk: 'rub')])
+              .amountFor('1', DateTime(2026, 8, 1)),
+          50000);
     });
   });
 }

@@ -146,6 +146,12 @@ double categoryBudgetLimitToPrimaryCurrency(
       (amountRatioToPrimaryCurrencyGivenPk(allWallets, limit.walletFk));
 }
 
+double envelopeAmountToPrimaryCurrency(
+    AllWallets allWallets, CategoryEnvelope envelope) {
+  return envelope.amount *
+      (amountRatioToPrimaryCurrencyGivenPk(allWallets, envelope.walletFk));
+}
+
 // Positive (input)
 double getAmountRatioWalletTransferTo(AllWallets allWallets, String walletToPk,
     {String? enteredAmountWalletPk}) {

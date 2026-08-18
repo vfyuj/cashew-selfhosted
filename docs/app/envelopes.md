@@ -15,12 +15,12 @@ One row per category per month, in the fork-owned `CategoryEnvelopes` table
 | Which categories | Main categories, minus the balance-correction category `"0"` (corrections and transfers are not planned spending). Subcategories roll up into their parent. |
 | Income or expense | Read from `Categories.income`. **Never stored on the envelope.** |
 | Order and visibility | The category list's. Envelopes have no list of their own to sort or hide. |
-| Amount | `RealColumn`, in the primary currency. Zero is a real answer, meaning "nothing planned". |
+| Amount | `RealColumn`, plus the account whose currency it is counted in (`walletFk`). Zero is a real answer, meaning "nothing planned". |
 
 `struct/categoryEnvelopes.dart` owns all of it, and the parts that are decisions rather than queries
 are pure functions with tests (`test/category_envelopes_test.dart`).
 
-## Four rules worth knowing
+## Five rules worth knowing
 
 **Every main category has an envelope, always.** Not "once something has created one" — the screen is
 built from `watchAllCategories()`, and a row exists because the category does
@@ -40,6 +40,17 @@ amounts it had come back with it. All of this falls out of deriving the list rat
 same category's amount for the same month write the same row, so the merge is a normal
 last-write-wins on one row instead of two rows that both count. This is the one part of the old
 envelope budgets that worked, and it is kept.
+
+**An amount is a number *and* the account its currency belongs to.** `walletFk`, exactly as budgets,
+objectives and category limits record theirs, and read back through
+`envelopeAmountToPrimaryCurrency` (`struct/currencyFunctions.dart`). Without it an envelope was a
+bare number whose meaning changed under it: plan 50,000 with a ruble account selected, make a dollar
+account primary, and the plan read $50,000 while the spending measured against it had been converted
+properly — a card comparing two different currencies and calling one of them overspending. The number
+pad edits the amount **as stored**, in its own account's currency, and offers an account picker only
+where the household keeps more than one currency; everything else on screen — the cards, the section
+totals, Planned vs Actual — is converted to the primary account's currency by `EnvelopePlan`, so it
+moves with the primary account the way every other figure in the app does.
 
 **A month with no row of its own is not empty.** It resolves to the nearest *earlier* month that has
 one — so "same amount every month" costs a single row, and a month you have never opened already
@@ -95,7 +106,9 @@ the household that good news is a problem.
   Planned card and the month's transactions for its Actual one. It sits on the home page and at the
   top of the envelopes page, following whichever month is on screen.
 - **Onboarding** (`pages/onBoardingPage.dart`) fills in this month's envelopes: the income step and
-  the spending step are one row per category, writing straight to this table.
+  the spending step are one row per category, writing straight to this table. No account picker here
+  on purpose — it is a list of numbers typed quickly in the primary account's currency, which is what
+  the rows are stamped with.
 - **"% of planned income"** is a convenience when setting an expense amount, not a stored setting.
   The percentage is resolved against this month's income envelopes and the plain number it comes to
   is what gets saved.
@@ -119,10 +132,11 @@ Deleting a category deletes its envelopes, with tombstones
 is, **on every launch**, not once.
 
 It finds the budgets the old implementation created for itself, turns each
-recorded past amount into a row, and deletes the budget with a tombstone so the
-household's other devices lose it too. Every other budget is untouched except
-for having the two dead columns nulled out, which is what makes it a plain
-upstream budget again.
+recorded past amount into a row — carrying over the budget's own `walletFk`,
+since the envelope means the same thing in the same currency — and deletes the
+budget with a tombstone so the household's other devices lose it too. Every
+other budget is untouched except for having the two dead columns nulled out,
+which is what makes it a plain upstream budget again.
 
 Three details carry the weight:
 
