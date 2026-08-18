@@ -4,6 +4,7 @@ import 'package:cashew_selfhosted/database/envelopeMigration.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/struct/categoryEnvelopes.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart' as globals;
+import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
@@ -35,18 +36,64 @@ void main() {
     globals.sharedPreferences = await SharedPreferences.getInstance();
   });
 
-  test('46 to 47 creates the fork-owned envelopes table', () async {
+  test('46 to 48 creates the fork-owned envelopes table, with its account',
+      () async {
     final connection = await verifier.startAt(46);
     final db = FinanceDatabase(connection);
     globals.database = db;
     addTearDown(db.close);
 
-    await verifier.migrateAndValidate(db, 47);
+    await verifier.migrateAndValidate(db, 48);
 
     // Not just present in the schema -- actually usable, which is what the
     // envelopes screen needs on the very first launch after an upgrade or a
     // restored backup.
     expect(await db.getAllCategoryEnvelopes(), isEmpty);
+  });
+
+  test('a 1.2.0 database stamps its envelopes with the primary account',
+      () async {
+    // 47 to 48 adds the column that says which account's currency an amount is
+    // counted in. Every envelope written before it existed was a bare number in
+    // whatever the primary account was at the time, so that is what it gets
+    // stamped with -- which is what makes a plan read the same after the
+    // upgrade as it did before it.
+    final Directory directory =
+        Directory.systemTemp.createTempSync('envelopes_wallet_fk');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final File file = File('${directory.path}/db.sqlite');
+
+    // A database in the shape 1.2.0 left behind: an envelopes table with no
+    // wallet_fk, a row in it, and the version number of the day.
+    final setup = FinanceDatabase(NativeDatabase(file));
+    await setup.customStatement('DROP TABLE IF EXISTS category_envelopes');
+    await setup.customStatement(
+      'CREATE TABLE category_envelopes ('
+      'envelope_pk TEXT NOT NULL, '
+      'category_fk TEXT NOT NULL REFERENCES categories (category_pk), '
+      'period_start INTEGER NOT NULL, '
+      'amount REAL NOT NULL, '
+      'date_time_modified INTEGER, '
+      'PRIMARY KEY (envelope_pk))',
+    );
+    await setup.customStatement(
+      "INSERT INTO category_envelopes "
+      '(envelope_pk, category_fk, period_start, amount) '
+      "VALUES ('groceries:2026-08', 'groceries', 0, 50000)",
+    );
+    await setup.customStatement('PRAGMA user_version = 47');
+    await setup.close();
+
+    appStateSettings['selectedWalletPk'] = 'rubles';
+    addTearDown(() => appStateSettings.remove('selectedWalletPk'));
+
+    final db = FinanceDatabase(NativeDatabase(file));
+    globals.database = db;
+    addTearDown(db.close);
+
+    final List<CategoryEnvelope> envelopes = await db.getAllCategoryEnvelopes();
+    expect(envelopes.single.amount, 50000);
+    expect(envelopes.single.walletFk, 'rubles');
   });
 
   test('a backup from a newer upstream Cashew still gets the envelopes table',
@@ -87,7 +134,10 @@ void main() {
       methodAdded: MethodAdded.csv,
     ));
     await db.createOrUpdateCategoryEnvelope(newCategoryEnvelope(
-        categoryPk: 'cat', periodStart: DateTime(2026, 8, 1), amount: 500));
+        categoryPk: 'cat',
+        periodStart: DateTime(2026, 8, 1),
+        amount: 500,
+        walletPk: '0'));
     expect((await db.getAllCategoryEnvelopes()).single.amount, 500);
   });
 
@@ -100,7 +150,7 @@ void main() {
     final db = FinanceDatabase(connection);
     globals.database = db;
     addTearDown(db.close);
-    await verifier.migrateAndValidate(db, 47);
+    await verifier.migrateAndValidate(db, 48);
 
     await db.createOrUpdateCategory(TransactionCategory(
       categoryPk: 'cat-groceries',
@@ -166,7 +216,7 @@ void main() {
     final db = FinanceDatabase(connection);
     globals.database = db;
     addTearDown(db.close);
-    await verifier.migrateAndValidate(db, 47);
+    await verifier.migrateAndValidate(db, 48);
 
     Future<TransactionCategory> category(String pk,
         {String? mainCategoryPk}) async {
@@ -194,7 +244,10 @@ void main() {
     expect((await plan()).amountFor('groceries', august), isNull);
 
     await db.createOrUpdateCategoryEnvelope(newCategoryEnvelope(
-        categoryPk: 'groceries', periodStart: august, amount: 500));
+        categoryPk: 'groceries',
+        periodStart: august,
+        amount: 500,
+        walletPk: '0'));
     expect((await plan()).amountFor('groceries', august), 500);
 
     // Demoted to a subcategory: it stops being something you plan, but its
@@ -227,7 +280,7 @@ void main() {
     final db = FinanceDatabase(connection);
     globals.database = db;
     addTearDown(db.close);
-    await verifier.migrateAndValidate(db, 47);
+    await verifier.migrateAndValidate(db, 48);
 
     await db.createOrUpdateCategory(TransactionCategory(
       categoryPk: 'cat-groceries',

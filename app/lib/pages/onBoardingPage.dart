@@ -196,6 +196,10 @@ class OnBoardingPageBodyState extends State<OnBoardingPageBody> {
         categoryPk: category.categoryPk,
         periodStart: DateTime.now(),
         amount: enteredAmount!,
+        // The pad shows the primary account's currency and there is no picker
+        // here on purpose - onboarding is a list of numbers typed quickly, not
+        // a place to decide which account each category is planned in.
+        walletPk: appStateSettings["selectedWalletPk"],
       ));
     }
   }

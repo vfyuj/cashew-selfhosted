@@ -130,6 +130,12 @@ List<CategoryEnvelope> envelopesForLegacyBudget(
         categoryPk: categoryPk,
         periodStart: legacyBudgetMonth(budget, now),
         amount: budget.amount,
+        // The budget already recorded which account its amount was counted in,
+        // and the envelope means exactly the same thing. Taking it from the
+        // budget rather than from today's primary account is what stops a
+        // household that plans in one currency and reads in another from having
+        // its converted plan converted a second time.
+        walletPk: budget.walletFk,
       )
     ];
   }
@@ -141,6 +147,7 @@ List<CategoryEnvelope> envelopesForLegacyBudget(
       categoryPk: categoryPk,
       periodStart: change.from,
       amount: change.amount,
+      walletPk: budget.walletFk,
     );
     byMonth[envelope.envelopePk] = envelope;
   }

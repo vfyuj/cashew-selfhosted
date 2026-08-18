@@ -205,6 +205,7 @@ void main() {
         periodStart: DateTime(2026, 8, 1),
         amount: 400,
         dateTimeModified: DateTime.now(),
+        walletFk: '0',
       ),
     ];
 
@@ -221,6 +222,7 @@ void main() {
       periodStart: DateTime(2026, 8, 1),
       amount: 400,
       dateTimeModified: DateTime.fromMillisecondsSinceEpoch(1786150106000),
+      walletFk: '2',
     );
 
     final restored = CategoryEnvelope.fromJson(
@@ -229,6 +231,10 @@ void main() {
     expect(restored.envelopePk, envelope.envelopePk);
     expect(restored.periodStart, envelope.periodStart);
     expect(restored.amount, envelope.amount);
+    // The account the amount is counted in travels with it. An envelope that
+    // arrived without one would be read in the receiving device's own primary
+    // currency, which is the bug this column exists to stop.
+    expect(restored.walletFk, envelope.walletFk);
     expect(restored.toJson(), envelope.toJson());
   });
 
