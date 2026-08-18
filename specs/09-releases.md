@@ -1,6 +1,6 @@
 # Releases
 
-**Status:** implemented 2026-08-11, and exercised since — every release from `v1.0.0-beta.21` through `v1.2.0` has shipped through it. The four signing secrets are configured, releases carry a signed APK (~86 MB), and the GHCR package is public: an unauthenticated manifest fetch for `ghcr.io/vfyuj/cashew-selfhosted:1.2.0` returns 200.
+**Status:** implemented 2026-08-11, and exercised since — every release from `v1.0.0-beta.21` through `v1.2.1` has shipped through it. The four signing secrets are configured, releases carry a signed APK (~86 MB), and the GHCR package is public: an unauthenticated manifest fetch for `ghcr.io/vfyuj/cashew-selfhosted:1.2.1` returns 200.
 
 Not every version becomes a tag. `1.0.2` and `1.1.1` were both developed and left untagged, and the next release simply carried their changelog sections alongside its own — which is what the changelog's "every section newer than the version you last launched" rule already does, so nothing special is needed.
 
