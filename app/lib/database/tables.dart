@@ -5119,6 +5119,49 @@ class FinanceDatabase extends _$FinanceDatabase {
     return (await select(associatedTitles).get()).length;
   }
 
+  /// Rearranges some main categories among the order slots they already hold.
+  ///
+  /// [categoryPksInOrder] is one contiguous run of the category listing --
+  /// the envelopes screen's expense half, or its income half -- in the order it
+  /// should now read. The slots stay where they are and only their occupants
+  /// change, so reordering one half cannot disturb the other, or the
+  /// balance-correction category sitting between them.
+  ///
+  /// moveCategory is the wrong tool for that: it shifts every row between the
+  /// old and new position by one, which for a list drawn in two filtered
+  /// sections would drag unrelated categories along.
+  Future<void> reorderCategoriesWithinTheirSlots(
+      List<String> categoryPksInOrder) async {
+    if (categoryPksInOrder.length < 2) return;
+    final List<TransactionCategory> current = await (select(categories)
+          ..where((c) => c.categoryPk.isIn(categoryPksInOrder)))
+        .get();
+    if (current.length != categoryPksInOrder.length) return;
+    final List<int> slots = [
+      for (TransactionCategory category in current) category.order
+    ]..sort();
+    final Map<String, int> currentOrderByPk = {
+      for (TransactionCategory category in current)
+        category.categoryPk: category.order
+    };
+    await batch((batch) {
+      for (int i = 0; i < categoryPksInOrder.length; i++) {
+        final String pk = categoryPksInOrder[i];
+        // Every write is a row the household's change feed then has to carry,
+        // so leave the ones that are already where they belong alone.
+        if (currentOrderByPk[pk] == slots[i]) continue;
+        batch.update(
+          categories,
+          CategoriesCompanion(
+            order: Value(slots[i]),
+            dateTimeModified: Value(DateTime.now()),
+          ),
+          where: (c) => c.categoryPk.equals(pk),
+        );
+      }
+    });
+  }
+
   Future moveCategory(String categoryPk, int newPosition, int oldPosition,
       {String? mainCategoryPk}) async {
     List<TransactionCategory> categoriesList = await (select(categories)
@@ -7789,6 +7832,11 @@ class FinanceDatabase extends _$FinanceDatabase {
       associatedTitles,
       objectives,
       scannerTemplates,
+      // The fork's own table. Left out when envelopes were added, which meant
+      // typing an amount woke no cycle at all: the row only went out when some
+      // other table's write happened to start one, so a plan set and then left
+      // alone could sit on one device indefinitely.
+      categoryEnvelopes,
       // Only the per-user view rows are ever collected for sync (row 0 is
       // excluded), but the trigger can't be that selective -- a write to row 0
       // wakes a cycle that finds nothing to push. Harmless, and rare:
@@ -7826,6 +7874,13 @@ class FinanceDatabase extends _$FinanceDatabase {
           ScannerTemplatesCompanion(dateTimeModified: Value(now)));
       batch.update(
           deleteLogs, DeleteLogsCompanion(dateTimeModified: Value(now)));
+      // The fork's own table, and the same omission as watchAllForAutoSync
+      // above: without this the envelopes in a restored backup keep the
+      // timestamps they were exported with, which predate this device's
+      // lastSynced watermark, so getAllNewCategoryEnvelopes never picks them
+      // up and the whole plan silently stays on the device that imported it.
+      batch.update(categoryEnvelopes,
+          CategoryEnvelopesCompanion(dateTimeModified: Value(now)));
     });
   }
 

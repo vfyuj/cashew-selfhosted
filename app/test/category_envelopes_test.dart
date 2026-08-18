@@ -62,7 +62,8 @@ void main() {
     test('the balance-correction category never does', () {
       // Category "0" stands in for account corrections and transfers, neither
       // of which is planned spending.
-      expect(isEnvelopeEligible(category(balanceCorrectionCategoryPk)), isFalse);
+      expect(
+          isEnvelopeEligible(category(balanceCorrectionCategoryPk)), isFalse);
     });
   });
 
@@ -136,8 +137,8 @@ void main() {
     });
 
     test('income and expense come from the category, never from the row', () {
-      expect(plan.categoriesOfType(income: true).map((c) => c.categoryPk),
-          ['3']);
+      expect(
+          plan.categoriesOfType(income: true).map((c) => c.categoryPk), ['3']);
       expect(plan.categoriesOfType(income: false).map((c) => c.categoryPk),
           ['1', '2']);
     });
@@ -235,9 +236,11 @@ void main() {
       // The pure case above, and the reason every other test in this file can
       // ignore currency entirely.
       expect(
-          buildEnvelopePlan([category('1')],
-                  [envelope('1', DateTime(2026, 8, 1), 50000, walletPk: 'rub')])
-              .amountFor('1', DateTime(2026, 8, 1)),
+          buildEnvelopePlan([
+            category('1')
+          ], [
+            envelope('1', DateTime(2026, 8, 1), 50000, walletPk: 'rub')
+          ]).amountFor('1', DateTime(2026, 8, 1)),
           50000);
     });
   });

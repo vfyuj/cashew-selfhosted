@@ -127,6 +127,9 @@ Future<Map<String, dynamic>> getDefaultPreferences() async {
     "customNavBarShortcut2": "budgets",
     "showTotalSpentForBudget": false,
     "showTotalSpentForObjective": true,
+    // Fork: the same choice for an envelope. Device-local like the two above,
+    // deliberately not a per-user view setting.
+    "showTotalSpentForEnvelope": false,
     "showCumulativeSpending": true,
     "removeZeroTransactionEntries": true,
     "ignorePastAmountSpent": false,
@@ -378,7 +381,8 @@ Future attemptToMigrateServerSetupWizard() async {
         selfHostedSession != null;
     appStateSettings["migratedServerSetupWizard"] = true;
     if (predatesWizard) {
-      print("Migrating: existing install, skipping the first-run server wizard");
+      print(
+          "Migrating: existing install, skipping the first-run server wizard");
       appStateSettings["hasCompletedServerSetup"] = true;
     }
     await sharedPreferences.setString(

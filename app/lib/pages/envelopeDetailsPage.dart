@@ -1,21 +1,29 @@
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
-import 'package:cashew_selfhosted/pages/addBudgetPage.dart' show ColumnSliver;
+import 'package:cashew_selfhosted/pages/addCategoryPage.dart';
 import 'package:cashew_selfhosted/pages/envelopesPage.dart';
 import 'package:cashew_selfhosted/struct/categoryEnvelopes.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
+import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/struct/spendingSummaryHelper.dart';
 import 'package:cashew_selfhosted/widgets/budgetContainer.dart'
     show BudgetProgress;
-import 'package:cashew_selfhosted/widgets/categoryIcon.dart';
+import 'package:cashew_selfhosted/widgets/categoryEntry.dart';
+import 'package:cashew_selfhosted/widgets/countNumber.dart';
+import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
 import 'package:cashew_selfhosted/widgets/envelopePlanBuilder.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
-import 'package:cashew_selfhosted/widgets/sliverStickyLabelDivider.dart';
-import 'package:cashew_selfhosted/widgets/tappable.dart';
+import 'package:cashew_selfhosted/widgets/navigationSidebar.dart';
+import 'package:cashew_selfhosted/widgets/openBottomSheet.dart'
+    show getHorizontalPaddingConstrained;
+import 'package:cashew_selfhosted/widgets/openPopup.dart'
+    show RoutesToPopAfterDelete;
 import 'package:cashew_selfhosted/widgets/textWidgets.dart';
 import 'package:cashew_selfhosted/widgets/transactionEntries.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 // One envelope, one month: what was planned, what was spent, where it went and
@@ -24,6 +32,13 @@ import 'package:provider/provider.dart';
 // Everything on this page is a read of data that already exists -- the same
 // queries the budget page uses, pointed at one main category and one calendar
 // month. The envelope contributes only the planned amount at the top.
+//
+// It is also *shaped* like the budget page on purpose: the category's colour
+// seeds the theme (CustomColorTheme), the figure and the progress bar sit in a
+// block tinted with it, and the breakdown underneath is upstream's own
+// CategoryEntry box rather than a hand-rolled list. What it deliberately does
+// not borrow is the pie chart and the spending-over-time graph -- an envelope is
+// one category for one month, and neither has anything to divide.
 class EnvelopeDetailsPage extends StatefulWidget {
   const EnvelopeDetailsPage({
     required this.category,
@@ -51,6 +66,10 @@ class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
   Stream<List<CategoryWithTotal>>? _totals;
   AllWallets? _totalsForWallets;
 
+  /// The subcategory whose row was tapped, if any. Narrows the transaction list
+  /// below, the same way selecting a slice does on the budget page.
+  TransactionCategory? selectedCategory;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -64,110 +83,246 @@ class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
   Widget build(BuildContext context) {
     final Color categoryColor = HexColor(widget.category.colour,
         defaultColor: Theme.of(context).colorScheme.primary);
-    final String listID = "envelope-${widget.category.categoryPk}-"
-        "${envelopePkFor(widget.category.categoryPk, widget.month)}";
 
-    return PageFramework(
-      dragDownToDismiss: true,
-      title: widget.category.name,
-      subtitle: TextFont(
-        text: getMonth(widget.month, includeYear: true),
-        fontSize: 15,
-        textColor: getColor(context, "textLight"),
+    // Reseeds the whole colour scheme from the category, so secondaryContainer
+    // below is a tint of it rather than the app's accent. The Builder is what
+    // puts the rest of the page underneath that Theme -- read it from this
+    // context and you get the old scheme back.
+    return CustomColorTheme(
+      accentColor: categoryColor,
+      child: Builder(
+        builder: (context) => _buildPage(context, categoryColor),
       ),
-      slivers: [
-        // The card again, so the number you came here to understand is still on
-        // screen, and still tappable to change.
-        SliverToBoxAdapter(
-          child: EnvelopePlanBuilder(
-            builder: (context, plan) {
-              return StreamBuilder<List<CategoryWithTotal>>(
-                stream: _totals,
-                builder: (context, snapshot) {
-                  return _Header(
-                    category: widget.category,
-                    month: widget.month,
-                    plan: plan,
-                    spent: _spentTotal(snapshot.data ?? []),
-                    color: categoryColor,
-                  );
-                },
-              );
-            },
-          ),
-        ),
-
-        // Where the money went inside the category. Only drawn when the
-        // category actually has subcategories -- one row saying "everything
-        // went to the category itself" is noise.
-        StreamBuilder<List<CategoryWithTotal>>(
-          stream: _totals,
-          builder: (context, snapshot) {
-            final List<CategoryWithTotal> totals = (snapshot.data ?? [])
-                .where((entry) => entry.total != 0)
-                .toList()
-              ..sort((a, b) => b.total.abs().compareTo(a.total.abs()));
-            if (totals.length <= 1) return SliverToBoxAdapter();
-
-            final double spent = _spentTotal(totals);
-            return SliverStickyLabelDivider(
-              info: "subcategories".tr(),
-              extraInfo: convertToMoney(
-                  Provider.of<AllWallets>(context), spent),
-              sliver: ColumnSliver(
-                children: [
-                  SizedBox(height: 5),
-                  for (CategoryWithTotal entry in totals)
-                    _SubCategoryRow(
-                      key: ValueKey(entry.category.categoryPk),
-                      entry: entry,
-                      // Its share of what this category spent, so the rows add
-                      // up to 100% rather than to the envelope. Signed the same
-                      // way the amount beside it is: expenses are stored
-                      // negative and income positive, so flipping
-                      // unconditionally made every income envelope's rows read
-                      // as negative percentages.
-                      percent: spent == 0
-                          ? 0
-                          : (entry.total * (widget.category.income ? 1 : -1)) /
-                              spent *
-                              100,
-                      mainCategory: widget.category,
-                    ),
-                  SizedBox(height: 5),
-                ],
-              ),
-            );
-          },
-        ),
-
-        SliverStickyLabelDivider(
-            info: "transactions".tr(), sliver: SliverToBoxAdapter()),
-        // The month's transactions in this category, drawn by the same widget
-        // the transaction list and the budget page use, so selecting, editing
-        // and swiping all behave exactly as they do everywhere else.
-        TransactionEntries(
-          monthRange.start,
-          monthRange.end,
-          categoryFks: [widget.category.categoryPk],
-          listID: listID,
-          useHorizontalPaddingConstrained: false,
-        ),
-        SliverToBoxAdapter(child: SizedBox(height: 50)),
-      ],
     );
   }
 
-  // One row per subcategory, plus one row for the transactions filed straight
-  // under the category itself.
+  Widget _buildPage(BuildContext context, Color categoryColor) {
+    final String listID = "envelope-${widget.category.categoryPk}-"
+        "${envelopePkFor(widget.category.categoryPk, widget.month)}";
+    final DateTime now = DateTime.now();
+    final bool isCurrentMonth =
+        widget.month.year == now.year && widget.month.month == now.month;
+    final Color? pageBackgroundColor =
+        Theme.of(context).brightness == Brightness.dark &&
+                appStateSettings["forceFullDarkBackground"]
+            ? Colors.black
+            : appStateSettings["materialYou"]
+                ? dynamicPastel(context, Theme.of(context).colorScheme.primary,
+                    amount: 0.92)
+                : null;
+
+    return EnvelopePlanBuilder(
+      builder: (context, plan) {
+        return StreamBuilder<List<CategoryWithTotal>>(
+          stream: _totals,
+          builder: (context, snapshot) {
+            final List<CategoryWithTotal> rows = snapshot.data ?? [];
+            // Expenses are stored signed negative (determineBudgetPolarity), so
+            // an expense category reads positive here and a month of refunds
+            // reads negative.
+            final TotalSpentCategoriesSummary summary =
+                watchTotalSpentInTimeRangeHelper(
+              dataInput: rows,
+              showAllSubcategories: true,
+              multiplyTotalBy: widget.category.income ? 1 : -1,
+            );
+            final double spent = summary.totalSpent;
+            final double? planned =
+                plan.amountFor(widget.category.categoryPk, widget.month);
+            final double plannedOrZero = planned ?? 0;
+
+            return PageFramework(
+              dragDownToDismiss: true,
+              title: widget.category.name,
+              capitalizeTitle: false,
+              belowAppBarPaddingWhenCenteredTitleSmall: 0,
+              subtitle: _EnvelopeTotal(
+                income: widget.category.income,
+                spent: spent,
+                planned: planned,
+              ),
+              subtitleAlignment: AlignmentDirectional.bottomStart,
+              subtitleSize: 10,
+              backgroundColor: pageBackgroundColor,
+              appBarBackgroundColor:
+                  Theme.of(context).colorScheme.secondaryContainer,
+              appBarBackgroundColorStart:
+                  Theme.of(context).colorScheme.secondaryContainer,
+              textColor: getColor(context, "black"),
+              listID: listID,
+              actions: [
+                CustomPopupMenuButton(
+                  showButtons: enableDoubleColumn(context),
+                  keepOutFirst: true,
+                  items: [
+                    DropdownItemMenu(
+                      id: "set-amount",
+                      label: "set-amount".tr(),
+                      icon: appStateSettings["outlinedIcons"]
+                          ? Icons.edit_outlined
+                          : Icons.edit_rounded,
+                      action: () => enterEnvelopeAmountPopup(
+                          context, widget.category, widget.month, plan),
+                    ),
+                    DropdownItemMenu(
+                      id: "edit-category",
+                      label: "edit-category".tr(),
+                      icon: appStateSettings["outlinedIcons"]
+                          ? Icons.category_outlined
+                          : Icons.category_rounded,
+                      action: () => pushRoute(
+                        context,
+                        AddCategoryPage(
+                          category: widget.category,
+                          routesToPopAfterDelete: RoutesToPopAfterDelete.One,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              slivers: [
+                // The bar, on the same tint as the app bar above it. The
+                // Transform.scale is the budget page's trick for bleeding the
+                // colour sideways past the padding, so there is no seam where
+                // the app bar ends.
+                SliverToBoxAdapter(
+                  child: Container(
+                    padding: EdgeInsetsDirectional.only(
+                        bottom: 20, start: 22, end: 22),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                    ),
+                    child: Column(
+                      children: [
+                        Transform.scale(
+                          alignment: AlignmentDirectional.bottomCenter,
+                          scale: 1500,
+                          child: Container(
+                            height: 10,
+                            width: 100,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer,
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsetsDirectional.symmetric(
+                            horizontal:
+                                getHorizontalPaddingConstrained(context),
+                          ),
+                          child: BudgetProgress(
+                            color: categoryColor,
+                            percent: plannedOrZero <= 0
+                                ? 0
+                                : (spent / plannedOrZero) * 100,
+                            yourPercent: 0,
+                            ghostPercent: 0,
+                            todayPercent: isCurrentMonth
+                                ? getPercentBetweenDates(monthRange, now)
+                                : -1,
+                            showToday: isCurrentMonth,
+                            large: true,
+                          ),
+                        ),
+                        // Which month this is. Not a timeline: an envelope is
+                        // always exactly one calendar month, so there is no
+                        // range to draw, only a name to say.
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(top: 8),
+                          child: TextFont(
+                            text: getMonth(widget.month, includeYear: true),
+                            fontSize: 15,
+                            textColor: Theme.of(context)
+                                .colorScheme
+                                .onSecondaryContainer,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Where the money went inside the category, in the same box the
+                // budget page uses: the ring on each icon is that row's share,
+                // and the subcategories sit under their main category.
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      SizedBox(height: 20),
+                      for (CategoryWithTotal row in rows)
+                        if (row.category.mainCategoryPk == null)
+                          CategoryEntry(
+                            key: ValueKey(row.category.categoryPk),
+                            category: row.category,
+                            transactionCount: row.transactionCount,
+                            categorySpent: row.total.abs(),
+                            totalSpent: summary.totalSpent,
+                            subcategoriesWithTotalMap: summary
+                                .subCategorySpendingIndexedByMainCategoryPk,
+                            expandSubcategories: true,
+                            selectedSubCategoryPk: selectedCategory?.categoryPk,
+                            selected: selectedCategory != null,
+                            allSelected: selectedCategory == null,
+                            todayPercent: isCurrentMonth
+                                ? getPercentBetweenDates(monthRange, now)
+                                : null,
+                            getPercentageAfterText: (_) =>
+                                (widget.category.income
+                                        ? "of-total"
+                                        : "of-spending")
+                                    .tr()
+                                    .toLowerCase(),
+                            useHorizontalPaddingConstrained: false,
+                            onTap: (TransactionCategory tapped, _) {
+                              setState(() {
+                                selectedCategory =
+                                    selectedCategory?.categoryPk ==
+                                            tapped.categoryPk
+                                        ? null
+                                        : tapped;
+                              });
+                            },
+                          ),
+                      SizedBox(height: 15),
+                    ],
+                  ),
+                ),
+
+                // The month's transactions in this category, drawn by the same
+                // widget the transaction list and the budget page use, so
+                // selecting, editing and swiping all behave exactly as they do
+                // everywhere else.
+                TransactionEntries(
+                  monthRange.start,
+                  monthRange.end,
+                  categoryFks: [
+                    selectedCategory?.categoryPk ?? widget.category.categoryPk
+                  ],
+                  listID: listID,
+                  useHorizontalPaddingConstrained: false,
+                ),
+                SliverToBoxAdapter(child: SizedBox(height: 50)),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // One row per subcategory, plus the main category carrying the whole total.
   //
-  // `includeAllSubCategories: true` with `countUnassignedTransactions: false`
-  // is the combination that partitions rather than overlaps: a transaction with
-  // a subcategory joins only its subcategory, and one without joins only the
-  // main category (`subCategoryFk IS NULL`). Setting countUnassigned to true
-  // instead makes the main category match *every* transaction as well, and the
-  // page then reports exactly double what was spent -- which is what the first
-  // version of this did.
+  // `includeAllSubCategories: true` with `countUnassignedTransactions: true` is
+  // the pairing watchTotalSpentInTimeRangeHelper is written for (see the note at
+  // the top of struct/spendingSummaryHelper.dart), and it is what the budget
+  // page uses. The main category's row counts *every* transaction in the
+  // category, subcategorised or not, and each subcategory's row counts its own;
+  // the helper is what keeps that from being read as double the spending, by
+  // summing only rows with no main category of their own. Hand-summing every row
+  // instead - which is what this page did before it used the helper - is what
+  // makes the pairing look wrong: with that arithmetic it has to be
+  // `countUnassignedTransactions: false`, or the total comes out doubled.
   //
   // `isIncome` matters as much: it is what the envelopes list filters its own
   // "spent" by, and leaving it off here netted a refund off the total on this
@@ -185,209 +340,98 @@ class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
       memberTransactionFilters: null,
       isIncome: widget.category.income,
       includeAllSubCategories: true,
-      countUnassignedTransactions: false,
+      countUnassignedTransactions: true,
     );
-  }
-
-  // Expenses are stored signed negative (determineBudgetPolarity), so an
-  // expense category reads positive here and a month of refunds reads negative.
-  double _spentTotal(List<CategoryWithTotal> totals) {
-    double total = 0;
-    for (CategoryWithTotal entry in totals) {
-      total += entry.total;
-    }
-    return widget.category.income ? total : -total;
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.category,
-    required this.month,
-    required this.plan,
+/// The figure at the top of the page: how much, of what, and which way round.
+///
+/// Tapping swaps between leading with what is left and leading with what has
+/// moved, and remembers the choice -- the same affordance, and the same setting,
+/// the budget page's own total has (pages/budgetPage.dart TotalSpent).
+class _EnvelopeTotal extends StatefulWidget {
+  const _EnvelopeTotal({
+    required this.income,
     required this.spent,
-    required this.color,
+    required this.planned,
   });
 
-  final TransactionCategory category;
-  final DateTime month;
-  final EnvelopePlan plan;
+  final bool income;
   final double spent;
-  final Color color;
+  final double? planned;
 
   @override
-  Widget build(BuildContext context) {
-    final AllWallets allWallets = Provider.of<AllWallets>(context);
-    final double? amount = plan.amountFor(category.categoryPk, month);
-    final double amountOrZero = amount ?? 0;
-    final double remaining = amountOrZero - spent;
-    final DateTime now = DateTime.now();
-    final bool isCurrentMonth =
-        month.year == now.year && month.month == now.month;
-
-    return Padding(
-      padding:
-          const EdgeInsetsDirectional.symmetric(horizontal: 13, vertical: 8),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(
-              getPlatform() == PlatformOS.isIOS ? 14 : 20),
-          boxShadow: boxShadowCheck([
-            BoxShadow(
-              color: color.withOpacity(
-                  Theme.of(context).brightness == Brightness.light ? 0.4 : 0.5),
-              blurRadius: 15,
-              spreadRadius: -4,
-              offset: Offset(0, 5),
-            ),
-          ]),
-        ),
-        child: Tappable(
-          color: getColor(context, "lightDarkAccentHeavyLight"),
-          borderRadius: getPlatform() == PlatformOS.isIOS ? 14 : 20,
-          onTap: () => enterEnvelopeAmountPopup(context, category, month, plan),
-          child: Padding(
-            padding: const EdgeInsetsDirectional.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CategoryIcon(
-                      category: category,
-                      categoryPk: category.categoryPk,
-                      size: 34,
-                      sizePadding: 16,
-                      margin: EdgeInsetsDirectional.zero,
-                      canEditByLongPress: false,
-                    ),
-                    SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TextFont(
-                            text: convertToMoney(allWallets, spent),
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            maxLines: 1,
-                          ),
-                          TextFont(
-                            text: amount == null
-                                ? envelopeActionWord(category.income)
-                                : convertToMoney(allWallets, remaining.abs()) +
-                                    " " +
-                                    envelopeStatusWord(
-                                      income: category.income,
-                                      beyondPlan: remaining < 0,
-                                    ).toLowerCase() +
-                                    "  ·  " +
-                                    convertToMoney(allWallets, amountOrZero) +
-                                    " " +
-                                    "planned".tr().toLowerCase(),
-                            fontSize: 15,
-                            maxLines: 2,
-                            textColor: amount == null
-                                ? getColor(context, "textLight")
-                                : envelopeStatusColor(context,
-                                    income: category.income,
-                                    beyondPlan: remaining < 0),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12),
-                BudgetProgress(
-                  color: color,
-                  percent:
-                      amountOrZero <= 0 ? 0 : (spent / amountOrZero) * 100,
-                  yourPercent: 0,
-                  ghostPercent: 0,
-                  todayPercent: isCurrentMonth
-                      ? getPercentBetweenDates(
-                          DateTimeRange(
-                            start: month,
-                            end: DateTime(month.year, month.month + 1, 0),
-                          ),
-                          now)
-                      : -1,
-                  showToday: isCurrentMonth,
-                  large: true,
-                  padding: EdgeInsetsDirectional.zero,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  State<_EnvelopeTotal> createState() => _EnvelopeTotalState();
 }
 
-class _SubCategoryRow extends StatelessWidget {
-  const _SubCategoryRow({
-    required this.entry,
-    required this.percent,
-    required this.mainCategory,
-    super.key,
-  });
-
-  final CategoryWithTotal entry;
-  final double percent;
-  final TransactionCategory mainCategory;
+class _EnvelopeTotalState extends State<_EnvelopeTotal> {
+  void _swapTotalDisplay() {
+    updateSettings(
+      "showTotalSpentForEnvelope",
+      appStateSettings["showTotalSpentForEnvelope"] != true,
+      pagesNeedingRefresh: [0, 4],
+      updateGlobalState: false,
+    );
+    // Read the new value back by rebuilding; envelopeHeadline reads the setting.
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final AllWallets allWallets = Provider.of<AllWallets>(context);
-    final bool isTheCategoryItself =
-        entry.category.categoryPk == mainCategory.categoryPk;
-    return Padding(
-      padding:
-          const EdgeInsetsDirectional.symmetric(horizontal: 25, vertical: 6),
-      child: Row(
-        children: [
-          CategoryIcon(
-            category: entry.category,
-            categoryPk: entry.category.categoryPk,
-            size: 24,
-            sizePadding: 12,
-            margin: EdgeInsetsDirectional.zero,
-            canEditByLongPress: false,
-          ),
-          SizedBox(width: 13),
-          Expanded(
-            child: TextFont(
-              // A transaction filed straight under the main category has no
-              // subcategory to name, so say that rather than repeating the
-              // category's own name back at the reader.
-              text: isTheCategoryItself
-                  ? "no-subcategory".tr()
-                  : entry.category.name,
-              fontSize: 16,
-              maxLines: 2,
-            ),
-          ),
-          SizedBox(width: 10),
-          Column(
+    final EnvelopeHeadline headline = envelopeHeadline(context,
+        income: widget.income, spent: widget.spent, planned: widget.planned);
+    final Color textColor = Theme.of(context).colorScheme.onSecondaryContainer;
+
+    return GestureDetector(
+      onTap: _swapTotalDisplay,
+      onLongPress: () {
+        HapticFeedback.heavyImpact();
+        _swapTotalDisplay();
+      },
+      child: AnimatedSwitcher(
+        duration: Duration(milliseconds: 200),
+        child: IntrinsicWidth(
+          key: ValueKey(headline.word),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              TextFont(
-                text: convertToMoney(
-                    allWallets, entry.total * (mainCategory.income ? 1 : -1)),
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
+              CountNumber(
+                count: headline.amount,
+                duration: Duration(milliseconds: 400),
+                initialCount: 0,
+                textBuilder: (number) {
+                  return TextFont(
+                    text: convertToMoney(allWallets, number,
+                        finalNumber: headline.amount),
+                    fontSize: 22,
+                    textAlign: TextAlign.start,
+                    fontWeight: FontWeight.bold,
+                    textColor: textColor,
+                  );
+                },
               ),
-              TextFont(
-                text: convertToPercent(percent,
-                    numberDecimals: 0, shouldRemoveTrailingZeroes: true),
-                fontSize: 13,
-                textColor: getColor(context, "textLight"),
+              Container(
+                padding: const EdgeInsetsDirectional.only(bottom: 1.5),
+                child: TextFont(
+                  text: " " +
+                      headline.word.toLowerCase() +
+                      (widget.planned == null
+                          ? ""
+                          : "  ·  " +
+                              convertToMoney(allWallets, widget.planned!) +
+                              " " +
+                              "planned".tr().toLowerCase()),
+                  fontSize: 15,
+                  textAlign: TextAlign.start,
+                  textColor: textColor,
+                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

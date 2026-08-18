@@ -687,8 +687,22 @@ class BudgetSettings extends StatelessWidget {
 }
 
 class TotalSpentToggle extends StatefulWidget {
-  const TotalSpentToggle({bool this.isForGoalTotal = false, super.key});
+  const TotalSpentToggle({
+    bool this.isForGoalTotal = false,
+    this.settingKey,
+    this.titleLabel,
+    this.pagesNeedingRefresh,
+    super.key,
+  });
   final bool isForGoalTotal; //Otherwise it's for the budget setting
+
+  /// Fork: the same radio sheet, pointed at another setting. Given, these win
+  /// over [isForGoalTotal] -- the envelopes screen uses them so it does not have
+  /// to own a second copy of this widget. Left null everywhere else, so every
+  /// existing call site behaves exactly as before.
+  final String? settingKey;
+  final String? titleLabel;
+  final List<int>? pagesNeedingRefresh;
 
   @override
   State<TotalSpentToggle> createState() => _TotalSpentToggleState();
@@ -697,12 +711,14 @@ class TotalSpentToggle extends StatefulWidget {
 class _TotalSpentToggleState extends State<TotalSpentToggle> {
   @override
   Widget build(BuildContext context) {
-    String appSettingKey = widget.isForGoalTotal
-        ? "showTotalSpentForObjective"
-        : "showTotalSpentForBudget";
-    String titleLabel = widget.isForGoalTotal
-        ? "goal-total-type".tr()
-        : "budget-total-type".tr();
+    String appSettingKey = widget.settingKey ??
+        (widget.isForGoalTotal
+            ? "showTotalSpentForObjective"
+            : "showTotalSpentForBudget");
+    String titleLabel = widget.titleLabel ??
+        (widget.isForGoalTotal
+            ? "goal-total-type".tr()
+            : "budget-total-type".tr());
     return SettingsContainer(
       title: titleLabel,
       description: appStateSettings[appSettingKey] == true
@@ -732,7 +748,12 @@ class _TotalSpentToggleState extends State<TotalSpentToggle> {
               },
               onChanged: (option) async {
                 bool result = option == "total-spent";
-                if (widget.isForGoalTotal) {
+                if (widget.settingKey != null) {
+                  await updateSettings(appSettingKey, result,
+                      updateGlobalState: false,
+                      pagesNeedingRefresh:
+                          widget.pagesNeedingRefresh ?? const []);
+                } else if (widget.isForGoalTotal) {
                   await updateSettings(appSettingKey, result,
                       updateGlobalState: true);
                 } else {
