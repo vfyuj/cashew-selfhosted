@@ -14,7 +14,8 @@ One row per category per month, in the fork-owned `CategoryEnvelopes` table
 | Period | One calendar month. There is no other option, so there is no cycle to configure. |
 | Which categories | Main categories, minus the balance-correction category `"0"` (corrections and transfers are not planned spending). Subcategories roll up into their parent. |
 | Income or expense | Read from `Categories.income`. **Never stored on the envelope.** |
-| Order and visibility | The category list's. Envelopes have no list of their own to sort or hide. |
+| Order | `Categories.order`, the household's own column — the same order the categories screen has, dragged into shape on Edit Envelopes. Shared, not personal: everyone with the same data sees the same order. |
+| Visibility | The category list's. Envelopes have no list of their own to hide from. |
 | Amount | `RealColumn`, plus the account whose currency it is counted in (`walletFk`). Zero is a real answer, meaning "nothing planned". |
 
 `struct/categoryEnvelopes.dart` owns all of it, and the parts that are decisions rather than queries
@@ -66,33 +67,86 @@ There is no reconciler here, because there is nothing to reconcile.
 
 A card per category, not a table row: the app's plain surface (white, or the lightened accent under
 Material You) with a shadow tinted to the category's own colour, so the list reads as a row of
-envelopes rather than a spreadsheet. Inside each card: the category, what has been spent and what is
-left, the planned amount as a tap target of its own, and the **budget card's own `BudgetProgress`
+envelopes rather than a spreadsheet. Inside each card: the category, the two figures that describe
+it, the planned amount as a tap target of its own, and the **budget card's own `BudgetProgress`
 bar** — reused directly from `widgets/budgetContainer.dart`, so the percent label, the overspend
 shake and the "today" marker behave exactly as they do on a budget. The marker only appears on the
 current month; a month that has ended has no today to mark.
 
-Tapping the card opens `pages/envelopeDetailsPage.dart` — that category, that month:
+**Which of the two figures leads is the reader's choice**, exactly as it is on a budget:
+`showTotalSpentForEnvelope` (device-local, like `showTotalSpentForBudget`) swaps between leading with
+what is left and leading with what has moved. Both figures are always shown, so the setting changes
+the emphasis and never hides a number. One helper decides it for every screen —
+`envelopeHeadline` in `pages/envelopesPage.dart` — so the card and the detail page cannot disagree.
+A category with no plan at all always leads with what moved: there is no "remaining" to lead with.
 
-- the same card, larger, with the amount still editable;
-- **where the money went inside the category**: one row per subcategory plus one for transactions
-  filed straight under the category, with each row's share of the total. The query is
-  `includeAllSubCategories: true` with `countUnassignedTransactions: false`, and that pairing is
-  load bearing — it partitions the transactions. With `countUnassignedTransactions: true` the main
-  category matches *every* transaction as well as its subcategory, and the page reports exactly
-  double what was spent;
+The pencil in the corner opens **Edit Envelopes** (`pages/editEnvelopesPage.dart`): drag to reorder,
+and a corner button for the total-type setting. It is deliberately smaller than Edit Budgets —
+there is no add button and no delete, because an envelope exists because a category exists. Tapping a
+row opens the category, which is where a name, colour or icon actually lives. The setting sheet is
+upstream's own `TotalSpentToggle` pointed at the envelope key rather than a second copy of it.
+
+**Reordering writes `Categories.order`**, so it rides the ordinary change feed, everyone sharing the
+data ends up with the same order, and the screen redraws itself — the order is a query, not a
+setting, so there is nothing to store, refresh or reconcile. The visible consequence is deliberate:
+this is the *same* order the categories screen has. A per-account order was built first and
+withdrawn; the reasoning, and why the per-user settings mechanism could not carry it, is in
+[settings.md](settings.md).
+
+The screen draws the two sides of the ledger as two lists, because a drag that moved a category
+across the divide would look like it had done nothing. Each list rearranges only the order slots its
+own categories already hold (`reorderCategoriesWithinTheirSlots`), so reordering expenses cannot
+disturb the income categories or the balance-correction category sitting between them. `moveCategory`
+is the wrong tool for that — it shifts everything between the two positions by one.
+
+Tapping the card opens `pages/envelopeDetailsPage.dart` — that category, that month, **shaped like
+the budget page**:
+
+- the category's colour seeds the whole page through `CustomColorTheme`, so the app bar and the block
+  under it are a tint of it rather than the app's accent, and the progress bar keeps its contrast
+  because `BudgetProgress` derives its own track from the same colour;
+- the figure and its clause sit in the app bar as the subtitle, tappable to swap the total type — the
+  same affordance the budget page's `TotalSpent` has;
+- the month's name sits under the bar. It is a label, not a timeline: an envelope is always exactly
+  one calendar month, so there is no range to draw. There is **no pie chart and no
+  spending-over-time graph** either — one category for one month has nothing to divide;
+- **where the money went inside the category**, in upstream's own `CategoryEntry` box
+  (`widgets/categoryEntry.dart` + `SubCategoriesContainer`): the progress ring on each icon is that
+  row's share, subcategories sit under their main category, and each row carries its transaction
+  count. Tapping a row narrows the transaction list below to it, as selecting a slice does on a
+  budget. The query is `includeAllSubCategories: true` with **`countUnassignedTransactions: true`**,
+  which is the pairing `watchTotalSpentInTimeRangeHelper` is written for: the main category's row
+  counts every transaction in the category and each subcategory's counts its own, and the helper
+  sums only rows with no main category of their own. The earlier version of this page hand-summed
+  every row instead, and *that* arithmetic needs `countUnassignedTransactions: false` or the total
+  comes out doubled. Either pairing is correct with its own summing; mixing them is what doubles the
+  number, so the flag and the helper move together;
 - **the month's transactions**, drawn by `TransactionEntries`, the same widget the transactions list
   and the budget page use, so selecting, editing and swiping behave as they do everywhere else.
 
-Tapping the amount — on the card or in the header — opens the number pad. Long-pressing a card opens
-the category itself.
+Two consequences of using upstream's box rather than a hand-rolled list, both accepted: there is **no
+dedicated "no subcategory" row** any more — the main category's row carries the whole total and the
+subcategory rows fall short of it — and a category with **no** subcategories now shows one row rather
+than nothing, which is where its transaction count lives.
+
+The amount is set from the card, or from **Set amount** in the detail page's corner menu, beside
+**Edit category** — the same two-item menu shape the budget page has. Long-pressing a card also opens
+the category.
 
 **The two sides of the ledger do not read the same way, and that is deliberate** (`envelopeActionWord`
-/ `envelopeStatusWord` / `envelopeStatusColor` in `pages/envelopesPage.dart`). Money going out is
-*spent*, what is left is *remaining*, and passing the plan is *over*, in red. Money coming in is
-*received*, what has not arrived yet is *still to come*, and passing the plan is *above plan*, in
-green — being paid more than you expected is not an overspend, and colouring it like one is telling
-the household that good news is a problem.
+/ `envelopeStatusWord` / `envelopeStatusColor` / `envelopeStatusSpans` in `pages/envelopesPage.dart`).
+Money going out is *spent in total*, what is left is *left*, and passing the plan is *overspent*, in
+red. Money coming in is *received*, what has not arrived yet is *still to come*, and passing the plan
+is *above plan*, in green — being paid more than you expected is not an overspend, and colouring it
+like one is telling the household that good news is a problem.
+
+The expense side is also punctuated differently, for a reason worth keeping: two full sentences with
+the leading clause in bold, rather than one comma-spliced phrase. "6,428 overspent, 37,232 spent"
+reads as though the second number were another slice of the first; a full stop makes them the two
+separate statements they are. *Overspent* rather than a bare *over* because the figure beside it is
+what the category went over **by**, and *in total* because the other figure is the whole month's
+spending, not a part of the plan. The income side keeps its comma and its words: "received" was never
+ambiguous. Both sides bold the leading clause, which is presentation rather than wording.
 
 ## Elsewhere in the app
 
@@ -104,7 +158,10 @@ the household that good news is a problem.
   through, most of them empty.
 - **Planned vs Actual** (`pages/homePage/homePagePlannedVsActual.dart`) reads envelope totals for its
   Planned card and the month's transactions for its Actual one. It sits on the home page and at the
-  top of the envelopes page, following whichever month is on screen.
+  top of the envelopes page, following whichever month is on screen. It takes an already-built plan
+  when it is given one: the envelopes page builds a single `EnvelopePlanBuilder` for the whole screen
+  and hands it down, because each builder holds two live queries and three side by side meant six
+  subscriptions for one screen's worth of the same two answers.
 - **Onboarding** (`pages/onBoardingPage.dart`) fills in this month's envelopes: the income step and
   the spending step are one row per category, writing straight to this table. No account picker here
   on purpose — it is a list of numbers typed quickly in the primary account's currency, which is what
@@ -122,6 +179,21 @@ and merged by the `processSyncLogs` branch, in the `toCompanion(false)` form eve
 
 **The server needed no change.** `sync_records` is keyed by `(dataset_id, table_name, pk)` and is
 indifferent to a table name it has never seen.
+
+**Two table enumerations have to name it, and both were missed when the table was added in 1.2.0**
+(fixed in 1.2.2, pinned by `test/envelope_sync_enrolment_test.dart`). Neither failure says anything:
+every screen keeps working and every amount saves, the plan just never leaves the device it was typed
+on, and the rest of the household sees zeroes.
+
+- `watchAllForAutoSync` — the tables whose writes wake a sync cycle. Without it, typing an amount
+  pushed nothing; the row only went out when an unrelated table happened to be written, so a plan set
+  and then left alone could sit on one device indefinitely.
+- `bumpAllModifiedTimestampsForResync` — run once after a restore, so restored rows are newer than
+  what peers have already synced from this device. Without it, the envelopes in an imported backup
+  kept their exported timestamps, `getAllNewCategoryEnvelopes` never picked them up, and the whole
+  plan stayed on the importing device while its categories and transactions travelled normally.
+
+A fork-owned table added later needs both, and a test here.
 
 Deleting a category deletes its envelopes, with tombstones
 (`deleteCategoryEnvelopesInCategory`).

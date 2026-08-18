@@ -247,6 +247,10 @@ Future<bool> updateSettings(
       } else if (page == 3) {
         settingsPageStateKey.currentState?.refreshState();
         settingsPageFrameworkStateKey.currentState?.refreshState();
+      } else if (page == 4) {
+        // Fork: the envelopes page. Its order and its total type are settings
+        // rather than queries, so nothing else would tell it to redraw.
+        envelopesPageStateKey.currentState?.refreshState();
       }
     }
   }

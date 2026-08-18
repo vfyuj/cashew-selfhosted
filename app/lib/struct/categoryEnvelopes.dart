@@ -122,7 +122,8 @@ class EnvelopePlan {
     this.allWallets,
   });
 
-  /// Envelope-eligible main categories, in the order the query returned them.
+  /// Envelope-eligible main categories, in the order the query returned them --
+  /// `Categories.order`, which the household shares and Edit Envelopes writes.
   final List<TransactionCategory> categories;
   final Map<String, List<CategoryEnvelope>> envelopesByCategoryPk;
 

@@ -33,11 +33,17 @@ import 'package:provider/provider.dart';
 // widget is always one whole calendar month, because that is the only period an
 // envelope has.
 class HomePagePlannedVsActual extends StatelessWidget {
-  const HomePagePlannedVsActual({this.month, super.key});
+  const HomePagePlannedVsActual({this.month, this.plan, super.key});
 
   /// The month to summarise. Null means the current one, which is what the home
   /// page wants; the envelopes page passes whichever month it is showing.
   final DateTime? month;
+
+  /// An already-built plan to read the planned figures from. The envelopes page
+  /// passes the one it built for the rest of the screen, so this card does not
+  /// open a second pair of queries for the same two answers. Null on the home
+  /// page, where this card stands alone and fetches its own.
+  final EnvelopePlan? plan;
 
   @override
   Widget build(BuildContext context) {
@@ -48,16 +54,18 @@ class HomePagePlannedVsActual extends StatelessWidget {
       end: DateTime(periodStart.year, periodStart.month + 1, 0),
     );
 
-    final Widget plannedCard = EnvelopePlanBuilder(
-      builder: (context, plan) {
-        return _CashFlowCard(
+    Widget plannedCardFor(EnvelopePlan plan) => _CashFlowCard(
           tag: "planned".tr(),
           expenses: plan.totalPlanned(income: false, periodStart: periodStart),
           income: plan.totalPlanned(income: true, periodStart: periodStart),
           openPage: EnvelopesPage(backButton: true),
         );
-      },
-    );
+
+    final Widget plannedCard = plan != null
+        ? plannedCardFor(plan!)
+        : EnvelopePlanBuilder(
+            builder: (context, plan) => plannedCardFor(plan),
+          );
 
     final Widget actualCard = StreamBuilder<TotalWithCount?>(
       stream: database.watchTotalWithCountOfWallet(
@@ -212,8 +220,9 @@ class _CashFlowCard extends StatelessWidget {
                           padding: const EdgeInsetsDirectional.symmetric(
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color:
-                                Theme.of(context).colorScheme.secondaryContainer,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer,
                             borderRadius: BorderRadius.circular(9),
                           ),
                           child: TextFont(

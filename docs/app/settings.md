@@ -22,6 +22,17 @@ section order and visibility, the wallet switcher, and the selected account. Mos
 account-wide, and syncing it wholesale would move all of that too. **Add keys one at a time** — each
 addition is a decision that the setting follows the person rather than the device.
 
+**Note what this mechanism cannot do**, because it has been reached for and turned down once: it has
+no *household-wide* setting. Rows are keyed by user id, so a preference everyone sharing the data
+should agree on has nowhere to live here. The envelope order is the worked example — it wanted to be
+one order for the whole household, so it is `Categories.order`, an ordinary synced column, and not a
+setting at all. See [envelopes.md](envelopes.md).
+
+The same shape rules out per-account order today for a different reason: a row only exists when the
+signed-in profile shares a household (see below), so on a solo account these keys never leave the
+device. Anything that must follow one person between their own phone and laptop, household or not,
+needs that rule revisited first.
+
 Shared preferences was not an option: it is per device, so a member's phone and laptop would never
 agree. A column on `Wallets` was not either — unlike `Budgets`, `Wallets` has no dead column to
 borrow, so it would have been the first deliberate break of the schema-identical invariant. A row in

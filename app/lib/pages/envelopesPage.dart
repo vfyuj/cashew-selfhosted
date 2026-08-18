@@ -3,12 +3,14 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addBudgetPage.dart' show ColumnSliver;
 import 'package:cashew_selfhosted/pages/addCategoryPage.dart';
+import 'package:cashew_selfhosted/pages/editEnvelopesPage.dart';
 import 'package:cashew_selfhosted/pages/envelopeDetailsPage.dart';
 import 'package:cashew_selfhosted/pages/homePage/homePagePlannedVsActual.dart';
 import 'package:cashew_selfhosted/struct/categoryEnvelopes.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/widgets/budgetContainer.dart' show BudgetProgress;
+import 'package:cashew_selfhosted/widgets/budgetContainer.dart'
+    show BudgetProgress;
 import 'package:cashew_selfhosted/widgets/categoryIcon.dart';
 import 'package:cashew_selfhosted/widgets/envelopePlanBuilder.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
@@ -25,6 +27,7 @@ import 'package:cashew_selfhosted/widgets/textWidgets.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sliver_tools/sliver_tools.dart';
 
 // The plan for one month, one row per main category.
 //
@@ -33,9 +36,10 @@ import 'package:provider/provider.dart';
 // category per month, and whether it counts as income or expense comes from the
 // category itself.
 //
-// There is no list of envelopes to order or hide either. The order and the
-// selection are the category list's, so an envelope appears the moment a
-// category does and disappears with it.
+// There is no list of envelopes to create or delete either: an envelope appears
+// the moment a category does and disappears with it. What the pencil in the
+// corner opens is a reorder screen and nothing more (editEnvelopesPage.dart),
+// and the order it writes is that member's own -- not the household's.
 class EnvelopesPage extends StatefulWidget {
   const EnvelopesPage({required this.backButton, Key? key}) : super(key: key);
   final bool backButton;
@@ -53,6 +57,13 @@ class EnvelopesPageState extends State<EnvelopesPage> {
     pageState.currentState?.scrollToTop();
   }
 
+  // The order and the total type are settings, not queries, so nothing else
+  // tells this page to redraw when one of them changes. updateSettings calls
+  // this through pagesNeedingRefresh: [4] (struct/settings.dart).
+  void refreshState() {
+    setState(() {});
+  }
+
   void changeMonth(int delta) {
     setState(() {
       selectedMonth =
@@ -68,6 +79,21 @@ class EnvelopesPageState extends State<EnvelopesPage> {
       title: "envelopes".tr(),
       backButton: widget.backButton,
       horizontalPaddingConstrained: enableDoubleColumn(context) == false,
+      actions: [
+        IconButton(
+          padding: EdgeInsetsDirectional.all(15),
+          tooltip: "edit-envelopes".tr(),
+          onPressed: () {
+            pushRoute(context, EditEnvelopesPage());
+          },
+          icon: Icon(
+            appStateSettings["outlinedIcons"]
+                ? Icons.edit_outlined
+                : Icons.edit_rounded,
+            color: Theme.of(context).colorScheme.onSecondaryContainer,
+          ),
+        ),
+      ],
       slivers: [
         SliverToBoxAdapter(
           child: MonthSelector(
@@ -75,11 +101,25 @@ class EnvelopesPageState extends State<EnvelopesPage> {
             onChangeMonth: changeMonth,
           ),
         ),
-        SliverToBoxAdapter(
-          child: HomePagePlannedVsActual(month: selectedMonth),
+        // One plan for the whole page. Each builder holds two live queries, and
+        // three of them side by side meant six subscriptions and three
+        // independently-timed rebuilds for one screen's worth of the same two
+        // answers.
+        EnvelopePlanBuilder(
+          builder: (context, plan) {
+            return MultiSliver(
+              children: [
+                SliverToBoxAdapter(
+                  child:
+                      HomePagePlannedVsActual(month: selectedMonth, plan: plan),
+                ),
+                EnvelopeSection(
+                    month: selectedMonth, income: false, plan: plan),
+                EnvelopeSection(month: selectedMonth, income: true, plan: plan),
+              ],
+            );
+          },
         ),
-        EnvelopeSection(month: selectedMonth, income: false),
-        EnvelopeSection(month: selectedMonth, income: true),
         SliverToBoxAdapter(child: SizedBox(height: 50)),
       ],
     );
@@ -140,26 +180,137 @@ class MonthSelector extends StatelessWidget {
   }
 }
 
-
 // The words and the colour an envelope uses depend on which side of the ledger
 // its category is on, and they are not symmetrical.
 //
-// Money going out is *spent*, and going past the plan is bad news: red. Money
-// coming in is *received*, and going past the plan is the best thing that can
-// happen to it -- being paid more than you expected is not an overspend, so it
-// reads green and says "above plan" rather than "over".
+// Money going out is *spent in total*, and going past the plan is bad news:
+// red, and named *overspent* rather than a bare "over", because the number
+// beside it is what you went over BY, not what you spent. Money coming in is
+// *received*, and going past the plan is the best thing that can happen to it --
+// being paid more than you expected is not an overspend, so it reads green and
+// says "above plan".
+//
+// The expense side also says "in total", because the two figures on a card
+// answer different questions -- what is left of the plan, and what has gone out
+// altogether -- and the second was being read as another slice of the first.
+// The income side is left as it was: "received" was never ambiguous.
 String envelopeActionWord(bool income) =>
-    income ? "received".tr() : "spent".tr();
+    income ? "received".tr() : "spent-in-total".tr();
 
 String envelopeStatusWord({required bool income, required bool beyondPlan}) {
-  if (beyondPlan) return income ? "above-plan".tr() : "over".tr();
+  if (beyondPlan) return income ? "above-plan".tr() : "overspent".tr();
   return income ? "still-to-come".tr() : "remaining".tr();
+}
+
+/// The two clauses of an envelope's status line, the second one quieter.
+///
+/// Two sentences on the expense side rather than one comma-spliced phrase: "6,428
+/// overspent, 37,232 spent" invited reading the second number as part of the
+/// first. A full stop, and the leading clause in bold, make them two separate
+/// statements -- which is what they are.
+List<TextSpan> envelopeStatusSpans(
+  BuildContext context, {
+  required EnvelopeHeadline headline,
+  required bool income,
+  required bool hasPlan,
+  required AllWallets allWallets,
+  required double fontSize,
+}) {
+  final TextStyle style = TextStyle(
+    color: headline.color,
+    fontFamily: appStateSettings["font"],
+    fontFamilyFallback: const ['Inter'],
+    fontSize: fontSize,
+  );
+  return [
+    TextSpan(
+      text: convertToMoney(allWallets, headline.amount) +
+          " " +
+          headline.word.toLowerCase(),
+      style: style.copyWith(fontWeight: FontWeight.bold),
+    ),
+    // Only a category with a plan has a second figure to report against it.
+    if (hasPlan)
+      TextSpan(
+        text: (income ? ", " : ". ") +
+            convertToMoney(allWallets, headline.trailingAmount) +
+            " " +
+            headline.trailingWord.toLowerCase(),
+        style: style,
+      ),
+  ];
 }
 
 Color envelopeStatusColor(BuildContext context,
     {required bool income, required bool beyondPlan}) {
   if (beyondPlan == false) return getColor(context, "textLight");
   return getColor(context, income ? "incomeAmount" : "expenseAmount");
+}
+
+/// Which of an envelope's two figures leads, and what each is called.
+///
+/// An envelope is described by two numbers -- what has moved and what is left --
+/// and `showTotalSpentForEnvelope` decides which one is the big one, exactly as
+/// `showTotalSpentForBudget` does for a budget. Both figures are always shown;
+/// the setting only swaps their billing, so nobody loses a number by changing it.
+///
+/// One helper for the card and the detail page, so the two can never disagree
+/// about which figure is being emphasised.
+class EnvelopeHeadline {
+  const EnvelopeHeadline({
+    required this.amount,
+    required this.word,
+    required this.trailingAmount,
+    required this.trailingWord,
+    required this.color,
+  });
+
+  /// The figure to show large, and the word for it.
+  final double amount;
+  final String word;
+
+  /// The other figure, for the quieter line beside it.
+  final double trailingAmount;
+  final String trailingWord;
+
+  /// Colour for the whole phrase: quiet unless the envelope is past its plan.
+  final Color color;
+}
+
+EnvelopeHeadline envelopeHeadline(
+  BuildContext context, {
+  required bool income,
+  required double spent,
+  required double? planned,
+}) {
+  final double remaining = (planned ?? 0) - spent;
+  final bool beyondPlan = remaining < 0;
+  final String spentWord = envelopeActionWord(income);
+  final String remainingWord =
+      envelopeStatusWord(income: income, beyondPlan: beyondPlan);
+  // Only a category with a plan can be measured against one. Money moving in a
+  // category nobody planned is just money moving -- there is no "remaining" to
+  // lead with, whatever the setting says.
+  final Color color = planned == null
+      ? getColor(context, "textLight")
+      : envelopeStatusColor(context, income: income, beyondPlan: beyondPlan);
+  if (planned == null ||
+      appStateSettings["showTotalSpentForEnvelope"] == true) {
+    return EnvelopeHeadline(
+      amount: spent,
+      word: spentWord,
+      trailingAmount: remaining.abs(),
+      trailingWord: remainingWord,
+      color: color,
+    );
+  }
+  return EnvelopeHeadline(
+    amount: remaining.abs(),
+    word: remainingWord,
+    trailingAmount: spent,
+    trailingWord: spentWord,
+    color: color,
+  );
 }
 
 // One half of the plan: every main expense category, or every main income one.
@@ -173,11 +324,16 @@ class EnvelopeSection extends StatefulWidget {
   const EnvelopeSection({
     required this.month,
     required this.income,
+    required this.plan,
     super.key,
   });
 
   final DateTime month;
   final bool income;
+
+  /// Handed down from the page rather than fetched here, so both sections and
+  /// the Planned vs Actual card above them read one snapshot.
+  final EnvelopePlan plan;
 
   @override
   State<EnvelopeSection> createState() => _EnvelopeSectionState();
@@ -229,47 +385,44 @@ class _EnvelopeSectionState extends State<EnvelopeSection> {
   @override
   Widget build(BuildContext context) {
     final AllWallets allWallets = Provider.of<AllWallets>(context);
-    return EnvelopePlanBuilder(
-      builder: (context, plan) {
-        final List<TransactionCategory> categories =
-            plan.categoriesOfType(income: widget.income);
-        if (categories.isEmpty) return SliverToBoxAdapter();
+    final EnvelopePlan plan = widget.plan;
+    final List<TransactionCategory> categories =
+        plan.categoriesOfType(income: widget.income);
+    if (categories.isEmpty) return SliverToBoxAdapter();
 
-        return StreamBuilder<List<CategoryWithTotal>>(
-          stream: _spent,
-          builder: (context, spentSnapshot) {
-            final Map<String, double> spentByCategoryPk = {
-              for (CategoryWithTotal entry in spentSnapshot.data ?? [])
-                // Expenses are stored signed negative (determineBudgetPolarity),
-                // so flip them: a month whose refunds outweigh its spending
-                // reads as negative spending rather than flipping to positive.
-                entry.category.categoryPk:
-                    widget.income ? entry.total : -entry.total,
-            };
-            double planned = 0;
-            for (TransactionCategory category in categories) {
-              planned += plan.amountFor(category.categoryPk, widget.month) ?? 0;
-            }
+    return StreamBuilder<List<CategoryWithTotal>>(
+      stream: _spent,
+      builder: (context, spentSnapshot) {
+        final Map<String, double> spentByCategoryPk = {
+          for (CategoryWithTotal entry in spentSnapshot.data ?? [])
+            // Expenses are stored signed negative (determineBudgetPolarity),
+            // so flip them: a month whose refunds outweigh its spending
+            // reads as negative spending rather than flipping to positive.
+            entry.category.categoryPk:
+                widget.income ? entry.total : -entry.total,
+        };
+        double planned = 0;
+        for (TransactionCategory category in categories) {
+          planned += plan.amountFor(category.categoryPk, widget.month) ?? 0;
+        }
 
-            return SliverStickyLabelDivider(
-              info: widget.income ? "income".tr() : "expense".tr(),
-              extraInfo: convertToMoney(allWallets, planned),
-              sliver: ColumnSliver(
-                children: [
-                  SizedBox(height: 5),
-                  for (TransactionCategory category in categories)
-                    EnvelopeEntry(
-                      key: ValueKey(category.categoryPk),
-                      category: category,
-                      month: widget.month,
-                      plan: plan,
-                      spent: spentByCategoryPk[category.categoryPk] ?? 0,
-                    ),
-                  SizedBox(height: 5),
-                ],
-              ),
-            );
-          },
+        return SliverStickyLabelDivider(
+          info: widget.income ? "income".tr() : "expense".tr(),
+          extraInfo: convertToMoney(allWallets, planned),
+          sliver: ColumnSliver(
+            children: [
+              SizedBox(height: 5),
+              for (TransactionCategory category in categories)
+                EnvelopeEntry(
+                  key: ValueKey(category.categoryPk),
+                  category: category,
+                  month: widget.month,
+                  plan: plan,
+                  spent: spentByCategoryPk[category.categoryPk] ?? 0,
+                ),
+              SizedBox(height: 5),
+            ],
+          ),
         );
       },
     );
@@ -301,9 +454,9 @@ class EnvelopeEntry extends StatelessWidget {
     final AllWallets allWallets = Provider.of<AllWallets>(context);
     final double? amount = plan.amountFor(category.categoryPk, month);
     final double amountOrZero = amount ?? 0;
-    final double percent =
-        amountOrZero <= 0 ? 0 : (spent / amountOrZero) * 100;
-    final double remaining = amountOrZero - spent;
+    final double percent = amountOrZero <= 0 ? 0 : (spent / amountOrZero) * 100;
+    final EnvelopeHeadline headline = envelopeHeadline(context,
+        income: category.income, spent: spent, planned: amount);
 
     // The month on screen, and how far into it we are. A month that has ended
     // or has not started gets no "today" marker, because there is no today in
@@ -369,7 +522,7 @@ class EnvelopeEntry extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-              children: [
+                  children: [
                     CategoryIcon(
                       category: category,
                       categoryPk: category.categoryPk,
@@ -387,34 +540,24 @@ class EnvelopeEntry extends StatelessWidget {
                               text: category.name, fontSize: 17, maxLines: 1),
                           SizedBox(height: 1),
                           TextFont(
-                            text: convertToMoney(allWallets, spent) +
-                                " " +
-                                envelopeActionWord(category.income)
-                                    .toLowerCase() +
-                                (amount == null
-                                    ? ""
-                                    : ", " +
-                                        convertToMoney(
-                                            allWallets, remaining.abs()) +
-                                        " " +
-                                        envelopeStatusWord(
-                                          income: category.income,
-                                          beyondPlan: remaining < 0,
-                                        ).toLowerCase()),
+                            // Which figure leads is the reader's choice; see
+                            // envelopeHeadline.
+                            text: "",
+                            richTextSpan: envelopeStatusSpans(
+                              context,
+                              headline: headline,
+                              income: category.income,
+                              hasPlan: amount != null,
+                              allWallets: allWallets,
+                              fontSize: 14,
+                            ),
                             fontSize: 14,
                             // Two lines, because the planned amount sits beside
                             // it and a long currency plus two clauses will not
                             // fit on one. Truncating here hides the number the
                             // line exists to show.
                             maxLines: 2,
-                            // Only a category with a plan can be measured
-                            // against one. Money moving in a category nobody
-                            // planned is just money moving.
-                            textColor: amount == null
-                                ? getColor(context, "textLight")
-                                : envelopeStatusColor(context,
-                                    income: category.income,
-                                    beyondPlan: remaining < 0),
+                            textColor: headline.color,
                           ),
                         ],
                       ),
@@ -601,7 +744,8 @@ Future<void> _setAmountFromPercentOfPlannedIncome(
   EnvelopePlan plan,
 ) async {
   final AllWallets allWallets = Provider.of<AllWallets>(context, listen: false);
-  final double plannedIncome = plan.totalPlanned(income: true, periodStart: month);
+  final double plannedIncome =
+      plan.totalPlanned(income: true, periodStart: month);
   if (plannedIncome <= 0) {
     openPopup(
       context,
