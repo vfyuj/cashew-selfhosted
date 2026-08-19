@@ -153,6 +153,14 @@ class _ServerSetupWizardPageState extends State<ServerSetupWizardPage> {
     if (mounted) setState(() => step = _WizardStep.probing);
     if (await selfHostedAccountHasExistingData()) {
       await updateSettings("hasOnboarded", true, updateGlobalState: false);
+      // The same flag a backup restore sets, for the same reason: this device's
+      // database is empty only until the first sync pull lands.
+      // initializeDefaultDatabase() runs on the main app's first mount, before
+      // that pull, and without this it reads the empty database as "new install"
+      // and seeds the default categories. They would not just sit there -- a
+      // fresh push cursor is DateTime(0) and the cycle pushes before it pulls,
+      // so they reach the feed and every other device in the household.
+      isDatabaseImportedOnThisSession = true;
     }
     await _finish();
   }
