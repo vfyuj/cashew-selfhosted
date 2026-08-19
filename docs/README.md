@@ -21,6 +21,7 @@ belongs to another page, this one links it.
 | [server/auth.md](server/auth.md) | Sessions, passwords, rate limiting, first-run setup, roles, provisioning. |
 | [server/storage.md](server/storage.md) | Files on disk: the three namespaces, and why backups are scoped differently from everything else. |
 | [server/database.md](server/database.md) | The server's own SQLite — tables and migrations. Not the app's database. |
+| [server/rates.md](server/rates.md) | Currency rates: why the server holds them, and why they are instance-wide rather than per household. |
 
 ## App
 

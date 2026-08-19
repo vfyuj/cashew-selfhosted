@@ -19,6 +19,13 @@ class TestApi {
 
   TestApi._(this.db, this.authService, this.handler, this.dataDir);
 
+  /// Wraps a router that the caller composed themselves, for tests that need
+  /// to inject something into buildApiRouter (the exchange-rate fetcher, say)
+  /// while still using the helpers below.
+  factory TestApi.forHandler(
+          Database db, AuthService authService, Handler handler, Directory dataDir) =>
+      TestApi._(db, authService, handler, dataDir);
+
   factory TestApi.create() {
     final db = sqlite3.openInMemory();
     db.execute('PRAGMA foreign_keys=ON;');

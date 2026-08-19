@@ -1246,5 +1246,10 @@
   "changelog-1-2-1-envelope-currency-body": "Os envelopes agora seguem a moeda da sua conta principal. Cada valor planeado lembra-se da conta em que foi introduzido, por isso tornar principal uma conta noutra moeda converte o plano da mesma forma que já converte as suas despesas, em vez de deixar o mesmo número com outro símbolo de moeda. Os valores planeados antes desta atualização são lidos como tendo sido definidos na conta que é principal agora. Se a casa usa mais do que uma moeda, ao introduzir o valor pode agora escolher em que conta o envelope é planeado.",
   "received": "Recebido",
   "above-plan": "acima do plano",
-  "still-to-come": "ainda por vir"
+  "still-to-come": "ainda por vir",
+  "rates-are-shared": "As taxas valem para todos",
+  "rates-are-shared-description": "O seu servidor mantém um único conjunto de taxas de câmbio para que os totais de todos coincidam. Um administrador pode alterá-las.",
+  "rate-not-saved": "Taxa não guardada",
+  "exchange-rates-unavailable": "Taxas de câmbio indisponíveis",
+  "exchange-rates-unavailable-description": "Este dispositivo ainda não as conseguiu carregar, por isso todas as moedas abaixo aparecem a 1:1. Os valores noutras moedas estarão errados até lá."
 }

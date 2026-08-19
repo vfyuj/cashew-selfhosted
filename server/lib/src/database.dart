@@ -4,7 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 
 /// Bump this whenever a migration is appended to [_migrations].
-const currentSchemaVersion = 4;
+const currentSchemaVersion = 5;
 
 /// Ordered schema migrations, indexed by the version they upgrade *to*.
 ///
@@ -23,6 +23,7 @@ final Map<int, void Function(Database db)> _migrations = {
   2: _migrateToV2,
   3: _migrateToV3,
   4: _migrateToV4,
+  5: _migrateToV5,
 };
 
 /// Everything that existed before schema versioning was introduced, including
@@ -227,6 +228,38 @@ void _migrateToV4(Database db) {
   } finally {
     if (foreignKeysWereOn) db.execute('PRAGMA foreign_keys=ON');
   }
+}
+
+/// Adds the deployment-wide exchange rate cache and its administrator
+/// overrides.
+///
+/// Deployment-wide on purpose, and **not** scoped to a dataset or a user. A
+/// rate is not data anyone owns, it is how everyone's data gets read: two
+/// members of one household looking at the same transaction have to convert it
+/// the same way or their budgets and envelopes stop reconciling. Before this,
+/// each device fetched its own copy and cached it in device-local settings, so
+/// two devices that last launched on different days disagreed about every
+/// figure that crossed a currency. See docs/server/rates.md.
+///
+/// `rate` is stored relative to USD, matching the upstream feed's own base, so
+/// nothing has to be rebased on the way in or out.
+void _migrateToV5(Database db) {
+  // Single row, pinned to id 0 by the CHECK: there is exactly one set of rates
+  // per deployment, and a second row would silently become a second answer.
+  db.execute('''
+    CREATE TABLE IF NOT EXISTS exchange_rates (
+      id         INTEGER PRIMARY KEY CHECK (id = 0),
+      rates      TEXT    NOT NULL,
+      fetched_at INTEGER NOT NULL
+    );
+  ''');
+  db.execute('''
+    CREATE TABLE IF NOT EXISTS exchange_rate_overrides (
+      currency   TEXT    PRIMARY KEY,
+      rate       REAL    NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  ''');
 }
 
 /// Applies every migration newer than the database's recorded version.

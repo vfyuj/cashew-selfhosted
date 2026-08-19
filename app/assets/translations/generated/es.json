@@ -1246,5 +1246,10 @@
   "changelog-1-2-1-envelope-currency-body": "Los sobres ahora siguen la moneda de tu cuenta principal. Cada importe planificado recuerda la cuenta en la que se introdujo, así que si conviertes en principal una cuenta en otra divisa, el plan se convierte igual que ya se convierten tus gastos, en lugar de dejar el mismo número con otro símbolo de moneda. Los importes planificados antes de esta actualización se consideran fijados en la cuenta que ahora es la principal. Si en casa usáis más de una divisa, al introducir el importe ya puedes elegir en qué cuenta se planifica un sobre.",
   "received": "Recibido",
   "above-plan": "por encima del plan",
-  "still-to-come": "aún por llegar"
+  "still-to-come": "aún por llegar",
+  "rates-are-shared": "Los tipos son para todos",
+  "rates-are-shared-description": "Tu servidor guarda un único conjunto de tipos de cambio para que los totales de todos coincidan. Un administrador puede cambiarlos.",
+  "rate-not-saved": "Tipo no guardado",
+  "exchange-rates-unavailable": "Tipos de cambio no disponibles",
+  "exchange-rates-unavailable-description": "Este dispositivo aún no ha podido cargarlos, así que todas las monedas de abajo se muestran a 1:1. Los importes en otras monedas serán incorrectos hasta entonces."
 }

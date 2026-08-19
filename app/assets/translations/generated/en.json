@@ -1344,5 +1344,10 @@
   "changelog-1-2-1-envelope-currency-body": "Envelopes now follow your primary account's currency. Each planned amount remembers the account it was entered in, so making an account in another currency primary converts the plan the same way your spending is already converted, instead of leaving the same number with a different currency symbol. Amounts planned before this update are read as having been set in the account that is primary now. If your household keeps more than one currency, the amount pad now lets you choose which account an envelope is planned in.",
   "received": "Received",
   "above-plan": "above plan",
-  "still-to-come": "still to come"
+  "still-to-come": "still to come",
+  "rates-are-shared": "Rates are set for everyone",
+  "rates-are-shared-description": "Your server keeps one set of exchange rates so everyone's totals agree. An administrator can change them.",
+  "rate-not-saved": "Rate not saved",
+  "exchange-rates-unavailable": "Exchange rates unavailable",
+  "exchange-rates-unavailable-description": "This device hasn't been able to load them yet, so every currency below is shown at 1:1. Amounts in other currencies will be wrong until it does."
 }

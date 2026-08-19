@@ -6,27 +6,47 @@ File: `app/lib/struct/perUserViewSettings.dart`.
 
 | Row | Contents | Synced |
 |---|---|---|
-| `0` | the whole shared-preferences blob written by `backupSettings()` — server URL, signed-in email, cached exchange rates | **never** |
+| `0` | the whole shared-preferences blob written by `backupSettings()` — server URL, signed-in email, the cached copy of the server's rate table | **never** |
 | `<userId>` | that member's view preferences, allow-listed keys only | yes |
 
 **Row 0's exclusion from the change feed (`getAllNewAppSettings`) is the safety property that makes
-syncing this table acceptable at all.** It carries the server URL, the signed-in email and cached
-rates — none of which should travel to another person's device. A change here that syncs the table
-"consistently, all rows" is a data leak, not a cleanup.
+syncing this table acceptable at all.** It carries the server URL and the signed-in email, neither of
+which should travel to another person's device. A change here that syncs the table "consistently, all
+rows" is a data leak, not a cleanup.
+
+### The exchange rates used to be filed here, and that was a bug
+
+Row 0 also holds a copy of the currency table, and for a long time that copy was the *only* one:
+every device fetched the published feed itself, cached it here, and never shared it. Filed alongside
+the server URL and the email as "obviously device-local" — but it is not the same kind of thing at
+all. A URL and an email are **identity**. A rate is a **reading of shared data**, and two people
+looking at one household have to read it the same way or their budgets stop reconciling. They
+didn't: the same 18 950 ₽ transaction showed as 22 594 in one account and 22 837 in the other,
+because the two devices had last launched days apart.
+
+The table now comes from the server ([../server/rates.md](../server/rates.md)) and what sits in row 0
+is a cache of that, so it is genuinely device-local again — it is a copy of something everyone
+already agrees on, kept so an unreachable server does not blank the screen. The lesson worth keeping:
+**"lives in `appStateSettings`" is not a reason to call something device-local.** Ask whether it is
+identity or interpretation.
 
 ## What is allowed to travel
 
 A short allow-list (`syncedViewSettingKeys`), not the whole settings map: hidden wallets, home-page
 section order and visibility, the wallet switcher, and the selected account. Most of
-`appStateSettings` is device-local (server URL, cached rates, which platform's icons to draw) or
-account-wide, and syncing it wholesale would move all of that too. **Add keys one at a time** — each
+`appStateSettings` is device-local (server URL, which platform's icons to draw) or account-wide, and
+syncing it wholesale would move all of that too. **Add keys one at a time** — each
 addition is a decision that the setting follows the person rather than the device.
 
-**Note what this mechanism cannot do**, because it has been reached for and turned down once: it has
+**Note what this mechanism cannot do**, because it has been reached for and turned down twice: it has
 no *household-wide* setting. Rows are keyed by user id, so a preference everyone sharing the data
-should agree on has nowhere to live here. The envelope order is the worked example — it wanted to be
-one order for the whole household, so it is `Categories.order`, an ordinary synced column, and not a
-setting at all. See [envelopes.md](envelopes.md).
+should agree on has nowhere to live here. Two worked examples, and they went different ways:
+
+- The envelope order wanted one order for the whole household, so it is `Categories.order`, an
+  ordinary synced column, and not a setting at all. See [envelopes.md](envelopes.md).
+- The currency table wanted one reading for the whole *deployment*, which is wider still than a
+  household — so it went to the server instead of into any table. See
+  [../server/rates.md](../server/rates.md).
 
 The same shape rules out per-account order today for a different reason: a row only exists when the
 signed-in profile shares a household (see below), so on a solo account these keys never leave the

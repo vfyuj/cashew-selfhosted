@@ -18,8 +18,8 @@ import 'package:cashew_selfhosted/struct/settings.dart';
 //
 // Row 0 is excluded from the change feed by getAllNewAppSettings, and that
 // exclusion is the safety property that makes syncing this table acceptable at
-// all: row 0 carries the server URL, the signed-in email and cached exchange
-// rates, none of which should travel.
+// all: row 0 carries the server URL and the signed-in email, neither of which
+// should travel.
 //
 // WHY NOT sharedPreferences: it is per device, so a member's phone and laptop
 // would never agree. WHY NOT a column on Wallets: Wallets has no dead column
@@ -30,10 +30,15 @@ import 'package:cashew_selfhosted/struct/settings.dart';
 /// The settings that follow a member between their own devices.
 ///
 /// Deliberately a short allow-list rather than the whole settings map. Most of
-/// `appStateSettings` is either device-local (the server URL, the cached
-/// exchange rates, which platform's icons to draw) or account-wide, and
-/// syncing it wholesale would move all of that too. Adding a key here is a
-/// decision to make it follow the person; make it one at a time.
+/// `appStateSettings` is either device-local (the server URL, which platform's
+/// icons to draw) or account-wide, and syncing it wholesale would move all of
+/// that too. Adding a key here is a decision to make it follow the person;
+/// make it one at a time.
+///
+/// Note what does *not* belong here even though it once looked like it did:
+/// the currency table. It has to be the same for everyone rather than follow
+/// one person, and this mechanism has no household-wide level -- so it lives
+/// on the server instead. See docs/server/rates.md.
 const List<String> syncedViewSettingKeys = [
   // Wallets this member has hidden from their own home page. See
   // [hiddenWalletPks].

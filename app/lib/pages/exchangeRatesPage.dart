@@ -3,6 +3,9 @@ import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/pages/aboutPage.dart';
 import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
+import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
+import 'package:cashew_selfhosted/widgets/globalSnackbar.dart';
+import 'package:cashew_selfhosted/widgets/openSnackbar.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/fadeIn.dart';
 import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
@@ -12,6 +15,7 @@ import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/outlinedButtonStacked.dart';
 import 'package:cashew_selfhosted/widgets/selectAmount.dart';
+import 'package:cashew_selfhosted/widgets/statusBox.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
 import 'package:cashew_selfhosted/widgets/textInput.dart';
 import 'package:cashew_selfhosted/widgets/textWidgets.dart';
@@ -21,6 +25,28 @@ import 'package:cashew_selfhosted/main.dart';
 import 'package:provider/provider.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
+
+/// Whether this device may change what a currency is worth.
+///
+/// Signed out, a pinned rate is device-local and there is nobody to disagree
+/// with, so anyone may set one. Signed in, the rate table belongs to the
+/// deployment and only an administrator edits it -- otherwise one member
+/// pinning a rate would put the household's figures back out of step, which is
+/// the whole reason the server holds them. See docs/server/rates.md.
+bool get canEditExchangeRates =>
+    selfHostedSession == null || cachedServerProfile?.isAdmin == true;
+
+/// The rate pinned by hand for [currencyKey], or null if it is simply the
+/// fetched one.
+///
+/// Reads from wherever the pins actually live: the deployment's own list when
+/// signed in, this device's settings when not. One accessor, so the screen's
+/// highlighting and its number pad cannot end up describing different maps.
+double? pinnedExchangeRate(String currencyKey) {
+  if (selfHostedSession != null) return serverRateOverrides[currencyKey];
+  final dynamic local = appStateSettings["customCurrencyAmounts"]?[currencyKey];
+  return local is num ? local.toDouble() : null;
+}
 
 class ExchangeRates extends StatefulWidget {
   const ExchangeRates({super.key});
@@ -75,7 +101,13 @@ class _ExchangeRatesState extends State<ExchangeRates> {
       currencyExchange[key] = null;
     }
     currencyExchange.addAll(appStateSettings["cachedCurrencyExchange"]);
-    if (currencyExchange.keys.length <= 0) {
+    // No table at all: a device that has never reached the server, or never had
+    // a network. Every currency below is then drawn at 1, which is a real
+    // number for a currency at par and a badly wrong one for every other -- so
+    // say so rather than letting the list read as fact. See the note above
+    // isCurrencyExchangeRateKnown in struct/currencyFunctions.dart.
+    final bool ratesUnavailable = currencyExchange.keys.length <= 0;
+    if (ratesUnavailable) {
       for (String key in currenciesJSON.keys) {
         currencyExchange[key] = 1;
       }
@@ -202,6 +234,21 @@ class _ExchangeRatesState extends State<ExchangeRates> {
             ),
           ),
         ),
+        if (ratesUnavailable)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsetsDirectional.symmetric(
+                  horizontal: 13, vertical: 8),
+              child: StatusBox(
+                title: "exchange-rates-unavailable".tr(),
+                description: "exchange-rates-unavailable-description".tr(),
+                color: Theme.of(context).colorScheme.error,
+                icon: appStateSettings["outlinedIcons"]
+                    ? Icons.cloud_off_outlined
+                    : Icons.cloud_off_rounded,
+              ),
+            ),
+          ),
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsetsDirectional.only(top: 5),
@@ -248,8 +295,8 @@ class _ExchangeRatesState extends State<ExchangeRates> {
                         .toList()[index]
                         .toString();
                     bool isCustomCurrency = customCurrencies.contains(key);
-                    bool isUnsetCustomCurrency = isCustomCurrency &&
-                        appStateSettings["customCurrencyAmounts"]?[key] == null;
+                    bool isUnsetCustomCurrency =
+                        isCustomCurrency && pinnedExchangeRate(key) == null;
                     String calculatedExchangeRateString = isUnsetCustomCurrency
                         ? "1"
                         : (1 /
@@ -257,15 +304,23 @@ class _ExchangeRatesState extends State<ExchangeRates> {
                                     Provider.of<AllWallets>(context), key))))
                             .toStringAsFixed(14);
                     return ScaledAnimatedSwitcher(
-                      keyToWatch: (appStateSettings["customCurrencyAmounts"]
-                              ?[key])
-                          .toString(),
+                      keyToWatch: pinnedExchangeRate(key).toString(),
                       key: ValueKey(key),
                       child: Padding(
                         padding: EdgeInsetsDirectional.only(
                             bottom: isCustomCurrency ? 5 : 0),
                         child: Tappable(
                           onTap: () async {
+                            if (!canEditExchangeRates) {
+                              openSnackbar(SnackbarMessage(
+                                title: "rates-are-shared".tr(),
+                                description: "rates-are-shared-description".tr(),
+                                icon: appStateSettings["outlinedIcons"]
+                                    ? Icons.info_outlined
+                                    : Icons.info_rounded,
+                              ));
+                              return;
+                            }
                             await openBottomSheet(
                               context,
                               SetCustomCurrency(currencyKey: key),
@@ -273,9 +328,7 @@ class _ExchangeRatesState extends State<ExchangeRates> {
                             setState(() {});
                           },
                           color: isCustomCurrency ||
-                                  appStateSettings["customCurrencyAmounts"]
-                                          ?[key] ==
-                                      null
+                                  pinnedExchangeRate(key) == null
                               ? Colors.transparent
                               : Theme.of(context)
                                   .colorScheme
@@ -285,9 +338,7 @@ class _ExchangeRatesState extends State<ExchangeRates> {
                                 EdgeInsetsDirectional.symmetric(horizontal: 8),
                             child: OutlinedContainer(
                               enabled: isCustomCurrency,
-                              filled: appStateSettings["customCurrencyAmounts"]
-                                      ?[key] !=
-                                  null,
+                              filled: pinnedExchangeRate(key) != null,
                               child: Padding(
                                 padding: const EdgeInsetsDirectional.symmetric(
                                     horizontal: 7),
@@ -379,10 +430,37 @@ class _SetCustomCurrencyState extends State<SetCustomCurrency> {
       subtitle: "1 USD = ",
       child: SelectAmountValue(
         allowZero: true,
-        setSelectedAmount: (amount, amountString) {
+        setSelectedAmount: (amount, amountString) async {
+          final bool clearing = amount == 0 || amountString == "";
+
+          // Signed in, an override belongs to the deployment: it goes to the
+          // server, which folds it into the table it serves everyone. Writing
+          // it locally as well would give this device a second, competing
+          // answer -- see docs/server/rates.md.
+          if (selfHostedSession != null) {
+            final result = clearing
+                ? await selfHostedClearRateOverride(widget.currencyKey)
+                : await selfHostedSetRateOverride(widget.currencyKey, amount);
+            if (result != ServerCallResult.ok) {
+              openSnackbar(SnackbarMessage(
+                title: "rate-not-saved".tr(),
+                description: "server-unreachable".tr(),
+                icon: appStateSettings["outlinedIcons"]
+                    ? Icons.cloud_off_outlined
+                    : Icons.cloud_off_rounded,
+              ));
+              return;
+            }
+            // Pull the new table straight back, so the figure on screen is the
+            // one the household will see rather than the one before the edit.
+            await getExchangeRates();
+            appStateKey.currentState?.refreshAppState();
+            return;
+          }
+
           Map<dynamic, dynamic> customCurrencyAmountsMap =
               appStateSettings["customCurrencyAmounts"];
-          if (amount == 0 || amountString == "") {
+          if (clearing) {
             customCurrencyAmountsMap.remove(widget.currencyKey);
           } else {
             // This will convert the primary currency to the custom currency
@@ -415,14 +493,10 @@ class _SetCustomCurrencyState extends State<SetCustomCurrency> {
         //                     ?[widget.currencyKey] ??
         //                 1))
         //         .toString()),
-        amountPassed: appStateSettings["customCurrencyAmounts"]
-                    ?[widget.currencyKey] ==
-                null
+        amountPassed: pinnedExchangeRate(widget.currencyKey) == null
             ? ""
-            : removeTrailingZeroes(appStateSettings["customCurrencyAmounts"]
-                        ?[widget.currencyKey]
-                    .toString() ??
-                "0"),
+            : removeTrailingZeroes(
+                pinnedExchangeRate(widget.currencyKey).toString()),
         suffix: " " + widget.currencyKey.allCaps,
         nextLabel: "set-amount".tr(),
         next: () {

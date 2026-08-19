@@ -8,7 +8,8 @@ Current state, read from `server/lib/src/`. Every route the server answers is li
 re-reads the role from the session on every request and rejects with `403`.
 
 **Scope** — which data the request reaches. `user`: the caller's own. `dataset`: the household's,
-shared by every member. The split is deliberate, not drift; see [storage.md](storage.md).
+shared by every member. `instance`: the whole deployment, the same answer for everyone. The split is
+deliberate, not drift; see [storage.md](storage.md).
 
 | Route | Auth | Scope | Behaviour |
 |---|---|---|---|
@@ -37,6 +38,9 @@ shared by every member. The split is deliberate, not drift; see [storage.md](sto
 | `PUT /attachments/<filename>` | session | dataset | Uploads a receipt photo or picked file. |
 | `GET /attachments/<filename>` | session | dataset | Downloads it. `404` if absent. |
 | `DELETE /attachments/<filename>` | session | dataset | Removes it. |
+| `GET /rates` | session | **instance** | `{rates, overrides, fetchedAt}`, USD-based. `503` if the server has never managed to fetch. See [rates.md](rates.md). |
+| `PUT /rates/overrides/<currency>` | admin | instance | `{rate: <positive number>}`. `400` on zero, negative or non-numeric. |
+| `DELETE /rates/overrides/<currency>` | admin | instance | Falls that currency back to the fetched value. |
 | `GET /admin/users` | admin | instance | `{users: [...]}`. |
 | `POST /admin/users` | admin | instance | `{email, name?, isAdmin?, shareHousehold?}` → `201 {user, temporaryPassword}`. `409` if the email is taken. |
 | `POST /admin/users/<id>/password` | admin | instance | Issues a new temporary password and signs that account's devices out. |
@@ -53,6 +57,10 @@ takes a client-supplied path (`storage.dart`).
 - **Two routers share `/auth`.** The public one is mounted first (`setup-state`, `setup`, `login`,
   `refresh`, `logout`); anything it does not recognise falls through to the authenticated account
   router (`me`, `me/password`), because a nested `Router` returns `routeNotFound` rather than a `404`.
+- **`/rates` and `/rates/overrides` are two mounts, not one router.** Mount middleware runs before
+  the nested router looks at the path, so an admin-gated router sharing the `/rates` prefix would
+  answer an ordinary member's read with `403`. The longer prefix is registered first, because the
+  first match wins.
 - **`/sync-stream` is registered directly, not mounted.** A single-segment mount with no sub-path
   does not reliably match its own root in `shelf_router` 1.1.4 — it fell through to the SPA
   catch-all and logged a misleading `[200]`.

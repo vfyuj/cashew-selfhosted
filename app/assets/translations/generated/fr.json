@@ -1246,5 +1246,10 @@
   "changelog-1-2-1-envelope-currency-body": "Les enveloppes suivent désormais la devise de votre compte principal. Chaque montant prévu retient le compte dans lequel il a été saisi : si vous définissez comme compte principal un compte dans une autre devise, le plan est converti comme le sont déjà vos dépenses, au lieu de garder le même nombre avec un autre symbole monétaire. Les montants prévus avant cette mise à jour sont considérés comme saisis dans le compte principal actuel. Si votre foyer utilise plusieurs devises, le pavé numérique permet maintenant de choisir le compte dans lequel une enveloppe est prévue.",
   "received": "Reçu",
   "above-plan": "au-dessus du plan",
-  "still-to-come": "encore à venir"
+  "still-to-come": "encore à venir",
+  "rates-are-shared": "Les taux valent pour tous",
+  "rates-are-shared-description": "Votre serveur conserve un seul jeu de taux de change pour que les totaux de chacun concordent. Un administrateur peut les modifier.",
+  "rate-not-saved": "Taux non enregistré",
+  "exchange-rates-unavailable": "Taux de change indisponibles",
+  "exchange-rates-unavailable-description": "Cet appareil n'a pas encore pu les charger, donc toutes les devises ci-dessous sont affichées à 1:1. Les montants dans d'autres devises seront faux jusque-là."
 }

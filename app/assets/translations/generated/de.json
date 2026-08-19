@@ -1246,5 +1246,10 @@
   "changelog-1-2-1-envelope-currency-body": "Umschläge richten sich jetzt nach der Währung deines Standardkontos. Jeder geplante Betrag merkt sich das Konto, in dem er eingegeben wurde: Machst du ein Konto in einer anderen Währung zum Standardkonto, wird der Plan genauso umgerechnet wie deine Ausgaben, statt dieselbe Zahl mit einem anderen Währungssymbol zu zeigen. Beträge, die vor diesem Update geplant wurden, gelten als in dem Konto gesetzt, das jetzt das Standardkonto ist. Wenn ihr mehrere Währungen führt, kannst du bei der Eingabe des Betrags nun wählen, in welchem Konto ein Umschlag geplant wird.",
   "received": "Erhalten",
   "above-plan": "über Plan",
-  "still-to-come": "steht noch aus"
+  "still-to-come": "steht noch aus",
+  "rates-are-shared": "Kurse gelten für alle",
+  "rates-are-shared-description": "Dein Server hält einen einzigen Satz Wechselkurse, damit alle Summen übereinstimmen. Ändern kann sie ein Administrator.",
+  "rate-not-saved": "Kurs nicht gespeichert",
+  "exchange-rates-unavailable": "Wechselkurse nicht verfügbar",
+  "exchange-rates-unavailable-description": "Dieses Gerät konnte sie noch nicht laden, deshalb steht unten jede Währung auf 1:1. Beträge in anderen Währungen sind bis dahin falsch."
 }

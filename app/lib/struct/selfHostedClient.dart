@@ -325,6 +325,39 @@ String _normalizeServerUrl(String serverUrl) {
 }
 
 /// Response shape for `POST /sync/push` (specs/04-stage-2-instant-sync.md).
+/// The deployment's currency table, as served by `GET /rates`.
+///
+/// [rates] already has any administrator override folded in -- the server does
+/// that, once, so every device in the household reads the same number. The
+/// [overrides] map ships alongside only so the rates screen can show which
+/// values were set by hand.
+class ServerExchangeRates {
+  const ServerExchangeRates({
+    required this.rates,
+    required this.overrides,
+    required this.fetchedAt,
+  });
+
+  final Map<String, double> rates;
+  final Map<String, double> overrides;
+  final DateTime fetchedAt;
+
+  static Map<String, double> _numbersFrom(dynamic raw) {
+    if (raw is! Map) return {};
+    return {
+      for (final entry in raw.entries)
+        if (entry.value is num) entry.key.toString(): (entry.value as num).toDouble()
+    };
+  }
+
+  factory ServerExchangeRates.fromJson(Map<String, dynamic> json) => ServerExchangeRates(
+        rates: _numbersFrom(json["rates"]),
+        overrides: _numbersFrom(json["overrides"]),
+        fetchedAt: DateTime.fromMillisecondsSinceEpoch(
+            (json["fetchedAt"] as num?)?.toInt() ?? 0),
+      );
+}
+
 class SyncPushResult {
   final DateTime serverTime;
   final int conflictCount;
@@ -880,6 +913,32 @@ class SelfHostedClient implements BackupTransport {
         return body['temporaryPassword'] as String;
       });
 
+  /// The deployment's currency table. See docs/server/rates.md.
+  Future<ServerExchangeRates> getRates() => _withRefreshRetry(() async {
+        final response = await _httpClient
+            .get(Uri.parse('${session.serverUrl}/rates'), headers: _authHeader)
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+        return ServerExchangeRates.fromJson(jsonDecode(response.body));
+      });
+
+  Future<void> putRateOverride(String currency, double rate) =>
+      _withRefreshRetry(() async {
+        final response = await _httpClient
+            .put(Uri.parse('${session.serverUrl}/rates/overrides/$currency'),
+                headers: _jsonHeaders, body: jsonEncode({'rate': rate}))
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+      });
+
+  Future<void> deleteRateOverride(String currency) => _withRefreshRetry(() async {
+        final response = await _httpClient
+            .delete(Uri.parse('${session.serverUrl}/rates/overrides/$currency'),
+                headers: _authHeader)
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+      });
+
   Future<void> deleteUser(int userId) => _withRefreshRetry(() async {
         final response = await _httpClient
             .delete(Uri.parse('${session.serverUrl}/admin/users/$userId'),
@@ -984,6 +1043,31 @@ Future<bool> selfHostedAccountHasExistingData() async {
     print("Could not list existing sync files: $e");
     return false;
   }
+}
+
+/// The deployment's currency table, or null if it could not be read.
+///
+/// Null on every failure -- unreachable, signed out, malformed -- because the
+/// caller's answer to all of them is the same: keep using the table already
+/// cached. See docs/server/rates.md.
+Future<ServerExchangeRates?> selfHostedFetchRates() async {
+  final (result, rates) = await _guarded((client) => client.getRates());
+  if (result != ServerCallResult.ok) return null;
+  return rates;
+}
+
+/// Sets an administrator override for one currency, deployment-wide.
+Future<ServerCallResult> selfHostedSetRateOverride(
+    String currency, double rate) async {
+  final (result, _) =
+      await _guarded((client) => client.putRateOverride(currency, rate));
+  return result;
+}
+
+/// Clears an override, falling that currency back to the fetched value.
+Future<ServerCallResult> selfHostedClearRateOverride(String currency) async {
+  final (result, _) = await _guarded((client) => client.deleteRateOverride(currency));
+  return result;
 }
 
 /// Refreshes the cached profile. On failure the existing cache is deliberately
