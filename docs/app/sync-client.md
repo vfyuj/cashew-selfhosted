@@ -21,7 +21,14 @@ avoided SQLite triggers (and their web/WASM portability question) and a schema m
 
 Two, in shared preferences, keyed by **server + account + dataset**:
 
-- **push cursor** — a timestamp. Local rows modified after it still need sending.
+- **push cursor** — a timestamp. Local rows modified after it still need sending. It starts one
+  millisecond above `DateTime(0)`, and that millisecond is load-bearing: `DateTime(0)` is the stamp
+  `initializeDefaultDatabase()` puts on the default wallet and the eleven default categories to mark
+  them as seeded rather than entered, and the `getAllNewX` scans compare with `>=`. Starting at
+  `DateTime(0)` exactly sent them, so every device's first push planted those categories in the
+  household's feed — where they stayed, since nothing ever edits a default category and so nothing
+  supersedes it. Every device that joined later pulled them down as real data. `resetLiveSync()`
+  rewinds to the same floor for the same reason.
 - **pull cursor** — a `seq` from the server's feed.
 
 The dataset is in the key because a `seq` is only meaningful within one dataset's feed. Neither the

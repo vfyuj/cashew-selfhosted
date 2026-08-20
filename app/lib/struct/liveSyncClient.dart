@@ -59,11 +59,30 @@ String? _cursorScopeKey() {
   return "${session.serverUrl}:${session.email}:${cachedServerProfile?.datasetId ?? 0}";
 }
 
+/// Where a device's push cursor starts, and what Reset Sync rewinds it to.
+///
+/// One millisecond above `DateTime(0)`, and that millisecond is the whole
+/// point. `DateTime(0)` is the stamp `initializeDefaultDatabase()` puts on the
+/// default wallet and the eleven default categories to mark them as seeded
+/// rather than entered -- upstream's way of keeping them out of a sync. The
+/// `getAllNewX` scans compare with `>=`, so a cursor of exactly `DateTime(0)`
+/// matched them, and every device's first push planted those categories in the
+/// household's feed, where they stayed: nothing ever edits them, so nothing
+/// ever supersedes them, and every device that joined later pulled them down
+/// as real data.
+///
+/// Rows with a null `dateTimeModified` are still picked up -- the scans OR in
+/// `isNull()` -- so nothing that was genuinely never stamped is skipped.
+final DateTime oldestPushCursor =
+    DateTime(0).add(const Duration(milliseconds: 1));
+
 Future<DateTime> _getPushCursor() async {
   final scope = _cursorScopeKey();
-  if (scope == null) return DateTime(0);
+  if (scope == null) return oldestPushCursor;
   final ms = sharedPreferences.getInt(_pushCursorPrefsKeyPrefix + scope);
-  return ms == null ? DateTime(0) : DateTime.fromMillisecondsSinceEpoch(ms);
+  return ms == null
+      ? oldestPushCursor
+      : DateTime.fromMillisecondsSinceEpoch(ms);
 }
 
 Future<void> _setPushCursor(DateTime cursor) async {
@@ -530,7 +549,11 @@ Future<bool> resetLiveSync() async {
     // write its now-meaningless cursors back over the ones set just below.
     _liveSyncGeneration++;
     await _setPullCursor(newStart);
-    await _setPushCursor(DateTime(0)); // re-scan and re-upload everything local
+    // Re-scan and re-upload everything local -- everything the user actually
+    // has, that is. See [oldestPushCursor]: rewinding to DateTime(0) exactly
+    // would sweep the seeded default categories back into the feed, which is
+    // the mess Reset Sync is most often reached for in the first place.
+    await _setPushCursor(oldestPushCursor);
     await runLiveSyncCycle();
     return true;
   } catch (e) {
