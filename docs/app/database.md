@@ -70,6 +70,27 @@ is missing, every query against it throws inside a stream, and the screen that r
 empty. It also covers the envelope conversion end to end, on the database shape an imported 1.1.x
 backup actually has.
 
+### The one difference that test forgives
+
+Ten columns across nine of upstream's tables are declared
+`dateTime().withDefault(Constant(DateTime.now()))`, which
+drift bakes into the DDL as a literal epoch second — whatever the clock said when that table was
+created. The verifier builds its reference schema and the migrated schema at two different moments,
+so a run that happens to straddle a second boundary finds every one of those columns "different" by
+exactly one second. It failed about one run in thirty.
+
+Those defaults cannot be dropped: they are upstream's columns, and those stay identical column for
+column. Bumping the schema to rebuild the fork's own table would not have helped either — those ten
+keep the flake on their own tables. So the *comparison* is what gives:
+`migrateAndValidateIgnoringClockSkew` in that file runs drift's real verifier and forgives exactly
+one shape of finding, two current-era epoch seconds within a minute of each other in the same
+`DEFAULT`. Anything else it cannot recognise — including a differently-worded report from a future
+drift — still fails. Two tests pin that: one sleeps past a second boundary so the old flake happens
+every run, and one walks the report lines the tolerance must and must not swallow.
+
+The defaults themselves are dead weight, incidentally: every write path sets `dateTimeModified`
+explicitly, and sync companions carry it even when null, so SQLite never falls back to one.
+
 ## Version numbers are shared with upstream, and that bites
 
 The fork owns a table but not the counter: `schemaVersionGlobal` is upstream Cashew's, and upstream

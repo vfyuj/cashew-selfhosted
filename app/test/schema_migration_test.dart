@@ -43,12 +43,70 @@ void main() {
     globals.database = db;
     addTearDown(db.close);
 
-    await verifier.migrateAndValidate(db, 48);
+    await migrateAndValidateIgnoringClockSkew(verifier, db, 48);
 
     // Not just present in the schema -- actually usable, which is what the
     // envelopes screen needs on the very first launch after an upgrade or a
     // restored backup.
     expect(await db.getAllCategoryEnvelopes(), isEmpty);
+  });
+
+  test('a run that straddles a second boundary still validates', () async {
+    // The flake this file used to have, made deterministic. Ten of upstream's
+    // columns default to the moment their table was created, so the verifier's
+    // reference schema and the migrated schema disagree by a second whenever
+    // the two are built either side of one. Sleeping past a boundary makes that
+    // happen every run instead of roughly one in thirty.
+    final connection = await verifier.startAt(46);
+    final db = FinanceDatabase(connection);
+    globals.database = db;
+    addTearDown(db.close);
+
+    await Future.delayed(const Duration(milliseconds: 1100));
+
+    await migrateAndValidateIgnoringClockSkew(verifier, db, 48);
+  });
+
+  test('the tolerance forgives the clock and nothing else', () {
+    // What [migrateAndValidateIgnoringClockSkew] is allowed to swallow, pinned
+    // line by line, because the cost of it widening is a schema change that
+    // stops being noticed.
+    expect(
+      _isRealDifference('     Not equal: `NULL DEFAULT 1787185626` (expected) '
+          'and `NULL DEFAULT 1787185625` (actual)'),
+      false,
+      reason: 'the same clock, read a second apart',
+    );
+    expect(
+      _isRealDifference('     Not equal: `NULL DEFAULT 0` (expected) '
+          'and `NULL DEFAULT 1` (actual)'),
+      true,
+      reason: 'a default that genuinely changed',
+    );
+    expect(
+      _isRealDifference('     Not equal: `NULL DEFAULT 1787185626` (expected) '
+          'and `NULL DEFAULT 1600000000` (actual)'),
+      true,
+      reason: 'both epoch-shaped, but years apart',
+    );
+    expect(
+      _isRealDifference(
+          '     Not equal: `NOT NULL DEFAULT 1787185626` (expected) '
+          'and `NULL DEFAULT 1787185625` (actual)'),
+      true,
+      reason: 'the clock moved and so did the nullability',
+    );
+    expect(
+      _isRealDifference('     Different types: Expected TEXT, got INT'),
+      true,
+    );
+    expect(
+      _isRealDifference('   The actual schema does not contain anything '
+          'with this name.'),
+      true,
+    );
+    expect(_isRealDifference('  date_time_modified:'), false);
+    expect(_isRealDifference(''), false);
   });
 
   test('a 1.2.0 database stamps its envelopes with the primary account',
@@ -150,7 +208,7 @@ void main() {
     final db = FinanceDatabase(connection);
     globals.database = db;
     addTearDown(db.close);
-    await verifier.migrateAndValidate(db, 48);
+    await migrateAndValidateIgnoringClockSkew(verifier, db, 48);
 
     await db.createOrUpdateCategory(TransactionCategory(
       categoryPk: 'cat-groceries',
@@ -216,7 +274,7 @@ void main() {
     final db = FinanceDatabase(connection);
     globals.database = db;
     addTearDown(db.close);
-    await verifier.migrateAndValidate(db, 48);
+    await migrateAndValidateIgnoringClockSkew(verifier, db, 48);
 
     Future<TransactionCategory> category(String pk,
         {String? mainCategoryPk}) async {
@@ -280,7 +338,7 @@ void main() {
     final db = FinanceDatabase(connection);
     globals.database = db;
     addTearDown(db.close);
-    await verifier.migrateAndValidate(db, 48);
+    await migrateAndValidateIgnoringClockSkew(verifier, db, 48);
 
     await db.createOrUpdateCategory(TransactionCategory(
       categoryPk: 'cat-groceries',
@@ -321,4 +379,81 @@ void main() {
     expect(budgets.single.sharedMembers, isNull);
     expect(await db.getAllCategoryEnvelopes(), isEmpty);
   });
+}
+
+/// [SchemaVerifier.migrateAndValidate], minus the one difference it reports
+/// that is not one.
+///
+/// Ten columns across nine of upstream's tables are declared
+/// `dateTime().withDefault(Constant(DateTime.now()))`, and drift bakes that
+/// into the DDL as a literal epoch second: the moment that table happened to be
+/// created. The verifier builds its reference schema and the migrated schema at
+/// two different moments, so a run that straddles a second boundary finds every
+/// one of those columns "different" by exactly one second. Measured at about
+/// one run in thirty, and on upstream's tables as readily as on the fork's own
+/// -- forcing a boundary between the two makes all ten report at once.
+///
+/// The defaults are not available to fix: they are upstream's columns, and
+/// those stay identical column for column (CLAUDE.md). So the comparison is
+/// what gives, and only for exactly this -- two current-era epoch seconds
+/// within a minute of each other in the same `DEFAULT`. Every other difference
+/// still fails the test, and so does a drift release that words its report
+/// differently: a line this does not recognise is a line it does not forgive.
+Future<void> migrateAndValidateIgnoringClockSkew(
+  SchemaVerifier verifier,
+  FinanceDatabase db,
+  int expectedVersion,
+) async {
+  try {
+    await verifier.migrateAndValidate(db, expectedVersion);
+  } on SchemaMismatch catch (mismatch) {
+    if (mismatch.explanation.split('\n').any(_isRealDifference)) rethrow;
+  }
+}
+
+final RegExp _notEqual =
+    RegExp(r'^Not equal: `(.*)` \(expected\) and `(.*)` \(actual\)$');
+
+/// An epoch second of the current era -- ten digits, so 2001 to 2065 -- as
+/// drift renders `DateTime.now()` into a column's `DEFAULT`. Narrow on purpose:
+/// an ordinary integer default such as `DEFAULT 0` must keep counting as
+/// itself.
+final RegExp _clockDefault = RegExp(r'DEFAULT ([12]\d{9})\b');
+
+/// Whether one line of a schema report says something actually went wrong.
+///
+/// The report is headings (`category_envelopes:`, ` columns:`,
+/// `  date_time_modified:`), blank lines, and findings. A finding is forgiven
+/// only when [_isClockSkew] recognises it; a line in no shape this knows counts
+/// as a real difference, which is what stops this from quietly widening.
+bool _isRealDifference(String line) {
+  final String trimmed = line.trim();
+  if (trimmed.isEmpty) return false;
+  if (trimmed.endsWith(':')) return false;
+  final RegExpMatch? notEqual = _notEqual.firstMatch(trimmed);
+  if (notEqual == null) return true;
+  return _isClockSkew(notEqual.group(1)!, notEqual.group(2)!) == false;
+}
+
+/// Whether [expected] and [actual] are the same column constraints, differing
+/// only in when the clock baked into a `DEFAULT` was read.
+bool _isClockSkew(String expected, String actual) {
+  final List<int> expectedClocks = [];
+  final List<int> actualClocks = [];
+  String withoutClocks(String constraints, List<int> found) =>
+      constraints.replaceAllMapped(_clockDefault, (Match match) {
+        found.add(int.parse(match.group(1)!));
+        return 'DEFAULT <clock>';
+      });
+  if (withoutClocks(expected, expectedClocks) !=
+      withoutClocks(actual, actualClocks)) {
+    return false;
+  }
+  // Nothing clock-shaped in a difference the verifier did report means the
+  // difference is somewhere this cannot see. Not ours to forgive.
+  if (expectedClocks.isEmpty) return false;
+  for (int i = 0; i < expectedClocks.length; i++) {
+    if ((expectedClocks[i] - actualClocks[i]).abs() > 60) return false;
+  }
+  return true;
 }
