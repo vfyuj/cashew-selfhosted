@@ -7,7 +7,7 @@ A permanently-diverging fork of [jameskokoska/Cashew](https://github.com/jamesko
 1. Read `specs/00-overview.md` — principles, tech stack, settled decisions, explicit non-goals.
 2. **How something works today: `docs/README.md`** (per-module, read from code). **Why it was decided that way: `specs/README.md`.** Open the one page you need; don't read either set.
 3. Open the stage doc when your change touches that stage — not up front. Its acceptance criteria decide when the work is done, and its `- [x]` checkboxes are the status of record; check items off instead of re-describing status in prose.
-4. **Prefer small, surgical diffs, especially near sync.** A previous Stage 2 attempt landed ~4,300 lines, broke unrelated UI and reintroduced a data-loss race; it was reverted. Postmortem: `specs/04-stage-2-instant-sync.md`. Large diffs here are a warning sign, not thoroughness.
+4. **Near sync, prefer small surgical diffs.** A previous Stage 2 attempt landed ~4,300 lines, broke unrelated UI and reintroduced a data-loss race; it was reverted. Postmortem: `specs/04-stage-2-instant-sync.md`. Large diffs *there* are a warning sign, not thoroughness. This is about the blast radius of sync changes specifically — it is not a general discouragement from refactoring, and it is not a reason to write a second copy of something rather than reuse what exists.
 
 ## Invariants
 
@@ -83,7 +83,7 @@ The owner has time to test and wants to do it themselves — **do not spend agen
 - `server/` — the Dart backend (auth, sync, backup, attachments, admin).
 - `docs/` — **how it works now**, per module, read from code. Start at `docs/README.md`.
 - `specs/` — **why it was decided**, plus what's planned and the acceptance criteria. Start at `specs/README.md`. Update a spec when a decision changes; don't let code and specs drift.
-- `upstream/` — pristine shallow clone of upstream Cashew, **read-only** reference for diffing and porting. Not checked in.
+- `upstream/` — pristine shallow clone of upstream Cashew, **read-only** reference for checking the table schema and for the occasional deliberate port. Not checked in. **Not a baseline the fork's files are expected to match** — reuse beats a near-duplicate, upstream files included; see `specs/00-overview.md`, "On not treating `upstream/` as an authority".
 - `app/assets/translations/` — the fork's own 8 languages, no longer generated from upstream's spreadsheet.
 - `.github/workflows/` — `ci.yml` (analyze + tests for both packages, plus a Dockerfile build), `build-apk.yml` (debug APK per push/PR; debug because PR builds deliberately have no signing secrets), `release.yml` (on a `v*` tag: signed APK + multi-arch GHCR image + GitHub Release). See `specs/09-releases.md`.
 
