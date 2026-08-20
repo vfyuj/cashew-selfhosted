@@ -1255,5 +1255,6 @@
   "changelog-1-4-0-rates-title": "Todos ven los mismos tipos de cambio",
   "changelog-1-4-0-rates-body": "Tu servidor mantiene ahora un único conjunto de tipos en lugar de que cada dispositivo cargue el suyo, así que los importes en otras monedas por fin coinciden entre cuentas. Un administrador puede ajustar uno en Ajustes, Tipos de cambio.",
   "changelog-1-4-0-sync-title": "El botón de sincronización manual ya no está",
-  "changelog-1-4-0-sync-body": "Copiaba toda la base de datos cada vez y había dejado de llevar algunos de tus ajustes sin avisar. La sincronización es automática desde hace tiempo, así que se ha eliminado. En Cuenta, Sincronización quedan el interruptor y Restablecer sincronización."
+  "changelog-1-4-0-sync-body": "Copiaba toda la base de datos cada vez y había dejado de llevar algunos de tus ajustes sin avisar. La sincronización es automática desde hace tiempo, así que se ha eliminado. En Cuenta, Sincronización quedan el interruptor y Restablecer sincronización.",
+  "changelog-1-4-1-default-categories-body": "Añadir un dispositivo a un hogar compartido ya no siembra once categorías vacías en los datos de todos. Si ya aparecieron algunas, bórralas una vez: no volverán."
 }

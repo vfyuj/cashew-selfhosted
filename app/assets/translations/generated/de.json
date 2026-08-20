@@ -1255,5 +1255,6 @@
   "changelog-1-4-0-rates-title": "Alle sehen dieselben Wechselkurse",
   "changelog-1-4-0-rates-body": "Dein Server hält jetzt einen einzigen Satz Kurse, statt dass jedes Gerät seinen eigenen lädt — Beträge in anderen Währungen stimmen endlich zwischen Konten überein. Ein Administrator kann einen Kurs unter Einstellungen, Wechselkurse anpassen.",
   "changelog-1-4-0-sync-title": "Die Schaltfläche für manuelle Synchronisierung ist weg",
-  "changelog-1-4-0-sync-body": "Sie kopierte jedes Mal die ganze Datenbank und hatte stillschweigend aufgehört, einige Einstellungen mitzunehmen. Synchronisiert wird längst automatisch, also ist sie entfernt. Unter Konto, Synchronisierung bleiben der Schalter und Sync zurücksetzen."
+  "changelog-1-4-0-sync-body": "Sie kopierte jedes Mal die ganze Datenbank und hatte stillschweigend aufgehört, einige Einstellungen mitzunehmen. Synchronisiert wird längst automatisch, also ist sie entfernt. Unter Konto, Synchronisierung bleiben der Schalter und Sync zurücksetzen.",
+  "changelog-1-4-1-default-categories-body": "Ein Gerät zu einem gemeinsamen Haushalt hinzuzufügen legt nicht länger elf leere Standardkategorien in den gemeinsamen Daten ab. Falls schon welche aufgetaucht sind, lösche sie einmal — sie kommen nicht wieder."
 }

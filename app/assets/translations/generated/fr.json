@@ -1255,5 +1255,6 @@
   "changelog-1-4-0-rates-title": "Tout le monde voit les mêmes taux de change",
   "changelog-1-4-0-rates-body": "Votre serveur conserve désormais un seul jeu de taux au lieu que chaque appareil charge le sien, donc les montants dans d'autres devises concordent enfin entre les comptes. Un administrateur peut en ajuster un dans Réglages, Taux de change.",
   "changelog-1-4-0-sync-title": "Le bouton de synchronisation manuelle a disparu",
-  "changelog-1-4-0-sync-body": "Il copiait toute votre base de données à chaque fois, et avait cessé sans le dire de transporter certains de vos réglages. La synchronisation est automatique depuis longtemps, il a donc été retiré. Compte, Synchronisation garde l'interrupteur et Réinitialiser la synchronisation."
+  "changelog-1-4-0-sync-body": "Il copiait toute votre base de données à chaque fois, et avait cessé sans le dire de transporter certains de vos réglages. La synchronisation est automatique depuis longtemps, il a donc été retiré. Compte, Synchronisation garde l'interrupteur et Réinitialiser la synchronisation.",
+  "changelog-1-4-1-default-categories-body": "Ajouter un appareil à un foyer partagé n'implante plus onze catégories vides dans les données de tout le monde. Si certaines sont déjà apparues, supprimez-les une fois : elles ne reviendront pas."
 }
