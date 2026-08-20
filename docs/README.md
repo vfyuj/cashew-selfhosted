@@ -19,7 +19,7 @@ belongs to another page, this one links it.
 | [server/api.md](server/api.md) | You need the HTTP surface — every route, its auth level, its scope. Guarded by a test, so it cannot silently rot. |
 | [server/sync.md](server/sync.md) | You are touching push/pull, sequence numbers, the wake-up socket, or Reset Sync. |
 | [server/auth.md](server/auth.md) | Sessions, passwords, rate limiting, first-run setup, roles, provisioning. |
-| [server/storage.md](server/storage.md) | Files on disk: the three namespaces, and why backups are scoped differently from everything else. |
+| [server/storage.md](server/storage.md) | Files on disk: the two namespaces, and why backups are scoped differently from attachments. |
 | [server/database.md](server/database.md) | The server's own SQLite — tables and migrations. Not the app's database. |
 | [server/rates.md](server/rates.md) | Currency rates: why the server holds them, and why they are instance-wide rather than per household. |
 

@@ -57,7 +57,7 @@ Router buildApiRouter(AuthService authService, Database db, String dataDir,
     '/sync',
     const Pipeline()
         .addMiddleware(authMiddleware)
-        .addHandler(buildSyncRouter(dataDir, db).call),
+        .addHandler(buildSyncRouter(db).call),
   );
   router.mount(
     '/backup',

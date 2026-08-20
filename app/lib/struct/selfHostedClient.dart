@@ -598,12 +598,13 @@ abstract class BackupTransport {
   Future<void> deleteFile(String filename);
 }
 
-/// Talks to one of this fork's two file namespaces -- `/sync/files` (device
-/// snapshot-diff transport) or `/backup` (full backups) -- both scoped
-/// server-side to the authenticated user. See specs/03-stage-1-kill-google.md.
-/// Implements [BackupTransport] via its `/sync/files` methods -- that's the
-/// only transport the device-to-device sync path is ever allowed to use.
-class SelfHostedClient implements BackupTransport {
+/// Everything this app asks of its own server: sessions, the change feed,
+/// backups, attachments, rates and administration.
+///
+/// It used to also implement [BackupTransport] over a `/sync/files` namespace,
+/// back when devices synced by trading whole SQLite files. That namespace and
+/// those methods are gone; backups go through [SelfHostedBackupTransport].
+class SelfHostedClient {
   final SelfHostedSession session;
   SelfHostedClient(this.session);
 
@@ -623,42 +624,6 @@ class SelfHostedClient implements BackupTransport {
   void _throwIfUnauthenticated(http.Response response) {
     if (response.statusCode == 401) throw SelfHostedUnauthenticatedException();
   }
-
-  Future<List<SyncFile>> listFiles() => _withRefreshRetry(() async {
-        final response = await _httpClient
-            .get(Uri.parse('${session.serverUrl}/sync/files'),
-                headers: _authHeader)
-            .timeout(const Duration(seconds: 20));
-        _throwIfUnauthenticated(response);
-        final list = jsonDecode(response.body) as List<dynamic>;
-        return list.map((e) => SyncFile.fromJson(e)).toList();
-      });
-
-  Future<List<int>> getFile(String filename) => _withRefreshRetry(() async {
-        final response = await _httpClient
-            .get(Uri.parse('${session.serverUrl}/sync/files/$filename'),
-                headers: _authHeader)
-            .timeout(const Duration(seconds: 60));
-        _throwIfUnauthenticated(response);
-        return response.bodyBytes;
-      });
-
-  Future<void> putFile(String filename, List<int> bytes) =>
-      _withRefreshRetry(() async {
-        final response = await _httpClient
-            .put(Uri.parse('${session.serverUrl}/sync/files/$filename'),
-                headers: _authHeader, body: bytes)
-            .timeout(const Duration(seconds: 60));
-        _throwIfUnauthenticated(response);
-      });
-
-  Future<void> deleteFile(String filename) => _withRefreshRetry(() async {
-        final response = await _httpClient
-            .delete(Uri.parse('${session.serverUrl}/sync/files/$filename'),
-                headers: _authHeader)
-            .timeout(const Duration(seconds: 20));
-        _throwIfUnauthenticated(response);
-      });
 
   Future<List<SyncFile>> listBackupFiles() => _withRefreshRetry(() async {
         final response = await _httpClient
@@ -1034,15 +999,7 @@ Future<bool> selfHostedAccountHasExistingData() async {
     print("Could not check whether this account has existing data: $e");
     return false;
   }
-  try {
-    // Stage 1's whole-database snapshots. An account last used by a build that
-    // predates the row-level feed has these and nothing else.
-    final files = await client.listFiles().timeout(budget);
-    return files.isNotEmpty;
-  } catch (e) {
-    print("Could not list existing sync files: $e");
-    return false;
-  }
+  return false;
 }
 
 /// The deployment's currency table, or null if it could not be read.

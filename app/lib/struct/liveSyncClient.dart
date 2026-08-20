@@ -6,7 +6,7 @@ import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/perUserViewSettings.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/syncClient.dart' show SyncLog;
+import 'package:cashew_selfhosted/struct/syncLog.dart';
 import 'package:cashew_selfhosted/widgets/globalSnackbar.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart'
     show errorSigningInDuringCloud;
@@ -16,15 +16,14 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Stage 2 live sync -- see specs/04-stage-2-instant-sync.md.
 ///
-/// Row-level push/pull against the server's change feed, replacing Stage 1's
-/// whole-database exchange as the *automatic* sync mechanism (timer, app
-/// resume, websocket wake-up, on local change). The legacy sync-*.sqlite
-/// mechanism in syncClient.dart is untouched and still reachable from the
-/// "manage synced devices" screen for manual use -- this file only changes
-/// what runs automatically in the background.
+/// Row-level push/pull against the server's change feed. The only sync
+/// mechanism there is: it replaced Stage 1's whole-database exchange, which was
+/// kept alongside it for a while and then deleted -- two hand-written lists of
+/// every syncable table had already drifted apart (`AppSettings` reached one
+/// and not the other). See specs/04-stage-2-instant-sync.md.
 ///
-/// Deliberately does not use a persisted local outbox table. The Stage 1
-/// query methods `getAllNewX(lastSynced)` already select "rows changed since
+/// Deliberately does not use a persisted local outbox table. The
+/// `getAllNewX(lastSynced)` query methods already select "rows changed since
 /// a given timestamp" straight from the source-of-truth Drift tables, so
 /// those tables themselves serve as the outbox: nothing can be lost between
 /// a local write and the next successful push, because there is nowhere
@@ -305,6 +304,12 @@ int _liveSyncGeneration = 0;
 /// dismiss" (specs/01-local-first-invariant.md): failures are logged and
 /// retried on the next trigger, never thrown at the caller.
 Future<void> runLiveSyncCycle() async {
+  // Paused means paused. Without this, [pauseLiveSync] only stopped the timers
+  // and the socket, so a debounce already in flight -- or any direct caller --
+  // still ran a full cycle afterwards. That mattered once importDB started
+  // relying on a pause to hold sync off while it replaces the database file
+  // underneath it.
+  if (_liveSyncPaused) return;
   if (appStateSettings["hasSignedIn"] != true) return;
   if (appStateSettings["backupSync"] == false) return;
   if (errorSigningInDuringCloud == true) return;
@@ -657,6 +662,27 @@ void pauseLiveSync() {
   _liveSyncReconnectTimer?.cancel();
   _liveSyncReconnectTimer = null;
   _closeLiveSyncSocket();
+}
+
+/// Pauses, then waits for a cycle that was already running to finish.
+///
+/// For callers that are about to replace the database file itself: pausing
+/// stops anything new from starting, but a cycle already mid-flight is still
+/// holding the old database and would write into it. Bounded, because a hung
+/// cycle must not turn into a hung restore -- and the wait is a courtesy
+/// anyway, since [processSyncLogs] is idempotent under last-write-wins and the
+/// restore overwrites everything regardless.
+Future<void> pauseLiveSyncAndWait(
+    {Duration timeout = const Duration(seconds: 10)}) async {
+  pauseLiveSync();
+  final DateTime deadline = DateTime.now().add(timeout);
+  while (_liveSyncCycleRunning && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+  if (_liveSyncCycleRunning) {
+    print("A sync cycle was still running after ${timeout.inSeconds}s; "
+        "continuing anyway");
+  }
 }
 
 /// Resumes after [pauseLiveSync] and catches up immediately. Idempotent, and

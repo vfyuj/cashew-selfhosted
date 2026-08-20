@@ -1,7 +1,6 @@
 // web.dart
 import 'dart:typed_data';
 import 'package:cashew_selfhosted/database/binary_string_conversion.dart';
-import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:drift/web.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:universal_html/html.dart' as html;
@@ -51,8 +50,6 @@ Future overwriteDefaultDB(Uint8List dataStore) async {
     localStorage["moor_db_str_db"] =
         bin2str.encode(Uint8List.fromList(dataStore));
   }
-  // we need to be able to sync with others after the restore
-  await sharedPreferences.setString("dateOfLastSyncedWithClient", "{}");
 }
 
 // Similar to DriftWebStorage.volatile, except we can load an initial db

@@ -8,14 +8,14 @@ Check items off as they're completed. Notes are kept short — see git history /
 
 ### Server (`/server`)
 - [x] Auth: `bin/create_user.dart` CLI, `users`/`sessions` tables (sqlite3), bcrypt hashing, opaque sha256-hashed-at-rest session tokens, sliding-expiry `/auth/refresh`. `POST /auth/login`, `/auth/refresh`, `/auth/logout`.
-- [x] Sync: `GET /sync/files`, `PUT/GET/DELETE /sync/files/:filename`, scoped server-side to the authenticated user.
+- [x] Sync: `GET /sync/files`, `PUT/GET/DELETE /sync/files/:filename`, scoped server-side to the authenticated user. **Removed in 1.3.x** — Stage 2's change feed replaced this transport and keeping both proved to be the expensive option; see `04-stage-2-instant-sync.md`. Everything below about these routes is a record of what Stage 1 shipped, not of what runs now.
 - [x] Backup: `GET /backup/list`, `PUT/GET/DELETE /backup/:filename`, separate namespace from sync.
 - [x] End-to-end tested via curl (login → sync upload/list/download → backup upload/list/download → refresh → logout, path-traversal rejection) against both the local binary and the built Docker image.
 - Note: password hashing uses **bcrypt**, not argon2id (spec allows either) — avoids native/FFI deps in the Docker image.
 
 ### App (`/app`)
 - [x] `lib/struct/selfHostedClient.dart`: session model (persisted via `sharedPreferences`, no network call at startup — local-first invariant preserved), `SelfHostedClient`, login/refresh/logout.
-- [x] `lib/struct/syncClient.dart`: Drive `appDataFolder` calls replaced by `SelfHostedClient` calls; `SyncLog`/`processSyncLogs`/`DeleteLog` merge logic **untouched**.
+- [x] `lib/struct/syncClient.dart`: Drive `appDataFolder` calls replaced by `SelfHostedClient` calls; `SyncLog`/`processSyncLogs`/`DeleteLog` merge logic **untouched**. The file was deleted in 1.3.x with the transport; the merge logic it was careful not to touch is still untouched, now in `struct/syncLog.dart` plus `processSyncLogs`.
 - [x] `lib/widgets/accountAndBackup.dart` + `lib/pages/accountsPage.dart`: sign-in UI (email/password/server-URL), own-server backup create/list/restore/delete.
 - [x] WebDAV/Nextcloud backup target (client-side, optional, alternative to own-server backup — sync is unaffected and always uses the self-hosted server). `BackupTransport` interface (`lib/struct/selfHostedClient.dart`) abstracts "own server" vs "WebDAV" so the backup UI/functions in `accountAndBackup.dart` don't branch on which is active. `lib/struct/webdavClient.dart`: hand-rolled PROPFIND/GET/PUT/DELETE/MKCOL client (no new dependency). `accountsPage.dart`: `BackupDestinationSettings` widget — dropdown + WebDAV URL/username/password/folder fields, shown once signed in. `flutter analyze` clean, `flutter build web --release` and `flutter build apk --debug` both succeed. **Not yet tested against a real WebDAV/Nextcloud server** — no server reachable in this session. Known caveat: PROPFIND/MKCOL are non-simple CORS requests; Nextcloud needs CORS configured for the *web* build to reach it directly (Android is unaffected, no CORS there).
   - [ ] Verify against a real Nextcloud (or other WebDAV) instance once the operator's server is reachable.

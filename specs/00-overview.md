@@ -53,15 +53,15 @@ near sync stay small and careful for the reason `04-stage-2-instant-sync.md` giv
 ## Glossary
 
 - **appDataFolder-equivalent**: the new server's per-user file storage, replacing Google Drive's hidden app-scoped Drive folder.
-- **Snapshot-diff sync**: today's mechanism (upload/download full SQLite files, diff by timestamp). This is the Stage 1 transport (just repointed at the new server) and stays the always-available fallback in Stage 2 — for a device's first-ever sync, or one that's been offline long enough that the incremental log no longer covers the gap.
-- **Incremental sync**: Stage 2's addition — individual row changes uploaded/downloaded directly as small JSON deltas (via a durable per-user change log on the server) instead of moving a whole SQLite file, so a trigger only transfers what actually changed. Still triggered by the same user actions as today (pull-to-refresh, app foreground, manual sync) — **not** a persistent connection or real-time push; an earlier attempt at real-time/event-push sync was tried and reverted (see `04-stage-2-instant-sync.md`).
+- **Snapshot-diff sync**: Stage 1's mechanism — upload/download full SQLite files, diff by timestamp. **Removed in 1.3.x.** It was kept alongside Stage 2 as a fallback for a while, and that turned out to cost more than it was worth: both mechanisms hand-listed every syncable table and the lists drifted. It is not the fallback for a first-ever sync either — the change feed handles that itself by rewinding the push cursor. See `04-stage-2-instant-sync.md`, "The old mechanism was kept, then deleted".
+- **Incremental sync**: the only sync mechanism — individual row changes as small JSON deltas against a durable per-dataset change log on the server, so a trigger transfers only what actually changed. Triggered on app start, on local change (800 ms debounce), on a timer, and by a **WebSocket wake-up**. That socket carries no data: its only message is "something changed", and the client's sole reaction is an ordinary pull, which is what makes a dropped or duplicated message harmless. (An earlier real-time/event-push attempt *was* reverted, and the caution was right, but what shipped does hold a persistent connection — this glossary said otherwise for months.)
 - **SyncLog / DeleteLog**: upstream's existing merge-log types. Reused, not replaced.
 
 ## Roadmap index
 
 1. `02-stage-0-foundations.md` — dev environment, fork identity, empty server skeleton deployed.
 2. `03-stage-1-kill-google.md` — self-hosted auth + repointed snapshot sync/backup. First real release.
-3. `04-stage-2-instant-sync.md` — incremental sync on top of Stage 1's snapshot-diff, triggered by the same user actions as today (not real-time push — see that file for why).
+3. `04-stage-2-instant-sync.md` — the row-level change feed that replaced Stage 1's snapshot-diff, plus the WebSocket wake-up on top of it, and the record of removing the snapshot mechanism once keeping both proved to be the expensive option.
 4. `05-accounts-and-admin.md` — first-run setup wizard, account management, instance administration. Revises Stage 1's auth section.
 5. `06-shared-household-data.md` — Stage 4. **Implemented.** Shared dataset and per-user views. Personal budgets and the subcategory allocation check shipped in it and were withdrawn in 1.2.0; both sections are kept there as cancelled decisions.
 6. Stage 3 (public-fork readiness) is intentionally **not yet written** — it depends on decisions we'll make while executing the earlier stages, and writing it now risks locking in guesses.

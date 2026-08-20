@@ -1,12 +1,18 @@
 # Sync client
 
-Files: `app/lib/struct/liveSyncClient.dart` (the automatic path), `struct/selfHostedClient.dart`
-(HTTP/session layer), `struct/syncClient.dart` (Stage 1 snapshot exchange, still reachable manually
-from "manage synced devices"). Server half: [../server/sync.md](../server/sync.md).
+Files: `app/lib/struct/liveSyncClient.dart` (the cycle), `struct/selfHostedClient.dart`
+(HTTP/session layer), `struct/syncLog.dart` (the merge's input type). Server half:
+[../server/sync.md](../server/sync.md).
+
+**There is one sync mechanism.** Stage 1's whole-database exchange (`syncClient.dart`, a
+`sync-<clientID>.sqlite` per device plus a "manage synced devices" screen) lived alongside this one
+for a while and was removed in August 2026: both hand-listed every syncable table, and the two lists
+had already drifted — `AppSettings` reached the feed and not the snapshot, so per-user view
+preferences did not travel over a manual sync. `specs/04-stage-2-instant-sync.md` has the record.
 
 ## No outbox table
 
-Upstream's `getAllNewX(lastSynced)` queries already select "rows changed since a timestamp" straight
+The `getAllNewX(lastSynced)` queries already select "rows changed since a timestamp" straight
 from the source-of-truth Drift tables, so **those tables are the outbox**. Nothing can be lost
 between a local write and the next push, because there is nowhere else the write could be. This also
 avoided SQLite triggers (and their web/WASM portability question) and a schema migration.
@@ -70,7 +76,8 @@ fetch (rate-limited to 30 minutes) so a name or role changed on another device e
 ## Reset Sync
 
 `resetLiveSync()` clears the server feed, drops this device's cursors, and re-uploads this device's
-data as the new baseline. A generation counter guards it: a cycle that started before the reset holds
+data as the new baseline. Reached from the sync sheet on the accounts page (`SyncSettings` in
+`widgets/accountAndBackup.dart`), which is what remains of the old devices screen. A generation counter guards it: a cycle that started before the reset holds
 cursors describing the old feed, and writing them back afterwards would silently undo it.
 
 ---

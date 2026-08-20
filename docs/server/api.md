@@ -23,10 +23,6 @@ deliberate, not drift; see [storage.md](storage.md).
 | `GET /auth/me` | session | user | The caller's own account JSON. |
 | `PATCH /auth/me` | session | user | `{name?, email?}`. `400` if neither, `409` if the email is taken. |
 | `POST /auth/me/password` | session | user | `{currentPassword, newPassword}` → a fresh session. Signs out every other device. `422` (not `401`) if the current password is wrong. |
-| `GET /sync/files` | session | dataset | Snapshot listing: `[{deviceId, filename, modifiedTime, size}]`. |
-| `PUT /sync/files/<filename>` | session | dataset | Uploads a device's SQLite snapshot (binary body). |
-| `GET /sync/files/<filename>` | session | dataset | Downloads it. `404` if absent. |
-| `DELETE /sync/files/<filename>` | session | dataset | Removes it. |
 | `POST /sync/push` | session | dataset | Row-level changes up. See below. |
 | `GET /sync/pull` | session | dataset | Row-level changes down. See below. |
 | `POST /sync/reset` | session | dataset | Drops the dataset's change feed. See below. |
@@ -97,7 +93,8 @@ matters.
 `seq`, each change shaped like a push change plus its `seq`.
 
 **`409 {"error":"rebootstrap","minRetainedSeq":<n>}`** when `since` is below what the server still
-retains. The client must fall back to a snapshot sync and resume from `minRetainedSeq`.
+retains. The client resumes from `minRetainedSeq` and rewinds its push cursor to zero, so its whole
+local database goes back up — see [../app/sync-client.md](../app/sync-client.md).
 
 ## `POST /sync/reset`
 
@@ -121,12 +118,14 @@ double-apply anything. Ping interval 30s.
 ## Deleting an account
 
 `DELETE /admin/users/<id>` cascades sessions and dataset membership through foreign keys, then
-deletes that user's `backup/` directory unconditionally. Sync snapshots and attachments belong to the
-dataset and are deleted **only when the removed account was its last member** — removing one member
-of a household must not delete the household's data.
+deletes that user's `backup/` directory unconditionally. The dataset's `sync/` and `attachments/`
+directories are deleted **only when the removed account was its last member** — removing one member
+of a household must not delete the household's data. (`sync/` now only ever holds leftovers from
+before the snapshot transport was removed; the cleanup stays so those go too.)
 
 ---
 
-Why any of this is shaped this way: `specs/03-stage-1-kill-google.md` (auth, snapshot sync, backup,
-attachments), `specs/04-stage-2-instant-sync.md` (the change feed), `specs/05-accounts-and-admin.md`
+Why any of this is shaped this way: `specs/03-stage-1-kill-google.md` (auth, backup, attachments),
+`specs/04-stage-2-instant-sync.md` (the change feed, and why the snapshot transport it replaced was
+later removed), `specs/05-accounts-and-admin.md`
 (setup and administration), `specs/06-shared-household-data.md` (datasets).

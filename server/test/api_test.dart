@@ -155,18 +155,18 @@ void main() {
       expectUtc(changed['expiresAt'], 'POST /auth/me/password expiresAt');
     });
 
-    test('on the sync file listing', () async {
+    test('on the backup listing', () async {
       final token = await api.setupAdmin();
       await api.handler(Request(
         'PUT',
-        Uri.parse('http://localhost/sync/files/sync-a.sqlite'),
+        Uri.parse('http://localhost/backup/db-v48-phone.sqlite'),
         body: [1, 2, 3],
         headers: {'authorization': 'Bearer $token'},
       ));
 
       final files = jsonDecode(
-          await (await api.send('GET', '/sync/files', token: token)).readAsString()) as List;
-      expectUtc(files.single['modifiedTime'], 'GET /sync/files modifiedTime');
+          await (await api.send('GET', '/backup/list', token: token)).readAsString()) as List;
+      expectUtc(files.single['modifiedTime'], 'GET /backup/list modifiedTime');
     });
   });
 
@@ -322,23 +322,34 @@ void main() {
           200);
     });
 
-    test('deleting a user removes their stored sync and backup files', () async {
+    test('deleting a user removes their stored files', () async {
       final adminToken = await api.setupAdmin();
       final member = await api.addMember(adminToken);
 
       await api.handler(Request(
         'PUT',
-        Uri.parse('http://localhost/sync/files/sync-device.sqlite'),
+        Uri.parse('http://localhost/attachments/receipt.jpg'),
         body: [1, 2, 3],
         headers: {'authorization': 'Bearer ${member.token}'},
       ));
-      final syncDir = Directory('${api.dataDir.path}/sync/${member.id}');
-      expect(syncDir.existsSync(), isTrue, reason: 'precondition: the upload landed');
+      await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/backup/db-v48-device.sqlite'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer ${member.token}'},
+      ));
+      final attachmentDir = Directory('${api.dataDir.path}/attachments/${member.datasetId}');
+      final backupDir = Directory('${api.dataDir.path}/backup/${member.id}');
+      expect(attachmentDir.existsSync(), isTrue, reason: 'precondition: the upload landed');
+      expect(backupDir.existsSync(), isTrue, reason: 'precondition: the upload landed');
 
       expect((await api.send('DELETE', '/admin/users/${member.id}', token: adminToken)).statusCode,
           200);
 
-      expect(syncDir.existsSync(), isFalse);
+      // This member was their dataset's only member, so the dataset's files go
+      // with them. The shared-household case is covered further down.
+      expect(attachmentDir.existsSync(), isFalse);
+      expect(backupDir.existsSync(), isFalse);
       expect(api.authService.listUsers().map((u) => u.email), ['owner@example.com']);
     });
 
@@ -389,26 +400,24 @@ void main() {
     });
   });
 
-  group('existing sync and backup behaviour is unchanged', () {
-    test('sync files stay scoped to the authenticated user', () async {
+  group('existing backup behaviour is unchanged', () {
+    test('backups stay scoped to the authenticated user', () async {
       final adminToken = await api.setupAdmin();
       final member = await api.addMember(adminToken);
 
       await api.handler(Request(
         'PUT',
-        Uri.parse('http://localhost/sync/files/sync-a.sqlite'),
+        Uri.parse('http://localhost/backup/db-v48-a.sqlite'),
         body: [9, 9, 9],
         headers: {'authorization': 'Bearer $adminToken'},
       ));
 
-      // GET /sync/files returns a bare JSON array, matching what the Drive
-      // files.list call it replaced returned.
       final ownerList = jsonDecode(
-          await (await api.send('GET', '/sync/files', token: adminToken)).readAsString()) as List;
+          await (await api.send('GET', '/backup/list', token: adminToken)).readAsString()) as List;
       final memberList = jsonDecode(
-          await (await api.send('GET', '/sync/files', token: member.token)).readAsString()) as List;
+          await (await api.send('GET', '/backup/list', token: member.token)).readAsString()) as List;
       expect(ownerList.length, 1);
-      expect(ownerList.single['filename'], 'sync-a.sqlite');
+      expect(ownerList.single['filename'], 'db-v48-a.sqlite');
       expect(memberList, isEmpty, reason: 'two accounts on one server remain isolated');
     });
   });
@@ -455,18 +464,17 @@ void main() {
           reason: 'one monotonic feed, not two interleaved ones');
     });
 
-    test('sync snapshots and attachments are shared, backups are not', () async {
+    test('attachments are shared, backups are not', () async {
       final adminToken = await api.setupAdmin();
       final shared = await api.addMember(adminToken, shareHousehold: true);
 
-      await putFile('/sync/files/sync-phone-1.sqlite', adminToken, [1]);
       await putFile('/attachments/receipt.jpg', adminToken, [2]);
       await putFile('/backup/db-v46-phone.sqlite', adminToken, [3]);
 
-      final syncList = jsonDecode(await (await api.send('GET', '/sync/files',
-              token: shared.token))
+      final attachmentList = jsonDecode(await (await api.send('GET',
+              '/attachments/list', token: shared.token))
           .readAsString()) as List;
-      expect(syncList.single['filename'], 'sync-phone-1.sqlite');
+      expect(attachmentList.single['filename'], 'receipt.jpg');
 
       // Load-bearing: attachmentUrl() bakes this path into the transaction
       // note, and the note syncs. Scoped by user it would 404 for the other.
@@ -490,7 +498,7 @@ void main() {
       final adminToken = await api.setupAdmin();
       final shared = await api.addMember(adminToken, shareHousehold: true);
       await api.push(adminToken);
-      await putFile('/sync/files/sync-phone-1.sqlite', adminToken, [1]);
+      await putFile('/attachments/receipt.jpg', adminToken, [1]);
 
       expect((await api.send('DELETE', '/admin/users/${shared.id}', token: adminToken))
           .statusCode, 200);
@@ -498,14 +506,21 @@ void main() {
       expect((await api.pullAll(adminToken)).single['pk'], 'w1',
           reason: 'removing one account must not delete the household feed');
       expect(
-          Directory('${api.dataDir.path}/sync/${shared.datasetId}').existsSync(), isTrue);
+          Directory('${api.dataDir.path}/attachments/${shared.datasetId}').existsSync(),
+          isTrue);
     });
 
     test('deleting the last member reaps the dataset and its files', () async {
       final adminToken = await api.setupAdmin();
       final isolated = await api.addMember(adminToken);
       await api.push(isolated.token);
-      await putFile('/sync/files/sync-x.sqlite', isolated.token, [1]);
+      // Written straight to disk: nothing serves the sync namespace any more,
+      // but account deletion still reaps it so leftovers from before the
+      // snapshot transport was removed go too.
+      Directory('${api.dataDir.path}/sync/${isolated.datasetId}')
+          .createSync(recursive: true);
+      File('${api.dataDir.path}/sync/${isolated.datasetId}/old-snapshot.sqlite')
+          .writeAsBytesSync([1]);
       await putFile('/attachments/r.jpg', isolated.token, [2]);
       await putFile('/backup/b.sqlite', isolated.token, [3]);
 

@@ -314,23 +314,6 @@ class DebugPage extends StatelessWidget {
               : Icons.input_rounded,
         ),
         SettingsContainerSwitch(
-          enableBorderRadius: true,
-          onSwitched: (value) {
-            updateSettings("syncEveryChange", value,
-                pagesNeedingRefresh: [], updateGlobalState: false);
-          },
-          initialValue: appStateSettings["syncEveryChange"] == true,
-          title: "sync-every-change".tr(),
-          descriptionWithValue: (value) {
-            return value
-                ? "sync-every-change-description1".tr()
-                : "sync-every-change-description2".tr();
-          },
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.sync_outlined
-              : Icons.sync_rounded,
-        ),
-        SettingsContainerSwitch(
           title: "Emulate iOS",
           description: "Enables scroll behaviour and icons from iOS",
           onSwitched: (value) {
@@ -513,10 +496,12 @@ class DebugPage extends StatelessWidget {
               ),
               SizedBox(height: 20),
               Button(
-                  label: "Force full sync",
+                  label: "Run sync now",
                   onTap: () async {
-                    sharedPreferences.setString(
-                        "dateOfLastSyncedWithClient", "{}");
+                    // There is no "full" sync to force any more: the row-level
+                    // feed always sends whatever the cursor says is outstanding,
+                    // and Reset Sync (accountAndBackup.dart) is what re-uploads
+                    // everything from scratch.
                     runAllCloudFunctions(context);
                   }),
               SizedBox(height: 20),

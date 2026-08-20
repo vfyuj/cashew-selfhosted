@@ -76,3 +76,20 @@ docker compose exec app /app/bin/create_user your@email.tld
 ```
 
 It creates the account if the email is new, or issues a fresh temporary password if it already exists, and prints it either way. `--admin` grants administrator; the very first account created always gets it automatically.
+
+## 3. After upgrading past 1.3.x: the old `sync/` folder
+
+Devices used to sync by trading whole SQLite files, one per device, kept under `sync/<datasetId>/` in
+the data directory. That mechanism was removed — sync is a row-level change feed now
+(`specs/04-stage-2-instant-sync.md`), and nothing reads or writes those files any more.
+
+They are not deleted for you, because deleting data on upgrade is not a thing this project does
+quietly. Once every device has updated and you have confirmed sync works, the folder can go:
+
+```bash
+docker compose exec app sh -c 'du -sh /data/sync && rm -rf /data/sync'
+```
+
+Leaving it costs only disk. Deleting your local database is a different matter, so note what this
+does *not* touch: `backup/`, `attachments/` and `db.sqlite` are all untouched, and your devices' own
+data was never in here in the first place.

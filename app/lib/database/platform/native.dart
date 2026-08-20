@@ -1,6 +1,5 @@
 // native.dart
 import 'package:cashew_selfhosted/database/tables.dart';
-import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -40,6 +39,4 @@ Future overwriteDefaultDB(Uint8List dataStore) async {
   final dbFolder = await getApplicationDocumentsDirectory();
   final dbFile = File(p.join(dbFolder.path, 'db.sqlite'));
   await dbFile.writeAsBytes(dataStore);
-  // we need to be able to sync with others after the restore
-  await sharedPreferences.setString("dateOfLastSyncedWithClient", "{}");
 }

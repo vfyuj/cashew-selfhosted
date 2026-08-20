@@ -12,7 +12,6 @@ import 'package:cashew_selfhosted/widgets/notificationsSettings.dart';
 import 'package:cashew_selfhosted/widgets/periodCyclePicker.dart';
 import 'package:cashew_selfhosted/widgets/selectAmount.dart';
 import 'package:drift/drift.dart' show Value;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,8 +21,6 @@ Future<Map<String, dynamic>> getDefaultPreferences() async {
     "databaseJustImported": false,
     "backupLimit": 20,
     "backupSync": true,
-    "syncEveryChange": kIsWeb,
-    "devicesHaveBeenSynced": 1,
     "numBackups": 1,
     "theme": "system", //system, light, dark
     "use24HourFormat": "system", //system, 12-hour, 24-hour

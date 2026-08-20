@@ -4,12 +4,14 @@ Files: `server/lib/src/sync/` (`sync_routes.dart`, `sync_stream_routes.dart`, `s
 Request and response shapes are in [api.md](api.md); the client half is in
 [../app/sync-client.md](../app/sync-client.md).
 
-Two transports coexist, both scoped to the **dataset**, so every member of a household follows one
-stream:
+One transport, scoped to the **dataset**, so every member of a household follows one stream:
+`/sync/push` and `/sync/pull`, small JSON deltas, with `/sync-stream` as a wake-up.
 
-- **Row-level feed** (`/sync/push`, `/sync/pull`) — the normal path. Small JSON deltas.
-- **Snapshot diff** (`/sync/files*`) — whole SQLite files, kept as the fallback for a device's first
-  sync or one that has been away too long.
+There used to be a second — `/sync/files*`, whole SQLite files — kept as a fallback for a device's
+first sync or one that had been away too long. It was removed in 1.3.x: neither case actually needed
+it (a stale cursor is handled by the `409 rebootstrap` below), and keeping two mechanisms meant two
+hand-written lists of every syncable table, which had already drifted apart. See
+`specs/04-stage-2-instant-sync.md`.
 
 ## The feed
 
