@@ -52,9 +52,37 @@ with how much changed: 4 devices × a 5 MB database ≈ 80 MB per family-wide sy
 that on a timer is not viable. After this stage, a sync that finds nothing new transfers a few
 hundred bytes regardless of how large the database has grown.
 
-The old mechanism (`syncClient.dart`) is untouched and still reachable from the "manage synced
-devices" screen for manual use. Only the *automatic* triggers were switched to the new engine —
-see "What actually changed in the app" below.
+### The old mechanism was kept, then deleted (2026-08-20)
+
+For a while `syncClient.dart` stayed untouched and reachable from the "manage synced devices" screen,
+with only the *automatic* triggers switched over. That was meant as a safety net while this stage
+settled. It became a liability instead.
+
+**Both mechanisms hand-listed every syncable table, and the two lists drifted.** `AppSettings` was
+added to the feed when per-user view settings shipped (`06-shared-household-data.md`) and never to
+the snapshot path — so a manual sync silently failed to carry a member's hidden accounts or home-page
+order. `CategoryEnvelopes` had to be added to both. Every future table would too, and nothing checked
+that it was.
+
+Deleted, therefore, along with everything only it used:
+
+- app: `createSyncBackup()`, `syncData()`/`_syncData()`, the per-client `dateOfLastSyncedWithClient`
+  cursors, the `sync-<clientID>.sqlite` filename helpers, the `isClientSync` branch of the backup
+  sheet (twenty conditionals in one widget), and the `syncEveryChange` / `devicesHaveBeenSynced`
+  settings. `SyncLog` moved to `struct/syncLog.dart` — it belongs to the merge, not the transport.
+- server: `GET/PUT/GET/DELETE /sync/files*` and the `sync/` storage namespace. Existing directories
+  are left on disk rather than deleted on upgrade; `DEPLOYMENT.md` says how to remove them.
+
+Two things the removal had to preserve, because they were never part of the snapshot exchange and
+only shared its file or its screen:
+
+- **Reset Sync** belongs to the change feed. It moved to a small `SyncSettings` sheet
+  (`widgets/accountAndBackup.dart`) with the `backupSync` master switch, which is what remains of the
+  devices screen.
+- **`pauseLiveSync()` now actually pauses.** `importDB` and `loadBackup` used
+  `cancelAndPreventSyncOperation()` to hold sync off while they replace the database file; the
+  replacement is `pauseLiveSyncAndWait()`. It also fixed a latent bug — `runLiveSyncCycle()` did not
+  check the paused flag, so a debounce already in flight ran a full cycle after a pause anyway.
 
 ## Design in one line
 
@@ -393,16 +421,13 @@ complexity for how rarely that happens. Do not revisit without new direction.
 ### Triggers wired
 
 - **App start** — `runAllCloudFunctions` (`navigationFramework.dart`) calls `runLiveSyncCycle()`
-  where it used to call `syncData()`. `syncData()` itself is untouched, not deleted, still used by
-  the manual "manage synced devices" screen.
+  where it used to call `syncData()`.
 - **Local change** — the existing `database.watchAllForAutoSync()` listener (`navigationFramework.dart`)
-  now calls `triggerLiveSyncDebounced()` (800ms debounce) instead of `createSyncBackup()`, and does
-  so unconditionally (not gated behind the legacy `syncEveryChange` setting, which only ever
-  applied to the old whole-database mechanism and defaulted off on mobile — this is the gap the
-  user asked to close). **Known rough edge:** the `syncEveryChange` toggle still exists in Settings
-  and still governs the old mechanism's debounce; it has no effect on the new engine. Left as-is
-  because reworking that settings screen was out of scope for this change — flagged here rather
-  than silently left undocumented.
+  calls `triggerLiveSyncDebounced()` (800ms debounce) instead of `createSyncBackup()`, and does so
+  unconditionally. It is not gated behind the legacy `syncEveryChange` setting, which only ever
+  applied to the old whole-database mechanism and defaulted off on mobile — the gap the owner asked
+  to close. That setting, and the toggle for it that lingered in Settings with no effect on this
+  engine, went with the mechanism it belonged to.
 - **App resume** — `main.dart`'s existing `OnAppResume` widget now also calls `runLiveSyncCycle()`.
 - **Periodic + reconnect** — `startLiveSync()`, called once from the same `initState` block as the
   `watchAllForAutoSync` listener. Runs a 45s `Timer.periodic` that both drives the cycle and

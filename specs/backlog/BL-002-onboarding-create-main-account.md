@@ -147,9 +147,11 @@ Sync moves Drift rows, not settings, so a fresh install of the app starts at `ha
 regardless of how much data the account it just signed into already holds.
 
 **Fix:** `selfHostedAccountHasExistingData()` in `app/lib/struct/selfHostedClient.dart` asks the
-server whether this account has anything yet — `GET /sync/pull?since=0&limit=1` for the Stage 2
-row-level feed, falling back to `GET /sync/files` for accounts last used by a build that predates it.
-A `409 rebootstrap` counts as "yes": only an account already in use can have had its feed reset.
+server whether this account has anything yet — `GET /sync/pull?since=0&limit=1`. A `409 rebootstrap`
+counts as "yes": only an account already in use can have had its feed reset. (It also used to fall
+back to `GET /sync/files` for accounts last used by a build predating the feed; that route went with
+the snapshot transport in 1.3.x. Answering "no" is the safe direction anyway — onboarding is
+skippable and creates nothing on its own.)
 `_finishAfterAuth()` in `serverSetupWizardPage.dart` calls it after a successful sign-in or setup and
 sets `hasOnboarded` when the answer is yes.
 

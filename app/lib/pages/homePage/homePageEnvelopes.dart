@@ -1,4 +1,3 @@
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/pages/addButton.dart';
@@ -6,17 +5,16 @@ import 'package:cashew_selfhosted/pages/envelopesPage.dart';
 import 'package:cashew_selfhosted/struct/categoryEnvelopes.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/widgets/envelopePlanBuilder.dart';
-import 'package:cashew_selfhosted/widgets/openBottomSheet.dart' show getIsFullScreen;
+import 'package:cashew_selfhosted/widgets/homePageCardCarousel.dart';
 import 'package:cashew_selfhosted/widgets/util/keepAliveClientMixin.dart';
-import 'package:cashew_selfhosted/widgets/util/widgetSize.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// This month's envelopes on the home page, swiped horizontally -- the same
-// shape the pinned budgets carousel has, and the same card the envelopes page
-// draws, so nothing about an envelope looks different depending on where you
-// meet it.
+// This month's envelopes on the home page, swiped horizontally -- literally the
+// same carousel the pinned budgets use (widgets/homePageCardCarousel.dart), and
+// the same card the envelopes page draws, so nothing about an envelope looks
+// different depending on where you meet it.
 //
 // **Only envelopes with an amount set for the month appear here.** Every main
 // category has an envelope (see docs/app/envelopes.md), which is right for the
@@ -31,8 +29,6 @@ class HomePageEnvelopes extends StatefulWidget {
 }
 
 class _HomePageEnvelopesState extends State<HomePageEnvelopes> {
-  double height = 0;
-
   // Both sides of the ledger in one query: the card decides what a number means
   // from its category's income flag, not from the query.
   Stream<List<CategoryWithTotal>>? _spent;
@@ -60,11 +56,12 @@ class _HomePageEnvelopesState extends State<HomePageEnvelopes> {
         _spentForMonth == month) return;
     _spentForWallets = allWallets;
     _spentForMonth = month;
+    final DateTimeRange range = envelopeMonthRange(month);
     try {
       _spent = database.watchTotalSpentInEachCategoryInTimeRangeFromCategories(
         allWallets: allWallets,
-        start: month,
-        end: DateTime(month.year, month.month + 1, 0),
+        start: range.start,
+        end: range.end,
         categoryFks: null,
         categoryFksExclude: null,
         budgetTransactionFilters: null,
@@ -128,63 +125,11 @@ class _HomePageEnvelopesState extends State<HomePageEnvelopes> {
                 );
               }
 
-              return Stack(
-                children: [
-                  // Measures one real card off screen, the same trick the
-                  // pinned budgets carousel uses: the carousel needs a fixed
-                  // height and the card's is whatever its text wraps to.
-                  IgnorePointer(
-                    child: Visibility(
-                      maintainSize: true,
-                      maintainAnimation: true,
-                      maintainState: true,
-                      child: Opacity(
-                        opacity: 0,
-                        child: WidgetSize(
-                          onChange: (Size size) {
-                            if (size.height == height) return;
-                            setState(() {
-                              height = size.height;
-                            });
-                          },
-                          child: cardFor(planned.first),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(bottom: 13),
-                    child: getIsFullScreen(context)
-                        ? SizedBox(
-                            height: height,
-                            child: ListView(
-                              addAutomaticKeepAlives: true,
-                              clipBehavior: Clip.none,
-                              scrollDirection: Axis.horizontal,
-                              padding: EdgeInsetsDirectional.symmetric(
-                                  horizontal: 10),
-                              children: [
-                                for (TransactionCategory category in planned)
-                                  SizedBox(width: 500, child: cardFor(category))
-                              ],
-                            ),
-                          )
-                        : CarouselSlider(
-                            options: CarouselOptions(
-                              height: height,
-                              enableInfiniteScroll: false,
-                              enlargeCenterPage: true,
-                              enlargeStrategy: CenterPageEnlargeStrategy.zoom,
-                              viewportFraction: 0.95,
-                              clipBehavior: Clip.none,
-                              enlargeFactor: 0.3,
-                            ),
-                            items: [
-                              for (TransactionCategory category in planned)
-                                cardFor(category)
-                            ],
-                          ),
-                  ),
+              return HomePageCardCarousel(
+                measureChild: cardFor(planned.first),
+                items: [
+                  for (TransactionCategory category in planned)
+                    cardFor(category)
                 ],
               );
             },

@@ -18,7 +18,29 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 3. **Data belongs to a dataset, not to an account.** Superseded Stage 4's original wording, which said single-owner-per-account. Since `06-shared-household-data.md` shipped, an account can share a dataset with another account, and everything — sync files, the change feed, attachments — is scoped to the dataset rather than the user. An account created without the sharing switch gets a dataset of its own and behaves exactly as before, which is still the default. Backups are the one deliberate exception and stay per-user; that file says why.
 4. **Reuse, don't rewrite, the local conflict-resolution logic.** Upstream's `SyncLog` model, `processSyncLogs` (last-write-wins by `dateTimeModified`), and `DeleteLog` tombstone table are sound and transport-agnostic. Only the transport (how bytes move between devices) and auth (how a device is authorized) are being replaced.
 5. **GPL-3.0 compliance.** Keep LICENSE and copyright notices. Source stays available (public repo). Fork identity (name/icon/package id) must be distinct from upstream before any distribution beyond the owner's own devices.
-6. **Single-tenant per deployment.** This is software a family self-hosts for themselves, not a multi-tenant SaaS. Each deployment serves one household's accounts. (Stage 4's "multi-user" means multiple people within one household's server, not multiple unrelated households sharing infrastructure.)
+6. **Reuse beats a second copy, and upstream's files are not off limits.** Only the *table schema* is pinned (`CLAUDE.md`, "Upstream database compatibility"), and that is about keeping an original-Cashew backup restorable — not about code. Everything else in `app/lib` is this fork's to optimise: extending an upstream widget with an optional parameter, or lifting a shared piece out of one, is preferable to writing a near-duplicate beside it. Added 2026-08-20, after a review found the opposite habit had taken hold with nothing behind it — see the note below.
+7. **Single-tenant per deployment.** This is software a family self-hosts for themselves, not a multi-tenant SaaS. Each deployment serves one household's accounts. (Stage 4's "multi-user" means multiple people within one household's server, not multiple unrelated households sharing infrastructure.)
+
+### On not treating `upstream/` as an authority
+
+Worth stating plainly, because for months the code was written as if the rule were the reverse.
+Upstream files were left untouched even where reuse was the obvious move, which is where the fork's
+handful of near-duplicate widgets came from — an envelope total beside a budget total, an envelope
+carousel beside a budget carousel, each one written fresh rather than sharing.
+
+Nothing ever asked for that. No spec required it, and a review in August 2026 found that in 136
+commits **not one upstream bug fix had ever been ported**; every mention of upstream in the history
+is the fork moving further away from it. The `upstream/` clone was five months stale at the time. The
+file-level diffability being protected had never once been used for the thing it was being protected
+for.
+
+So: `upstream/` is a reference for checking the table schema and for the occasional deliberate port.
+It is not a baseline that files are expected to match. **Git history is what records what changed and
+why** — it knows the reasoning, which a diff against a half-year-old snapshot never can.
+
+Two things this does *not* loosen: the table schema stays column-for-column identical, and changes
+near sync stay small and careful for the reason `04-stage-2-instant-sync.md` gives — a reverted
+~4,300-line attempt. Neither of those is about upstream parity.
 
 ## Tech stack decisions
 
@@ -31,15 +53,15 @@ A fork of Cashew (Flutter/Dart budgeting app, GPL-3.0) that replaces its Google-
 ## Glossary
 
 - **appDataFolder-equivalent**: the new server's per-user file storage, replacing Google Drive's hidden app-scoped Drive folder.
-- **Snapshot-diff sync**: today's mechanism (upload/download full SQLite files, diff by timestamp). This is the Stage 1 transport (just repointed at the new server) and stays the always-available fallback in Stage 2 — for a device's first-ever sync, or one that's been offline long enough that the incremental log no longer covers the gap.
-- **Incremental sync**: Stage 2's addition — individual row changes uploaded/downloaded directly as small JSON deltas (via a durable per-user change log on the server) instead of moving a whole SQLite file, so a trigger only transfers what actually changed. Still triggered by the same user actions as today (pull-to-refresh, app foreground, manual sync) — **not** a persistent connection or real-time push; an earlier attempt at real-time/event-push sync was tried and reverted (see `04-stage-2-instant-sync.md`).
+- **Snapshot-diff sync**: Stage 1's mechanism — upload/download full SQLite files, diff by timestamp. **Removed in 1.3.x.** It was kept alongside Stage 2 as a fallback for a while, and that turned out to cost more than it was worth: both mechanisms hand-listed every syncable table and the lists drifted. It is not the fallback for a first-ever sync either — the change feed handles that itself by rewinding the push cursor. See `04-stage-2-instant-sync.md`, "The old mechanism was kept, then deleted".
+- **Incremental sync**: the only sync mechanism — individual row changes as small JSON deltas against a durable per-dataset change log on the server, so a trigger transfers only what actually changed. Triggered on app start, on local change (800 ms debounce), on a timer, and by a **WebSocket wake-up**. That socket carries no data: its only message is "something changed", and the client's sole reaction is an ordinary pull, which is what makes a dropped or duplicated message harmless. (An earlier real-time/event-push attempt *was* reverted, and the caution was right, but what shipped does hold a persistent connection — this glossary said otherwise for months.)
 - **SyncLog / DeleteLog**: upstream's existing merge-log types. Reused, not replaced.
 
 ## Roadmap index
 
 1. `02-stage-0-foundations.md` — dev environment, fork identity, empty server skeleton deployed.
 2. `03-stage-1-kill-google.md` — self-hosted auth + repointed snapshot sync/backup. First real release.
-3. `04-stage-2-instant-sync.md` — incremental sync on top of Stage 1's snapshot-diff, triggered by the same user actions as today (not real-time push — see that file for why).
+3. `04-stage-2-instant-sync.md` — the row-level change feed that replaced Stage 1's snapshot-diff, plus the WebSocket wake-up on top of it, and the record of removing the snapshot mechanism once keeping both proved to be the expensive option.
 4. `05-accounts-and-admin.md` — first-run setup wizard, account management, instance administration. Revises Stage 1's auth section.
 5. `06-shared-household-data.md` — Stage 4. **Implemented.** Shared dataset and per-user views. Personal budgets and the subcategory allocation check shipped in it and were withdrawn in 1.2.0; both sections are kept there as cancelled decisions.
 6. Stage 3 (public-fork readiness) is intentionally **not yet written** — it depends on decisions we'll make while executing the earlier stages, and writing it now risks locking in guesses.

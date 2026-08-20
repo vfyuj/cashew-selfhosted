@@ -10,7 +10,7 @@
 # JetBrains IDE project files -- per-developer, not part of the fork.
 .idea/
 
-# Local test databases created by the runbook in TESTING.md.
+# Local test databases created by the runbook in RUNNING_LOCALLY.md.
 /.testdata*/
 
 # Running deploy/docker-compose.yml from inside a clone puts a live instance

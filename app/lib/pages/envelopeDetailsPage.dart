@@ -10,7 +10,7 @@ import 'package:cashew_selfhosted/struct/spendingSummaryHelper.dart';
 import 'package:cashew_selfhosted/widgets/budgetContainer.dart'
     show BudgetProgress;
 import 'package:cashew_selfhosted/widgets/categoryEntry.dart';
-import 'package:cashew_selfhosted/widgets/countNumber.dart';
+import 'package:cashew_selfhosted/widgets/swappableTotal.dart';
 import 'package:cashew_selfhosted/widgets/dropdownSelect.dart';
 import 'package:cashew_selfhosted/widgets/envelopePlanBuilder.dart';
 import 'package:cashew_selfhosted/widgets/framework/pageFramework.dart';
@@ -23,7 +23,6 @@ import 'package:cashew_selfhosted/widgets/textWidgets.dart';
 import 'package:cashew_selfhosted/widgets/transactionEntries.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 // One envelope, one month: what was planned, what was spent, where it went and
@@ -54,10 +53,7 @@ class EnvelopeDetailsPage extends StatefulWidget {
 }
 
 class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
-  DateTimeRange get monthRange => DateTimeRange(
-        start: widget.month,
-        end: DateTime(widget.month.year, widget.month.month + 1, 0),
-      );
+  DateTimeRange get monthRange => envelopeMonthRange(widget.month);
 
   // One subscription for the page: the header and the breakdown are two views
   // of the same numbers, and creating the stream in build() would resubscribe
@@ -350,7 +346,11 @@ class _EnvelopeDetailsPageState extends State<EnvelopeDetailsPage> {
 /// Tapping swaps between leading with what is left and leading with what has
 /// moved, and remembers the choice -- the same affordance, and the same setting,
 /// the budget page's own total has (pages/budgetPage.dart TotalSpent).
-class _EnvelopeTotal extends StatefulWidget {
+/// The envelope's headline figure, and the tap that swaps which of its two
+/// numbers leads. Shares [SwappableTotal] with the budget page -- what an
+/// envelope calls its figures is the only part that differs, and
+/// [envelopeHeadline] already owns that.
+class _EnvelopeTotal extends StatelessWidget {
   const _EnvelopeTotal({
     required this.income,
     required this.spent,
@@ -362,77 +362,28 @@ class _EnvelopeTotal extends StatefulWidget {
   final double? planned;
 
   @override
-  State<_EnvelopeTotal> createState() => _EnvelopeTotalState();
-}
-
-class _EnvelopeTotalState extends State<_EnvelopeTotal> {
-  void _swapTotalDisplay() {
-    updateSettings(
-      "showTotalSpentForEnvelope",
-      appStateSettings["showTotalSpentForEnvelope"] != true,
-      pagesNeedingRefresh: [0, 4],
-      updateGlobalState: false,
-    );
-    // Read the new value back by rebuilding; envelopeHeadline reads the setting.
-    setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
     final AllWallets allWallets = Provider.of<AllWallets>(context);
-    final EnvelopeHeadline headline = envelopeHeadline(context,
-        income: widget.income, spent: widget.spent, planned: widget.planned);
-    final Color textColor = Theme.of(context).colorScheme.onSecondaryContainer;
-
-    return GestureDetector(
-      onTap: _swapTotalDisplay,
-      onLongPress: () {
-        HapticFeedback.heavyImpact();
-        _swapTotalDisplay();
+    return SwappableTotal(
+      settingKey: "showTotalSpentForEnvelope",
+      pagesNeedingRefresh: const [0, 4],
+      contentFor: (_) {
+        // envelopeHeadline reads the setting itself, so it already reflects
+        // whichever way it was just swapped.
+        final EnvelopeHeadline headline = envelopeHeadline(context,
+            income: income, spent: spent, planned: planned);
+        return SwappableTotalContent(
+          amount: headline.amount,
+          trailing: " " +
+              headline.word.toLowerCase() +
+              (planned == null
+                  ? ""
+                  : "  \u00b7  " +
+                      convertToMoney(allWallets, planned!) +
+                      " " +
+                      "planned".tr().toLowerCase()),
+        );
       },
-      child: AnimatedSwitcher(
-        duration: Duration(milliseconds: 200),
-        child: IntrinsicWidth(
-          key: ValueKey(headline.word),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              CountNumber(
-                count: headline.amount,
-                duration: Duration(milliseconds: 400),
-                initialCount: 0,
-                textBuilder: (number) {
-                  return TextFont(
-                    text: convertToMoney(allWallets, number,
-                        finalNumber: headline.amount),
-                    fontSize: 22,
-                    textAlign: TextAlign.start,
-                    fontWeight: FontWeight.bold,
-                    textColor: textColor,
-                  );
-                },
-              ),
-              Container(
-                padding: const EdgeInsetsDirectional.only(bottom: 1.5),
-                child: TextFont(
-                  text: " " +
-                      headline.word.toLowerCase() +
-                      (widget.planned == null
-                          ? ""
-                          : "  ·  " +
-                              convertToMoney(allWallets, widget.planned!) +
-                              " " +
-                              "planned".tr().toLowerCase()),
-                  fontSize: 15,
-                  textAlign: TextAlign.start,
-                  textColor: textColor,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

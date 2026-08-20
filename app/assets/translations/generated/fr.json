@@ -1246,5 +1246,15 @@
   "changelog-1-2-1-envelope-currency-body": "Les enveloppes suivent désormais la devise de votre compte principal. Chaque montant prévu retient le compte dans lequel il a été saisi : si vous définissez comme compte principal un compte dans une autre devise, le plan est converti comme le sont déjà vos dépenses, au lieu de garder le même nombre avec un autre symbole monétaire. Les montants prévus avant cette mise à jour sont considérés comme saisis dans le compte principal actuel. Si votre foyer utilise plusieurs devises, le pavé numérique permet maintenant de choisir le compte dans lequel une enveloppe est prévue.",
   "received": "Reçu",
   "above-plan": "au-dessus du plan",
-  "still-to-come": "encore à venir"
+  "still-to-come": "encore à venir",
+  "rates-are-shared": "Les taux valent pour tous",
+  "rates-are-shared-description": "Votre serveur conserve un seul jeu de taux de change pour que les totaux de chacun concordent. Un administrateur peut les modifier.",
+  "rate-not-saved": "Taux non enregistré",
+  "exchange-rates-unavailable": "Taux de change indisponibles",
+  "exchange-rates-unavailable-description": "Cet appareil n'a pas encore pu les charger, donc toutes les devises ci-dessous sont affichées à 1:1. Les montants dans d'autres devises seront faux jusque-là.",
+  "changelog-1-4-0-rates-title": "Tout le monde voit les mêmes taux de change",
+  "changelog-1-4-0-rates-body": "Votre serveur conserve désormais un seul jeu de taux au lieu que chaque appareil charge le sien, donc les montants dans d'autres devises concordent enfin entre les comptes. Un administrateur peut en ajuster un dans Réglages, Taux de change.",
+  "changelog-1-4-0-sync-title": "Le bouton de synchronisation manuelle a disparu",
+  "changelog-1-4-0-sync-body": "Il copiait toute votre base de données à chaque fois, et avait cessé sans le dire de transporter certains de vos réglages. La synchronisation est automatique depuis longtemps, il a donc été retiré. Compte, Synchronisation garde l'interrupteur et Réinitialiser la synchronisation.",
+  "changelog-1-4-1-default-categories-body": "Ajouter un appareil à un foyer partagé n'implante plus onze catégories vides dans les données de tout le monde. Si certaines sont déjà apparues, supprimez-les une fois : elles ne reviendront pas."
 }

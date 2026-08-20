@@ -1,4 +1,5 @@
 import 'package:cashew_selfhosted/database/tables.dart';
+import 'package:flutter/material.dart' show DateTimeRange;
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 
 // Envelopes: how much a category is meant to get in a given month.
@@ -37,6 +38,21 @@ bool isEnvelopeEligible(TransactionCategory category) =>
 /// The month [date] falls in, as its first day at midnight.
 DateTime envelopePeriodStart(DateTime date) =>
     DateTime(date.year, date.month, 1);
+
+/// The calendar month [month] falls in, as a range.
+///
+/// The end is the month's last day at midnight, which is what every query here
+/// wants: `onlyShowBasedOnTimeRange` ORs in `isOnDay(end)`, so the whole of the
+/// last day counts. Computed once rather than re-derived at each call site --
+/// five of them had their own `DateTime(y, m + 1, 0)`, and nothing held them to
+/// agreeing.
+DateTimeRange envelopeMonthRange(DateTime month) {
+  final DateTime start = envelopePeriodStart(month);
+  return DateTimeRange(
+    start: start,
+    end: DateTime(start.year, start.month + 1, 0),
+  );
+}
 
 /// The primary key of [categoryPk]'s envelope for the month starting at
 /// [periodStart].

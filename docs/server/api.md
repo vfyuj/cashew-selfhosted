@@ -8,7 +8,8 @@ Current state, read from `server/lib/src/`. Every route the server answers is li
 re-reads the role from the session on every request and rejects with `403`.
 
 **Scope** — which data the request reaches. `user`: the caller's own. `dataset`: the household's,
-shared by every member. The split is deliberate, not drift; see [storage.md](storage.md).
+shared by every member. `instance`: the whole deployment, the same answer for everyone. The split is
+deliberate, not drift; see [storage.md](storage.md).
 
 | Route | Auth | Scope | Behaviour |
 |---|---|---|---|
@@ -22,10 +23,6 @@ shared by every member. The split is deliberate, not drift; see [storage.md](sto
 | `GET /auth/me` | session | user | The caller's own account JSON. |
 | `PATCH /auth/me` | session | user | `{name?, email?}`. `400` if neither, `409` if the email is taken. |
 | `POST /auth/me/password` | session | user | `{currentPassword, newPassword}` → a fresh session. Signs out every other device. `422` (not `401`) if the current password is wrong. |
-| `GET /sync/files` | session | dataset | Snapshot listing: `[{deviceId, filename, modifiedTime, size}]`. |
-| `PUT /sync/files/<filename>` | session | dataset | Uploads a device's SQLite snapshot (binary body). |
-| `GET /sync/files/<filename>` | session | dataset | Downloads it. `404` if absent. |
-| `DELETE /sync/files/<filename>` | session | dataset | Removes it. |
 | `POST /sync/push` | session | dataset | Row-level changes up. See below. |
 | `GET /sync/pull` | session | dataset | Row-level changes down. See below. |
 | `POST /sync/reset` | session | dataset | Drops the dataset's change feed. See below. |
@@ -37,6 +34,9 @@ shared by every member. The split is deliberate, not drift; see [storage.md](sto
 | `PUT /attachments/<filename>` | session | dataset | Uploads a receipt photo or picked file. |
 | `GET /attachments/<filename>` | session | dataset | Downloads it. `404` if absent. |
 | `DELETE /attachments/<filename>` | session | dataset | Removes it. |
+| `GET /rates` | session | **instance** | `{rates, overrides, fetchedAt}`, USD-based. `503` if the server has never managed to fetch. See [rates.md](rates.md). |
+| `PUT /rates/overrides/<currency>` | admin | instance | `{rate: <positive number>}`. `400` on zero, negative or non-numeric. |
+| `DELETE /rates/overrides/<currency>` | admin | instance | Falls that currency back to the fetched value. |
 | `GET /admin/users` | admin | instance | `{users: [...]}`. |
 | `POST /admin/users` | admin | instance | `{email, name?, isAdmin?, shareHousehold?}` → `201 {user, temporaryPassword}`. `409` if the email is taken. |
 | `POST /admin/users/<id>/password` | admin | instance | Issues a new temporary password and signs that account's devices out. |
@@ -53,6 +53,10 @@ takes a client-supplied path (`storage.dart`).
 - **Two routers share `/auth`.** The public one is mounted first (`setup-state`, `setup`, `login`,
   `refresh`, `logout`); anything it does not recognise falls through to the authenticated account
   router (`me`, `me/password`), because a nested `Router` returns `routeNotFound` rather than a `404`.
+- **`/rates` and `/rates/overrides` are two mounts, not one router.** Mount middleware runs before
+  the nested router looks at the path, so an admin-gated router sharing the `/rates` prefix would
+  answer an ordinary member's read with `403`. The longer prefix is registered first, because the
+  first match wins.
 - **`/sync-stream` is registered directly, not mounted.** A single-segment mount with no sub-path
   does not reliably match its own root in `shelf_router` 1.1.4 — it fell through to the SPA
   catch-all and logged a misleading `[200]`.
@@ -89,7 +93,8 @@ matters.
 `seq`, each change shaped like a push change plus its `seq`.
 
 **`409 {"error":"rebootstrap","minRetainedSeq":<n>}`** when `since` is below what the server still
-retains. The client must fall back to a snapshot sync and resume from `minRetainedSeq`.
+retains. The client resumes from `minRetainedSeq` and rewinds its push cursor to zero, so its whole
+local database goes back up — see [../app/sync-client.md](../app/sync-client.md).
 
 ## `POST /sync/reset`
 
@@ -113,12 +118,14 @@ double-apply anything. Ping interval 30s.
 ## Deleting an account
 
 `DELETE /admin/users/<id>` cascades sessions and dataset membership through foreign keys, then
-deletes that user's `backup/` directory unconditionally. Sync snapshots and attachments belong to the
-dataset and are deleted **only when the removed account was its last member** — removing one member
-of a household must not delete the household's data.
+deletes that user's `backup/` directory unconditionally. The dataset's `sync/` and `attachments/`
+directories are deleted **only when the removed account was its last member** — removing one member
+of a household must not delete the household's data. (`sync/` now only ever holds leftovers from
+before the snapshot transport was removed; the cleanup stays so those go too.)
 
 ---
 
-Why any of this is shaped this way: `specs/03-stage-1-kill-google.md` (auth, snapshot sync, backup,
-attachments), `specs/04-stage-2-instant-sync.md` (the change feed), `specs/05-accounts-and-admin.md`
+Why any of this is shaped this way: `specs/03-stage-1-kill-google.md` (auth, backup, attachments),
+`specs/04-stage-2-instant-sync.md` (the change feed, and why the snapshot transport it replaced was
+later removed), `specs/05-accounts-and-admin.md`
 (setup and administration), `specs/06-shared-household-data.md` (datasets).

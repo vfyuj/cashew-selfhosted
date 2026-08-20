@@ -13,7 +13,16 @@ import 'package:test/test.dart';
 ///
 /// `shelf_router` exposes no public route table, so the routes are read out of
 /// the source text. The mount prefixes below mirror `buildApiRouter` in
-/// `lib/src/api.dart`; adding a new mounted router means adding a line here.
+/// `lib/src/api.dart`.
+///
+/// One file per prefix, deliberately: a file holding two routers mounted at
+/// two different prefixes cannot be described here, which is why the
+/// administrator-only rate overrides live in their own file rather than beside
+/// the read route they belong to.
+///
+/// Forgetting to add a line here is caught by its own test below -- without
+/// that, a new route file would simply be invisible to this check and its
+/// routes could go undocumented forever.
 const _mountPrefixes = <String, String>{
   // Registered directly on the top-level router: /health and /sync-stream.
   'lib/src/api.dart': '',
@@ -22,6 +31,8 @@ const _mountPrefixes = <String, String>{
   'lib/src/backup/backup_routes.dart': '/backup',
   'lib/src/attachments/attachment_routes.dart': '/attachments',
   'lib/src/admin/admin_routes.dart': '/admin',
+  'lib/src/rates/rate_routes.dart': '/rates',
+  'lib/src/rates/rate_admin_routes.dart': '/rates/overrides',
 };
 
 final _routeCall = RegExp(r"""router\.(get|post|put|delete|patch)\(\s*'([^']*)'""");
@@ -45,7 +56,33 @@ Set<String> _routesInSource() {
   return routes;
 }
 
+/// Every file under `lib/src` that registers routes.
+///
+/// Found on disk rather than listed, so that this check cannot be the thing
+/// somebody forgets to update.
+Set<String> _filesRegisteringRoutes() {
+  return Directory('lib/src')
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((file) => file.path.endsWith('.dart'))
+      .where((file) => _routeCall.hasMatch(file.readAsStringSync()))
+      .map((file) => file.path)
+      .toSet();
+}
+
 void main() {
+  test('every file registering routes has a mount prefix here', () {
+    // Without this, adding a route file and forgetting to list it above makes
+    // its routes invisible to the check below -- which would pass while the
+    // documentation silently went incomplete.
+    expect(
+      _filesRegisteringRoutes().difference(_mountPrefixes.keys.toSet()),
+      isEmpty,
+      reason: 'these files register routes but have no mount prefix in '
+          '_mountPrefixes -- add one, matching buildApiRouter',
+    );
+  });
+
   test('docs/server/api.md documents exactly the routes the server serves', () {
     final doc = File('../docs/server/api.md').readAsStringSync();
     final documented = _documentedRow

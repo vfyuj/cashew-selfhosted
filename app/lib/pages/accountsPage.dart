@@ -183,8 +183,7 @@ class AccountsPageState extends State<AccountsPage> {
                             Expanded(
                               child: SyncCloudBackupButton(
                                 onTap: () async {
-                                  chooseBackup(context,
-                                      isManaging: true, isClientSync: true);
+                                  openSyncSettings(context);
                                 },
                               ),
                             ),

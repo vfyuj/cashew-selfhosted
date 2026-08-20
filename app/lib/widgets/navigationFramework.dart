@@ -36,7 +36,6 @@ import 'package:cashew_selfhosted/struct/navBarIconsData.dart';
 import 'package:cashew_selfhosted/struct/quickActions.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/syncClient.dart';
 import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/bottomNavBar.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
@@ -316,10 +315,9 @@ Future<bool> runAllCloudFunctions(BuildContext context,
   try {
     loadingIndeterminateKey.currentState?.setVisibility(true);
     await runForceSignIn(context);
-    // Stage 2 live sync (specs/04-stage-2-instant-sync.md) replaces the old
-    // whole-database syncData() as the automatic mechanism here. syncData()
-    // itself is untouched and still reachable from the "manage synced
-    // devices" screen for manual use.
+    // The row-level change feed -- the only sync mechanism there is, since the
+    // whole-database exchange it replaced was removed.
+    // See specs/04-stage-2-instant-sync.md.
     await runLiveSyncCycle();
     loadingIndeterminateKey.currentState?.setVisibility(true);
     await createBackupInBackground(context);
@@ -329,7 +327,6 @@ Future<bool> runAllCloudFunctions(BuildContext context,
     print("Error running sync functions on load: " + e.toString());
     loadingIndeterminateKey.currentState?.setVisibility(false);
     runningCloudFunctions = false;
-    canSyncData = true;
     if (e is SelfHostedUnauthenticatedException) {
       // SelfHostedClient already retries once internally after a silent
       // refresh; if we still got here, the session is stale/expired.
@@ -454,9 +451,9 @@ class PageNavigationFrameworkState extends State<PageNavigationFramework> {
         // Users can visually see the last time of sync, especially on web where sign-in is not automatic,
         // so it shouldn't be an issue
         if (runningCloudFunctions == false && selfHostedSession != null) {
-          // Stage 2 live sync -- debounced push+pull, cheap enough to run on
-          // every local change (unlike the old whole-database
-          // createSyncBackup, which stayed opt-in via "syncEveryChange").
+          // Debounced push+pull, cheap enough to run on every local change --
+          // unlike the whole-database snapshot it replaced, which was opt-in
+          // behind a setting for that reason.
           // See specs/04-stage-2-instant-sync.md.
           triggerLiveSyncDebounced();
         }

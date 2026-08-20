@@ -1,12 +1,10 @@
 import 'dart:convert';
 
-import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import '../auth/auth_middleware.dart';
-import '../storage.dart';
 import 'sync_hub.dart';
 
 /// Assigns the next per-dataset sequence number, creating the dataset's
@@ -27,56 +25,9 @@ int _nextSeq(Database db, int datasetId) {
 
 /// Stage 1's snapshot-diff transport (still mounted for backward
 /// compatibility -- see the Migration section of specs/04-stage-2-instant-sync.md)
-/// plus Stage 2's row-level change feed (`/push`, `/pull`). Both share this
-/// router because both are scoped by the same authenticated-user middleware.
-Router buildSyncRouter(String dataDir, Database db) {
+/// the row-level change feed.
+Router buildSyncRouter(Database db) {
   final router = Router();
-
-  // Scoped by dataset, not by user: the members of a household sync one set of
-  // snapshots between all of their devices. Filenames stay collision-free in
-  // the shared directory because clientID carries a millisecond suffix.
-  UserFileStore storeFor(Request request) =>
-      UserFileStore(dataDir, 'sync', currentUser(request).datasetId);
-
-  router.get('/files', (Request request) {
-    final files = storeFor(request).list();
-    final json = files
-        .map((f) => {
-              'deviceId': p.basenameWithoutExtension(f.filename),
-              ...f.toJson(),
-            })
-        .toList();
-    return Response.ok(jsonEncode(json), headers: {'content-type': 'application/json'});
-  });
-
-  router.put('/files/<filename>', (Request request, String filename) async {
-    final bytes = await request.read().expand((chunk) => chunk).toList();
-    try {
-      storeFor(request).write(filename, bytes);
-      return Response.ok('');
-    } on InvalidFilenameException {
-      return Response(400, body: 'invalid filename');
-    }
-  });
-
-  router.get('/files/<filename>', (Request request, String filename) {
-    try {
-      final bytes = storeFor(request).read(filename);
-      if (bytes == null) return Response.notFound('not found');
-      return Response.ok(bytes, headers: {'content-type': 'application/octet-stream'});
-    } on InvalidFilenameException {
-      return Response(400, body: 'invalid filename');
-    }
-  });
-
-  router.delete('/files/<filename>', (Request request, String filename) {
-    try {
-      storeFor(request).delete(filename);
-      return Response.ok('');
-    } on InvalidFilenameException {
-      return Response(400, body: 'invalid filename');
-    }
-  });
 
   // Stage 2 row-level change feed. See specs/04-stage-2-instant-sync.md.
   router.post('/push', (Request request) async {

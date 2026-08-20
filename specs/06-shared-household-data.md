@@ -143,8 +143,32 @@ Shipped as one `AppSettings` row per member, keyed by their server user id,
 carrying a short allow-list of view preferences (`app/lib/struct/perUserViewSettings.dart`).
 Row 0 keeps its existing job as the device-local settings blob and is excluded
 from the feed — that exclusion is the safety property that makes syncing this
-table acceptable at all, since row 0 holds the server URL, the signed-in email
-and the cached exchange rates.
+table acceptable at all, since row 0 holds the server URL and the signed-in
+email.
+
+### Sharing data forces a shared reading of it (added 2026-08-20)
+
+Row 0 also held the cached currency table, and that turned out to be a real bug
+rather than a harmless leftover. Every device fetched the published rate feed
+itself and cached it there, so nothing shared it: the owner found the same
+18 950 ₽ transaction counted as 22 594 dinars in one account and 22 837 in the
+other, and every budget and envelope touching a foreign currency disagreed by
+about a percent. Two devices, last launched days apart, holding two snapshots of
+a moving rate.
+
+The general point, worth applying to the next setting as well: **this stage made
+the data shared, and anything that decides how that data is *read* has to become
+shared with it.** A rate is not identity like a server URL or an email — it is an
+interpretation, and an interpretation everyone has to agree on. It was filed with
+the device-local keys on the grounds that it lived in `appStateSettings`, which
+is not a reason for anything.
+
+Fixed by moving the table to the server (`docs/server/rates.md`), not by adding
+it to the sync feed. Rates are wider than a household — every account on a
+deployment wants the same ones — and the per-user mechanism here has no
+household-wide level at all, since its rows are keyed by user id. Administrator
+overrides moved with it, for the same reason: one member pinning a rate locally
+would have put the household straight back out of step.
 
 Wallet hiding was originally layered *on top of* `homePageWidgetDisplay`
 rather than replacing it: the household still decided which accounts were

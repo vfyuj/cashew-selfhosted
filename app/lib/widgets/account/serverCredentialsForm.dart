@@ -1,11 +1,12 @@
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
+import 'package:cashew_selfhosted/widgets/account/accountForm.dart';
+import 'package:cashew_selfhosted/widgets/account/accountSheets.dart' show messageForServerCallResult;
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/iconButtonScaled.dart';
 import 'package:cashew_selfhosted/widgets/textInput.dart';
-import 'package:cashew_selfhosted/widgets/textWidgets.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -75,7 +76,8 @@ class ServerCredentialsForm extends StatefulWidget {
   State<ServerCredentialsForm> createState() => ServerCredentialsFormState();
 }
 
-class ServerCredentialsFormState extends State<ServerCredentialsForm> {
+class ServerCredentialsFormState extends State<ServerCredentialsForm>
+    with AccountFormState {
   late final TextEditingController serverUrlController = TextEditingController(
       text: widget.initialServerUrl ??
           (kIsWeb ? Uri.base.origin : appStateSettings["serverUrl"] ?? ""));
@@ -89,9 +91,7 @@ class ServerCredentialsFormState extends State<ServerCredentialsForm> {
   final FocusNode passwordFocus = FocusNode();
   final FocusNode confirmFocus = FocusNode();
 
-  bool submitting = false;
   bool passwordVisible = false;
-  String? errorText;
 
   bool get isSetup => widget.mode == ServerAuthMode.setup;
 
@@ -127,86 +127,60 @@ class ServerCredentialsFormState extends State<ServerCredentialsForm> {
     return null;
   }
 
-  String _messageFor(ServerCallResult result) {
-    switch (result) {
-      case ServerCallResult.invalidCredentials:
-        return "invalid-login".tr();
-      case ServerCallResult.unreachable:
-        return "server-unreachable".tr();
-      case ServerCallResult.validationError:
-        return "password-too-short".tr();
-      case ServerCallResult.conflict:
-        return isSetup ? "server-already-set-up".tr() : "email-already-in-use".tr();
-      default:
-        return "server-error".tr();
-    }
-  }
+  Future<void> submit() => submitForm(() async {
+        final validationError = _validate();
+        if (validationError != null) return validationError;
 
-  Future<void> submit() async {
-    if (submitting) return;
-    final validationError = _validate();
-    if (validationError != null) {
-      setState(() => errorText = validationError);
-      return;
-    }
-    setState(() {
-      submitting = true;
-      errorText = null;
-    });
+        // On web the controller is pre-filled with Uri.base.origin and the
+        // field is hidden, so this is correct whether or not it was shown.
+        final serverUrl = serverUrlController.text;
+        final email = emailController.text.trim();
 
-    // On web the controller is pre-filled with Uri.base.origin and the field
-    // is hidden, so this is correct whether or not it was shown.
-    final serverUrl = serverUrlController.text;
-    final email = emailController.text.trim();
+        final result = isSetup
+            ? await selfHostedSetup(
+                serverUrl: serverUrl,
+                email: email,
+                name: nameController.text.trim(),
+                password: passwordController.text,
+              )
+            : await selfHostedLoginDetailed(
+                serverUrl: serverUrl,
+                email: email,
+                password: passwordController.text,
+              );
 
-    final result = isSetup
-        ? await selfHostedSetup(
-            serverUrl: serverUrl,
-            email: email,
-            name: nameController.text.trim(),
-            password: passwordController.text,
-          )
-        : await selfHostedLoginDetailed(
-            serverUrl: serverUrl,
-            email: email,
-            password: passwordController.text,
-          );
+        if (result != ServerCallResult.ok) {
+          // Someone else claimed this instance between the probe and the
+          // submit. Let the host flip to sign-in rather than leaving a dead
+          // form.
+          if (isSetup && result == ServerCallResult.conflict) {
+            widget.onSetupUnavailable?.call();
+          }
+          // Only the conflict wording differs from every other account form,
+          // and the shared mapper already takes it as a parameter. This used to
+          // be a private copy of that switch, which had quietly lost the
+          // `forbidden` case.
+          return messageForServerCallResult(result,
+              conflictMessage:
+                  isSetup ? "server-already-set-up".tr() : null);
+        }
 
-    if (!mounted) return;
+        // Detach the input connection before committing, so the browser has the
+        // form registered by the time the save prompt is requested.
+        minimizeKeyboard(context);
+        await Future.delayed(const Duration(milliseconds: 50));
+        services.TextInput.finishAutofillContext(shouldSave: true);
 
-    if (result != ServerCallResult.ok) {
-      setState(() {
-        submitting = false;
-        errorText = _messageFor(result);
+        if (widget.runSyncAfterLogin && mounted) {
+          await syncAfterLogin(context);
+        }
+        refreshUIAfterLoginChange();
+
+        if (!mounted) return null;
+        widget.onSuccess?.call();
+        if (widget.popOnSuccess && mounted) popRoute(context, true);
+        return null;
       });
-      // Someone else claimed this instance between the probe and the submit.
-      // Let the host flip to sign-in rather than leaving a dead form.
-      if (isSetup && result == ServerCallResult.conflict) {
-        widget.onSetupUnavailable?.call();
-      }
-      return;
-    }
-
-    // Detach the input connection before committing, so the browser has the
-    // form registered by the time the save prompt is requested.
-    minimizeKeyboard(context);
-    await Future.delayed(const Duration(milliseconds: 50));
-    services.TextInput.finishAutofillContext(shouldSave: true);
-
-    if (widget.runSyncAfterLogin && mounted) {
-      await syncAfterLogin(context);
-    }
-    refreshUIAfterLoginChange();
-
-    if (!mounted) return;
-    // The success path used to leave `submitting` true forever, relying
-    // entirely on the caller unmounting this form (via onSuccess/popOnSuccess)
-    // to make the disabled button moot. If that unmount is ever delayed or
-    // doesn't happen, the button should still recover rather than stay dead.
-    setState(() => submitting = false);
-    widget.onSuccess?.call();
-    if (widget.popOnSuccess && mounted) popRoute(context, true);
-  }
 
   Widget _passwordVisibilityToggle() {
     // On Flutter web the autofill hint is applied to the DOM element *after*
@@ -326,16 +300,7 @@ class ServerCredentialsFormState extends State<ServerCredentialsForm> {
             ],
           ),
         ),
-        if (errorText != null)
-          Padding(
-            padding: const EdgeInsetsDirectional.only(top: 12),
-            child: TextFont(
-              text: errorText!,
-              textColor: Theme.of(context).colorScheme.error,
-              textAlign: TextAlign.center,
-              maxLines: 4,
-            ),
-          ),
+        AccountFormError(errorText, maxLines: 4),
         const SizedBox(height: 20),
         Button(
           label: isSetup ? "create-admin-account".tr() : "sign-in-to-server".tr(),

@@ -10,6 +10,8 @@ import 'package:server/src/auth/auth_routes.dart';
 import 'package:server/src/auth/auth_service.dart';
 import 'package:server/src/attachments/attachment_routes.dart';
 import 'package:server/src/backup/backup_routes.dart';
+import 'package:server/src/rates/rate_admin_routes.dart';
+import 'package:server/src/rates/rate_routes.dart';
 import 'package:server/src/sync/sync_routes.dart';
 import 'package:server/src/sync/sync_stream_routes.dart';
 
@@ -19,7 +21,9 @@ import 'package:server/src/sync/sync_stream_routes.dart';
 /// the real routing and middleware composition against an in-memory database,
 /// without binding a port.
 Router buildApiRouter(AuthService authService, Database db, String dataDir,
-    {String? appVersion}) {
+    {String? appVersion,
+    Future<Map<String, double>?> Function()? fetchExchangeRates,
+    Duration rateRefreshInterval = defaultRateRefreshInterval}) {
   final router = Router();
 
   // Reports the version of the web build being served alongside liveness, so
@@ -53,7 +57,7 @@ Router buildApiRouter(AuthService authService, Database db, String dataDir,
     '/sync',
     const Pipeline()
         .addMiddleware(authMiddleware)
-        .addHandler(buildSyncRouter(dataDir, db).call),
+        .addHandler(buildSyncRouter(db).call),
   );
   router.mount(
     '/backup',
@@ -64,6 +68,27 @@ Router buildApiRouter(AuthService authService, Database db, String dataDir,
     const Pipeline()
         .addMiddleware(authMiddleware)
         .addHandler(buildAttachmentRouter(dataDir).call),
+  );
+  // Everyone reads the rate table, only an administrator edits it. The two are
+  // mounted at *distinct* prefixes rather than layered on one: mount
+  // middleware runs before the nested router decides whether the path is even
+  // its own, so an admin-gated mount sharing the /rates prefix would answer a
+  // household member's ordinary read with 403. The longer prefix is registered
+  // first, because the first match wins. See docs/server/rates.md.
+  router.mount(
+    '/rates/overrides',
+    const Pipeline()
+        .addMiddleware(authMiddleware)
+        .addMiddleware(requireAdmin())
+        .addHandler(buildRatesAdminRouter(db).call),
+  );
+  router.mount(
+    '/rates',
+    const Pipeline().addMiddleware(authMiddleware).addHandler(buildRatesRouter(
+          db,
+          fetchRates: fetchExchangeRates,
+          refreshInterval: rateRefreshInterval,
+        ).call),
   );
   router.mount(
     '/admin',

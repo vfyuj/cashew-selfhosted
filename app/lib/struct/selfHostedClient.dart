@@ -325,6 +325,39 @@ String _normalizeServerUrl(String serverUrl) {
 }
 
 /// Response shape for `POST /sync/push` (specs/04-stage-2-instant-sync.md).
+/// The deployment's currency table, as served by `GET /rates`.
+///
+/// [rates] already has any administrator override folded in -- the server does
+/// that, once, so every device in the household reads the same number. The
+/// [overrides] map ships alongside only so the rates screen can show which
+/// values were set by hand.
+class ServerExchangeRates {
+  const ServerExchangeRates({
+    required this.rates,
+    required this.overrides,
+    required this.fetchedAt,
+  });
+
+  final Map<String, double> rates;
+  final Map<String, double> overrides;
+  final DateTime fetchedAt;
+
+  static Map<String, double> _numbersFrom(dynamic raw) {
+    if (raw is! Map) return {};
+    return {
+      for (final entry in raw.entries)
+        if (entry.value is num) entry.key.toString(): (entry.value as num).toDouble()
+    };
+  }
+
+  factory ServerExchangeRates.fromJson(Map<String, dynamic> json) => ServerExchangeRates(
+        rates: _numbersFrom(json["rates"]),
+        overrides: _numbersFrom(json["overrides"]),
+        fetchedAt: DateTime.fromMillisecondsSinceEpoch(
+            (json["fetchedAt"] as num?)?.toInt() ?? 0),
+      );
+}
+
 class SyncPushResult {
   final DateTime serverTime;
   final int conflictCount;
@@ -565,12 +598,13 @@ abstract class BackupTransport {
   Future<void> deleteFile(String filename);
 }
 
-/// Talks to one of this fork's two file namespaces -- `/sync/files` (device
-/// snapshot-diff transport) or `/backup` (full backups) -- both scoped
-/// server-side to the authenticated user. See specs/03-stage-1-kill-google.md.
-/// Implements [BackupTransport] via its `/sync/files` methods -- that's the
-/// only transport the device-to-device sync path is ever allowed to use.
-class SelfHostedClient implements BackupTransport {
+/// Everything this app asks of its own server: sessions, the change feed,
+/// backups, attachments, rates and administration.
+///
+/// It used to also implement [BackupTransport] over a `/sync/files` namespace,
+/// back when devices synced by trading whole SQLite files. That namespace and
+/// those methods are gone; backups go through [SelfHostedBackupTransport].
+class SelfHostedClient {
   final SelfHostedSession session;
   SelfHostedClient(this.session);
 
@@ -590,42 +624,6 @@ class SelfHostedClient implements BackupTransport {
   void _throwIfUnauthenticated(http.Response response) {
     if (response.statusCode == 401) throw SelfHostedUnauthenticatedException();
   }
-
-  Future<List<SyncFile>> listFiles() => _withRefreshRetry(() async {
-        final response = await _httpClient
-            .get(Uri.parse('${session.serverUrl}/sync/files'),
-                headers: _authHeader)
-            .timeout(const Duration(seconds: 20));
-        _throwIfUnauthenticated(response);
-        final list = jsonDecode(response.body) as List<dynamic>;
-        return list.map((e) => SyncFile.fromJson(e)).toList();
-      });
-
-  Future<List<int>> getFile(String filename) => _withRefreshRetry(() async {
-        final response = await _httpClient
-            .get(Uri.parse('${session.serverUrl}/sync/files/$filename'),
-                headers: _authHeader)
-            .timeout(const Duration(seconds: 60));
-        _throwIfUnauthenticated(response);
-        return response.bodyBytes;
-      });
-
-  Future<void> putFile(String filename, List<int> bytes) =>
-      _withRefreshRetry(() async {
-        final response = await _httpClient
-            .put(Uri.parse('${session.serverUrl}/sync/files/$filename'),
-                headers: _authHeader, body: bytes)
-            .timeout(const Duration(seconds: 60));
-        _throwIfUnauthenticated(response);
-      });
-
-  Future<void> deleteFile(String filename) => _withRefreshRetry(() async {
-        final response = await _httpClient
-            .delete(Uri.parse('${session.serverUrl}/sync/files/$filename'),
-                headers: _authHeader)
-            .timeout(const Duration(seconds: 20));
-        _throwIfUnauthenticated(response);
-      });
 
   Future<List<SyncFile>> listBackupFiles() => _withRefreshRetry(() async {
         final response = await _httpClient
@@ -880,6 +878,32 @@ class SelfHostedClient implements BackupTransport {
         return body['temporaryPassword'] as String;
       });
 
+  /// The deployment's currency table. See docs/server/rates.md.
+  Future<ServerExchangeRates> getRates() => _withRefreshRetry(() async {
+        final response = await _httpClient
+            .get(Uri.parse('${session.serverUrl}/rates'), headers: _authHeader)
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+        return ServerExchangeRates.fromJson(jsonDecode(response.body));
+      });
+
+  Future<void> putRateOverride(String currency, double rate) =>
+      _withRefreshRetry(() async {
+        final response = await _httpClient
+            .put(Uri.parse('${session.serverUrl}/rates/overrides/$currency'),
+                headers: _jsonHeaders, body: jsonEncode({'rate': rate}))
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+      });
+
+  Future<void> deleteRateOverride(String currency) => _withRefreshRetry(() async {
+        final response = await _httpClient
+            .delete(Uri.parse('${session.serverUrl}/rates/overrides/$currency'),
+                headers: _authHeader)
+            .timeout(const Duration(seconds: 20));
+        _throwUnlessOk(response);
+      });
+
   Future<void> deleteUser(int userId) => _withRefreshRetry(() async {
         final response = await _httpClient
             .delete(Uri.parse('${session.serverUrl}/admin/users/$userId'),
@@ -975,15 +999,32 @@ Future<bool> selfHostedAccountHasExistingData() async {
     print("Could not check whether this account has existing data: $e");
     return false;
   }
-  try {
-    // Stage 1's whole-database snapshots. An account last used by a build that
-    // predates the row-level feed has these and nothing else.
-    final files = await client.listFiles().timeout(budget);
-    return files.isNotEmpty;
-  } catch (e) {
-    print("Could not list existing sync files: $e");
-    return false;
-  }
+  return false;
+}
+
+/// The deployment's currency table, or null if it could not be read.
+///
+/// Null on every failure -- unreachable, signed out, malformed -- because the
+/// caller's answer to all of them is the same: keep using the table already
+/// cached. See docs/server/rates.md.
+Future<ServerExchangeRates?> selfHostedFetchRates() async {
+  final (result, rates) = await _guarded((client) => client.getRates());
+  if (result != ServerCallResult.ok) return null;
+  return rates;
+}
+
+/// Sets an administrator override for one currency, deployment-wide.
+Future<ServerCallResult> selfHostedSetRateOverride(
+    String currency, double rate) async {
+  final (result, _) =
+      await _guarded((client) => client.putRateOverride(currency, rate));
+  return result;
+}
+
+/// Clears an override, falling that currency back to the fetched value.
+Future<ServerCallResult> selfHostedClearRateOverride(String currency) async {
+  final (result, _) = await _guarded((client) => client.deleteRateOverride(currency));
+  return result;
 }
 
 /// Refreshes the cached profile. On failure the existing cache is deliberately

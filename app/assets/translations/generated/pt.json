@@ -1246,5 +1246,15 @@
   "changelog-1-2-1-envelope-currency-body": "Os envelopes agora seguem a moeda da sua conta principal. Cada valor planeado lembra-se da conta em que foi introduzido, por isso tornar principal uma conta noutra moeda converte o plano da mesma forma que já converte as suas despesas, em vez de deixar o mesmo número com outro símbolo de moeda. Os valores planeados antes desta atualização são lidos como tendo sido definidos na conta que é principal agora. Se a casa usa mais do que uma moeda, ao introduzir o valor pode agora escolher em que conta o envelope é planeado.",
   "received": "Recebido",
   "above-plan": "acima do plano",
-  "still-to-come": "ainda por vir"
+  "still-to-come": "ainda por vir",
+  "rates-are-shared": "As taxas valem para todos",
+  "rates-are-shared-description": "O seu servidor mantém um único conjunto de taxas de câmbio para que os totais de todos coincidam. Um administrador pode alterá-las.",
+  "rate-not-saved": "Taxa não guardada",
+  "exchange-rates-unavailable": "Taxas de câmbio indisponíveis",
+  "exchange-rates-unavailable-description": "Este dispositivo ainda não as conseguiu carregar, por isso todas as moedas abaixo aparecem a 1:1. Os valores noutras moedas estarão errados até lá.",
+  "changelog-1-4-0-rates-title": "Todos veem as mesmas taxas de câmbio",
+  "changelog-1-4-0-rates-body": "O seu servidor mantém agora um único conjunto de taxas em vez de cada dispositivo carregar o seu, por isso os valores noutras moedas finalmente coincidem entre contas. Um administrador pode ajustar uma em Definições, Taxas de câmbio.",
+  "changelog-1-4-0-sync-title": "O botão de sincronização manual desapareceu",
+  "changelog-1-4-0-sync-body": "Copiava a base de dados inteira de cada vez e tinha deixado de levar algumas das suas definições sem avisar. A sincronização é automática há já algum tempo, por isso foi removido. Em Conta, Sincronização ficam o interruptor e Repor sincronização.",
+  "changelog-1-4-1-default-categories-body": "Adicionar um dispositivo a um agregado partilhado já não semeia onze categorias vazias nos dados de todos. Se algumas já apareceram, apague-as uma vez — não voltam."
 }

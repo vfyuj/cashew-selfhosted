@@ -6,7 +6,7 @@ import 'package:cashew_selfhosted/pages/transactionFilters.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/perUserViewSettings.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/syncClient.dart';
+import 'package:cashew_selfhosted/struct/syncLog.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
 import 'package:cashew_selfhosted/widgets/periodCyclePicker.dart';
 import 'package:cashew_selfhosted/widgets/walletEntry.dart';

@@ -1,7 +1,7 @@
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/syncClient.dart';
+import 'package:cashew_selfhosted/struct/liveSyncClient.dart';
 import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/globalSnackbar.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
@@ -39,7 +39,11 @@ Future<String?> importDBFileFromDevice(BuildContext context) async {
     ));
   }
 
-  await cancelAndPreventSyncOperation();
+  // Hold sync off while the database file is replaced underneath it. Live
+  // sync resumes on the app's next resume or trigger; nothing is lost in the
+  // meantime, because the push cursor scans the tables themselves rather than
+  // a queue (docs/app/sync-client.md).
+  await pauseLiveSyncAndWait();
 
   await createSafetyBackupBeforeOverwrite(context);
 

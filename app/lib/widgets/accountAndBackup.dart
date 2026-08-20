@@ -4,14 +4,12 @@ import 'package:cashew_selfhosted/database/generatePreviewData.dart';
 import 'package:cashew_selfhosted/database/tables.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/main.dart';
-import 'package:cashew_selfhosted/pages/aboutPage.dart';
 import 'package:cashew_selfhosted/pages/accountsPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/liveSyncClient.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
 import 'package:cashew_selfhosted/struct/webdavClient.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
-import 'package:cashew_selfhosted/struct/syncClient.dart';
 import 'package:cashew_selfhosted/widgets/animatedExpanded.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
 import 'package:cashew_selfhosted/widgets/exportCSV.dart';
@@ -67,6 +65,35 @@ void refreshUIAfterLoginChange() {
 /// opens AccountsPage to collect email/password/server URL -- there is no
 /// more one-tap OAuth popup to trigger this inline, credentials must come
 /// from a form. See specs/03-stage-1-kill-google.md.
+/// The device name that goes into a backup filename.
+///
+/// Moved here from the deleted syncClient.dart, along with the sanitiser
+/// below: naming a backup file is all these were ever used for.
+String getCurrentDeviceName() {
+  return sanitizeFilenameComponent((clientID).split("-")[0]);
+}
+
+/// Strips everything but alphanumerics/underscores from a device name before
+/// it goes into a backup filename. Device names (e.g. macOS's "Macintosh
+/// intel m") often contain spaces, and the self-hosted server's file routes
+/// store whatever raw path segment they're given rather than URL-decoding
+/// it -- so an un-sanitized name round-trips back as a filename with a
+/// literal "%20" in it instead of a space.
+String sanitizeFilenameComponent(String value) {
+  return value.replaceAll(RegExp(r'[^A-Za-z0-9_]+'), '_');
+}
+
+/// Renews the session on launch, if this install is set up to stay signed in.
+///
+/// Also moved from the deleted syncClient.dart; it was never part of the
+/// snapshot exchange, it just lived in the same file.
+Future<bool> runForceSignIn(BuildContext context) async {
+  if (appStateSettings["forceAutoLogin"] == false) return false;
+  if (appStateSettings["hasSignedIn"] == false) return false;
+  if (selfHostedSession == null) return false;
+  return await selfHostedRefresh();
+}
+
 Future<bool> signInAndSync(BuildContext context,
     {required dynamic Function() next}) async {
   if (selfHostedSession == null) {
@@ -86,7 +113,7 @@ Future<bool> signInAndSync(BuildContext context,
 Future<bool> syncAfterLogin(BuildContext context) async {
   loadingIndeterminateKey.currentState?.setVisibility(true);
   try {
-    await syncData(context);
+    await runLiveSyncCycle();
     loadingIndeterminateKey.currentState?.setVisibility(true);
     await createBackupInBackground(context);
     loadingIndeterminateKey.currentState?.setVisibility(false);
@@ -244,7 +271,6 @@ Future<void> createBackup(
   context, {
   bool? silentBackup,
   bool deleteOldBackups = false,
-  String? clientIDForSync,
 }) async {
   try {
     if (silentBackup == false || silentBackup == null) {
@@ -272,33 +298,21 @@ Future<void> createBackup(
     DBFileInfo currentDBFileInfo = await getCurrentDBFileInfo();
 
     String filename = "db-v$schemaVersionGlobal-${getCurrentDeviceName()}.sqlite";
-    if (clientIDForSync != null) {
-      // Sync always goes through the self-hosted server, never WebDAV --
-      // see specs/03-stage-1-kill-google.md.
-      if (selfHostedSession == null) throw ("Not signed in to a server");
-      final client = SelfHostedClient(selfHostedSession!);
-      filename =
-          getCurrentDeviceSyncBackupFileName(clientIDForSync: clientIDForSync);
-      await client.putFile(filename, currentDBFileInfo.dbFileBytes);
-    } else {
-      final transport = getBackupTransport();
-      if (transport == null) throw ("Backup destination is not configured");
-      await transport.putFile(filename, currentDBFileInfo.dbFileBytes);
-    }
+    final transport = getBackupTransport();
+    if (transport == null) throw ("Backup destination is not configured");
+    await transport.putFile(filename, currentDBFileInfo.dbFileBytes);
 
-    if (clientIDForSync == null)
-      openSnackbar(
-        SnackbarMessage(
-          title: "backup-created".tr(),
-          description: filename,
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.backup_outlined
-              : Icons.backup_rounded,
-        ),
-      );
-    if (clientIDForSync == null)
-      await updateSettings("lastBackup", DateTime.now().toString(),
-          pagesNeedingRefresh: [], updateGlobalState: false);
+    openSnackbar(
+      SnackbarMessage(
+        title: "backup-created".tr(),
+        description: filename,
+        icon: appStateSettings["outlinedIcons"]
+            ? Icons.backup_outlined
+            : Icons.backup_rounded,
+      ),
+    );
+    await updateSettings("lastBackup", DateTime.now().toString(),
+        pagesNeedingRefresh: [], updateGlobalState: false);
 
     if (silentBackup == false || silentBackup == null) {
       loadingIndeterminateKey.currentState?.setVisibility(false);
@@ -354,8 +368,7 @@ Future<void> deleteRecentBackups(context, amountToKeep,
   }
 }
 
-Future<void> deleteBackup(BackupTransport client, String filename,
-    {bool isSync = false}) async {
+Future<void> deleteBackup(BackupTransport client, String filename) async {
   try {
     await client.deleteFile(filename);
   } catch (e) {
@@ -364,15 +377,12 @@ Future<void> deleteBackup(BackupTransport client, String filename,
 }
 
 Future<void> chooseBackup(context,
-    {bool isManaging = false,
-    bool isClientSync = false,
-    bool hideDownloadButton = false}) async {
+    {bool isManaging = false, bool hideDownloadButton = false}) async {
   try {
     openBottomSheet(
       context,
       BackupManagement(
         isManaging: isManaging,
-        isClientSync: isClientSync,
         hideDownloadButton: hideDownloadButton,
       ),
     );
@@ -388,12 +398,14 @@ Future<void> chooseBackup(context,
   }
 }
 
-Future<void> loadBackup(BuildContext context, BackupTransport client,
-    SyncFile file, {bool isSync = false}) async {
+Future<void> loadBackup(
+    BuildContext context, BackupTransport client, SyncFile file) async {
   try {
     openLoadingPopup(context);
 
-    await cancelAndPreventSyncOperation();
+    // Hold sync off while the database file is replaced underneath it -- same
+    // reason as importDB.dart. It resumes on the next app resume or trigger.
+    await pauseLiveSyncAndWait();
 
     await createSafetyBackupBeforeOverwrite(context);
 
@@ -558,33 +570,123 @@ Future<(BackupTransport? client, List<SyncFile>?)> getBackupFiles() async {
   return (null, null);
 }
 
-Future<(BackupTransport? client, List<SyncFile>?)> getSyncFiles() async {
-  if (selfHostedSession == null) return (null, null);
-  try {
-    final client = SelfHostedClient(selfHostedSession!);
-    return (client, await client.listFiles());
-  } catch (e) {
-    openSnackbar(
-      SnackbarMessage(
-          title: e.toString(),
-          icon: appStateSettings["outlinedIcons"]
-              ? Icons.error_outlined
-              : Icons.error_rounded),
-    );
-  }
-  return (null, null);
+/// Sync settings: whether this device syncs at all, and the escape hatch.
+///
+/// What is left of the old "synced devices" screen. That screen listed one
+/// whole-database snapshot per device, because Stage 1 sync worked by trading
+/// SQLite files; the row-level feed replaced it and the file list went with it.
+/// These two outlived it -- `backupSync` is the master switch the live cycle
+/// itself checks (liveSyncClient.dart), and Reset Sync belongs to the feed, not
+/// to the mechanism that was removed.
+Future<void> openSyncSettings(BuildContext context) {
+  return openBottomSheet(context, const SyncSettings());
 }
 
+class SyncSettings extends StatefulWidget {
+  const SyncSettings({super.key});
+
+  @override
+  State<SyncSettings> createState() => _SyncSettingsState();
+}
+
+class _SyncSettingsState extends State<SyncSettings> {
+  @override
+  Widget build(BuildContext context) {
+    return PopupFramework(
+      title: "sync".tr().capitalizeFirst,
+      subtitle: "manage-syncing-info".tr(),
+      child: Column(
+        children: [
+          SettingsContainerSwitch(
+            enableBorderRadius: true,
+            onSwitched: (value) async {
+              await updateSettings("backupSync", value,
+                  pagesNeedingRefresh: [], updateGlobalState: false);
+              // The sidebar shows a sync button that this hides.
+              sidebarStateKey.currentState?.refreshState();
+              setState(() {});
+            },
+            initialValue: appStateSettings["backupSync"],
+            title: "sync-data".tr(),
+            description: "sync-data-description".tr(),
+            icon: appStateSettings["outlinedIcons"]
+                ? Icons.cloud_sync_outlined
+                : Icons.cloud_sync_rounded,
+          ),
+          // Reset Sync -- the escape hatch upstream Cashew also ships. A change
+          // feed can end up in a state no client can make progress against,
+          // and without this the only remedy is editing the server database by
+          // hand. See specs/04-stage-2-instant-sync.md.
+          //
+          // English literals rather than .tr() keys, like liveSyncClient.dart's
+          // snackbars: nobody has translated them since BL-007 made the
+          // translations fork-owned. "reset"/"cancel" are existing upstream
+          // keys, so those stay translated.
+          SettingsContainer(
+            enableBorderRadius: true,
+            title: "Reset Sync",
+            description: "Reset the remote sync database",
+            icon: appStateSettings["outlinedIcons"]
+                ? Icons.restart_alt_outlined
+                : Icons.restart_alt_rounded,
+            onTap: () {
+              openPopup(
+                context,
+                icon: appStateSettings["outlinedIcons"]
+                    ? Icons.restart_alt_outlined
+                    : Icons.restart_alt_rounded,
+                title: "Reset Sync",
+                description:
+                    "Clears the server sync database to reinitialize syncing between devices. "
+                    "This device's data is then uploaded as the new baseline. "
+                    "Local data and stored backups remain intact." +
+                        (cachedServerProfile?.sharesHousehold == true
+                            ? "\n\nThis budget is shared. Every device of "
+                                "everyone sharing it will re-sync against "
+                                "this device's data."
+                            : ""),
+                onSubmit: () async {
+                  popRoute(context);
+                  await openLoadingPopupTryCatch(() async {
+                    final success = await resetLiveSync();
+                    if (success == false) {
+                      throw "Could not reach the server to reset syncing.";
+                    }
+                    openSnackbar(SnackbarMessage(
+                      title: "Sync reset",
+                      description: "Other devices will re-sync automatically",
+                      icon: appStateSettings["outlinedIcons"]
+                          ? Icons.check_circle_outlined
+                          : Icons.check_circle_rounded,
+                    ));
+                  });
+                },
+                onSubmitLabel: "reset".tr(),
+                onCancel: () => popRoute(context),
+                onCancelLabel: "cancel".tr(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The backups list.
+///
+/// It used to double as the "synced devices" screen via an `isClientSync`
+/// flag threaded through twenty conditionals, listing one whole-database
+/// snapshot per device. That mechanism is gone (see [SyncSettings]), and with
+/// it every branch of the flag.
 class BackupManagement extends StatefulWidget {
   const BackupManagement({
     Key? key,
     required this.isManaging,
-    required this.isClientSync,
     this.hideDownloadButton = false,
   }) : super(key: key);
 
   final bool isManaging;
-  final bool isClientSync;
   final bool hideDownloadButton;
 
   @override
@@ -604,8 +706,7 @@ class _BackupManagementState extends State<BackupManagement> {
   void initState() {
     super.initState();
     Future.delayed(Duration.zero, () async {
-      (BackupTransport?, List<SyncFile>?) result =
-          widget.isClientSync ? await getSyncFiles() : await getBackupFiles();
+      (BackupTransport?, List<SyncFile>?) result = await getBackupFiles();
       BackupTransport? client = result.$1;
       List<SyncFile>? files = result.$2;
       if (files == null || client == null) {
@@ -626,56 +727,20 @@ class _BackupManagementState extends State<BackupManagement> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.isClientSync) {
-      if (filesState.length > 0) {
-        print(appStateSettings["devicesHaveBeenSynced"]);
-        updateSettings("devicesHaveBeenSynced", filesState.length,
-            updateGlobalState: false);
-      }
-    } else {
-      if (filesState.length > 0) {
-        updateSettings("numBackups", filesState.length,
-            updateGlobalState: false);
-      }
+    if (filesState.length > 0) {
+      updateSettings("numBackups", filesState.length, updateGlobalState: false);
     }
     Iterable<MapEntry<int, SyncFile>> filesMap = filesState.asMap().entries;
     return PopupFramework(
-      title: widget.isClientSync
-          ? "devices".tr().capitalizeFirst
-          : widget.isManaging
-              ? "backups".tr()
-              : "restore-a-backup".tr(),
-      subtitle: widget.isClientSync
-          ? "manage-syncing-info".tr()
-          : widget.isManaging
-              ? appStateSettings["backupLimit"].toString() +
-                  " " +
-                  "stored-backups".tr()
-              : "overwrite-warning".tr(),
+      title: widget.isManaging ? "backups".tr() : "restore-a-backup".tr(),
+      subtitle: widget.isManaging
+          ? appStateSettings["backupLimit"].toString() +
+              " " +
+              "stored-backups".tr()
+          : "overwrite-warning".tr(),
       child: Column(
         children: [
-          widget.isClientSync && kIsWeb == false
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: AboutInfoBox(
-                        title: "web-app".tr(),
-                        link: "https://budget-track.web.app/",
-                        color: appStateSettings["materialYou"]
-                            ? Theme.of(context).colorScheme.secondaryContainer
-                            : getColor(context, "lightDarkAccentHeavyLight"),
-                        padding: EdgeInsetsDirectional.only(
-                          start: 5,
-                          end: 5,
-                          bottom: 10,
-                          top: 5,
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              : SizedBox.shrink(),
-          widget.isManaging && widget.isClientSync == false
+          widget.isManaging
               ? SettingsContainerSwitch(
                   enableBorderRadius: true,
                   onSwitched: (value) async {
@@ -693,114 +758,7 @@ class _BackupManagementState extends State<BackupManagement> {
                       : Icons.cloud_done_rounded,
                 )
               : SizedBox.shrink(),
-          widget.isClientSync
-              ? SettingsContainerSwitch(
-                  enableBorderRadius: true,
-                  onSwitched: (value) async {
-                    // Only update global is the sidebar is shown
-                    await updateSettings("backupSync", value,
-                        pagesNeedingRefresh: [], updateGlobalState: false);
-                    sidebarStateKey.currentState?.refreshState();
-                    setState(() {
-                      backupSync = value;
-                    });
-                    // Future.delayed(Duration(milliseconds: 100), () {
-                    //   bottomSheetControllerGlobal.snapToExtent(0);
-                    // });
-                  },
-                  initialValue: appStateSettings["backupSync"],
-                  title: "sync-data".tr(),
-                  description: "sync-data-description".tr(),
-                  icon: appStateSettings["outlinedIcons"]
-                      ? Icons.cloud_sync_outlined
-                      : Icons.cloud_sync_rounded,
-                )
-              : SizedBox.shrink(),
-          // Only allow sync on every change for web
-          // Only on web, disabled automatically in initializeSettings if not web
-          widget.isClientSync && kIsWeb
-              ? AnimatedExpanded(
-                  expand: backupSync,
-                  child: SettingsContainerSwitch(
-                    enableBorderRadius: true,
-                    onSwitched: (value) async {
-                      await updateSettings("syncEveryChange", value,
-                          pagesNeedingRefresh: [], updateGlobalState: false);
-                    },
-                    initialValue: appStateSettings["syncEveryChange"],
-                    title: "sync-every-change".tr(),
-                    descriptionWithValue: (value) {
-                      return value
-                          ? "sync-every-change-description1".tr()
-                          : "sync-every-change-description2".tr();
-                    },
-                    icon: appStateSettings["outlinedIcons"]
-                        ? Icons.all_inbox_outlined
-                        : Icons.all_inbox_rounded,
-                  ),
-                )
-              : SizedBox.shrink(),
-          // Reset Sync -- the escape hatch upstream Cashew also ships. A change
-          // feed can end up in a state no client can make progress against,
-          // and without this the only remedy is editing the server database by
-          // hand. See specs/04-stage-2-instant-sync.md.
-          // English literals rather than .tr() keys. The original reason no
-          // longer holds -- assets/translations was regenerated from upstream
-          // Cashew's Google Sheet back then, which would have dropped any
-          // fork-local key, but BL-007 made the translations fork-owned and
-          // that pipeline is gone. These stay English only because nobody has
-          // translated them since; new fork strings do use .tr(). Same for
-          // liveSyncClient.dart's snackbars. "reset"/"cancel" are existing
-          // upstream keys, so those stay translated.
-          widget.isClientSync
-              ? SettingsContainer(
-                  enableBorderRadius: true,
-                  title: "Reset Sync",
-                  description: "Reset the remote sync database",
-                  icon: appStateSettings["outlinedIcons"]
-                      ? Icons.restart_alt_outlined
-                      : Icons.restart_alt_rounded,
-                  onTap: () {
-                    openPopup(
-                      context,
-                      icon: appStateSettings["outlinedIcons"]
-                          ? Icons.restart_alt_outlined
-                          : Icons.restart_alt_rounded,
-                      title: "Reset Sync",
-                      description:
-                          "Clears the server sync database to reinitialize syncing between devices. "
-                          "This device's data is then uploaded as the new baseline. "
-                          "Local data and stored backups remain intact." +
-                              (cachedServerProfile?.sharesHousehold == true
-                                  ? "\n\nThis budget is shared. Every device of "
-                                      "everyone sharing it will re-sync against "
-                                      "this device's data."
-                                  : ""),
-                      onSubmit: () async {
-                        popRoute(context);
-                        await openLoadingPopupTryCatch(() async {
-                          final success = await resetLiveSync();
-                          if (success == false) {
-                            throw "Could not reach the server to reset syncing.";
-                          }
-                          openSnackbar(SnackbarMessage(
-                            title: "Sync reset",
-                            description:
-                                "Other devices will re-sync automatically",
-                            icon: appStateSettings["outlinedIcons"]
-                                ? Icons.check_circle_outlined
-                                : Icons.check_circle_rounded,
-                          ));
-                        });
-                      },
-                      onSubmitLabel: "reset".tr(),
-                      onCancel: () => popRoute(context),
-                      onCancelLabel: "cancel".tr(),
-                    );
-                  },
-                )
-              : SizedBox.shrink(),
-          widget.isManaging && widget.isClientSync == false
+          widget.isManaging
               ? AnimatedExpanded(
                   expand: autoBackups,
                   child: SettingsContainerDropdown(
@@ -821,9 +779,7 @@ class _BackupManagementState extends State<BackupManagement> {
                   ),
                 )
               : SizedBox.shrink(),
-          widget.isManaging &&
-                  widget.isClientSync == false &&
-                  appStateSettings["showBackupLimit"]
+          widget.isManaging && appStateSettings["showBackupLimit"]
               ? SettingsContainerDropdown(
                   enableBorderRadius: true,
                   key: dropDownKey,
@@ -862,18 +818,11 @@ class _BackupManagementState extends State<BackupManagement> {
                   },
                 )
               : SizedBox.shrink(),
-          if ((widget.isManaging == false && widget.isClientSync == false) ==
-              false)
-            SizedBox(height: 10),
+          if (widget.isManaging) SizedBox(height: 10),
           isLoading
               ? Column(
                   children: [
-                    for (int i = 0;
-                        i <
-                            (widget.isClientSync
-                                ? appStateSettings["devicesHaveBeenSynced"]
-                                : appStateSettings["numBackups"]);
-                        i++)
+                    for (int i = 0; i < appStateSettings["numBackups"]; i++)
                       LoadingShimmerDriveFiles(
                           isManaging: widget.isManaging, i: i),
                   ],
@@ -945,9 +894,7 @@ class _BackupManagementState extends State<BackupManagement> {
                                   },
                                 );
                                 if (result == true)
-                                  loadBackup(
-                                      context, clientState, file.value,
-                                      isSync: widget.isClientSync);
+                                  loadBackup(context, clientState, file.value);
                               }
                               // else {
                               //   await openPopup(
@@ -967,19 +914,10 @@ class _BackupManagementState extends State<BackupManagement> {
                               // }
                             },
                             borderRadius: 15,
-                            color: widget.isClientSync &&
-                                    isCurrentDeviceSyncBackupFile(
-                                        file.value.name)
-                                ? Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withOpacity(0.4)
-                                : appStateSettings["materialYou"]
-                                    ? Theme.of(context)
-                                        .colorScheme
-                                        .secondaryContainer
-                                    : getColor(
-                                        context, "lightDarkAccentHeavyLight"),
+                            color: appStateSettings["materialYou"]
+                                ? Theme.of(context).colorScheme.secondaryContainer
+                                : getColor(
+                                    context, "lightDarkAccentHeavyLight"),
                             child: Container(
                               padding: EdgeInsetsDirectional.symmetric(
                                   horizontal: 20, vertical: 15),
@@ -989,23 +927,15 @@ class _BackupManagementState extends State<BackupManagement> {
                                     child: Row(
                                       children: [
                                         Icon(
-                                          widget.isClientSync
-                                              ? appStateSettings[
-                                                      "outlinedIcons"]
-                                                  ? Icons.devices_outlined
-                                                  : Icons.devices_rounded
-                                              : appStateSettings[
-                                                      "outlinedIcons"]
-                                                  ? Icons.description_outlined
-                                                  : Icons.description_rounded,
+                                          appStateSettings["outlinedIcons"]
+                                              ? Icons.description_outlined
+                                              : Icons.description_rounded,
                                           color: Theme.of(context)
                                               .colorScheme
                                               .secondary,
                                           size: 30,
                                         ),
-                                        SizedBox(
-                                            width:
-                                                widget.isClientSync ? 17 : 13),
+                                        SizedBox(width: 13),
                                         Expanded(
                                           child: Column(
                                             crossAxisAlignment:
@@ -1022,32 +952,10 @@ class _BackupManagementState extends State<BackupManagement> {
                                                 maxLines: 2,
                                               ),
                                               TextFont(
-                                                text: (isSyncBackupFile(
-                                                        file.value.name)
-                                                    ? getDeviceFromSyncBackupFileName(
-                                                            file.value.name) +
-                                                        " " +
-                                                        "sync"
-                                                    : file.value.name ??
-                                                        "No name"),
+                                                text: file.value.name,
                                                 fontSize: 14,
                                                 maxLines: 2,
                                               ),
-                                              // isSyncBackupFile(
-                                              //         file.value.name)
-                                              //     ? Padding(
-                                              //         padding:
-                                              //             const EdgeInsetsDirectional
-                                              //                 .only(top: 3),
-                                              //         child: TextFont(
-                                              //           text:
-                                              //               file.value.name ??
-                                              //                   "",
-                                              //           fontSize: 11,
-                                              //           maxLines: 2,
-                                              //         ),
-                                              //       )
-                                              //     : SizedBox.shrink()
                                             ],
                                           ),
                                         ),
@@ -1087,8 +995,6 @@ class _BackupManagementState extends State<BackupManagement> {
                                                                 clientState,
                                                             fileToSave:
                                                                 file.value,
-                                                            isSync: widget
-                                                                .isClientSync,
                                                           );
                                                         },
                                                         icon: Icons
@@ -1160,11 +1066,7 @@ class _BackupManagementState extends State<BackupManagement> {
                                                             " MB",
                                                       ),
                                                     ),
-                                                    description: (widget
-                                                            .isClientSync
-                                                        ? "delete-sync-backup-warning"
-                                                            .tr()
-                                                        : null),
+                                                    description: null,
                                                     onSubmit: () async {
                                                       popRoute(context);
                                                       loadingIndeterminateKey
@@ -1172,9 +1074,7 @@ class _BackupManagementState extends State<BackupManagement> {
                                                           ?.setVisibility(true);
                                                       await deleteBackup(
                                                           clientState,
-                                                          file.value.id,
-                                                          isSync: widget
-                                                              .isClientSync);
+                                                          file.value.id);
                                                       openSnackbar(
                                                         SnackbarMessage(
                                                             title:
@@ -1193,14 +1093,6 @@ class _BackupManagementState extends State<BackupManagement> {
                                                       });
                                                       // bottomSheetControllerGlobal
                                                       //     .snapToExtent(0);
-                                                      if (widget.isClientSync)
-                                                        await updateSettings(
-                                                            "devicesHaveBeenSynced",
-                                                            appStateSettings[
-                                                                    "devicesHaveBeenSynced"] -
-                                                                1,
-                                                            updateGlobalState:
-                                                                false);
                                                       if (widget.isManaging) {
                                                         await updateSettings(
                                                             "numBackups",
@@ -1365,7 +1257,6 @@ Future<bool> saveDriveFileToDevice({
   required BuildContext boxContext,
   required BackupTransport client,
   required SyncFile fileToSave,
-  bool isSync = false,
 }) async {
   List<int> dataStore = await client.getFile(fileToSave.name);
   String fileName = "cashew-" +

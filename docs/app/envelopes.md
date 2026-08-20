@@ -105,8 +105,9 @@ the budget page**:
 - the category's colour seeds the whole page through `CustomColorTheme`, so the app bar and the block
   under it are a tint of it rather than the app's accent, and the progress bar keeps its contrast
   because `BudgetProgress` derives its own track from the same colour;
-- the figure and its clause sit in the app bar as the subtitle, tappable to swap the total type — the
-  same affordance the budget page's `TotalSpent` has;
+- the figure and its clause sit in the app bar as the subtitle, tappable to swap the total type —
+  literally the same widget the budget page uses, `widgets/swappableTotal.dart`, which takes what the
+  two figures are *called* as its only parameter;
 - the month's name sits under the bar. It is a label, not a timeline: an envelope is always exactly
   one calendar month, so there is no range to draw. There is **no pie chart and no
   spending-over-time graph** either — one category for one month has nothing to divide;
@@ -151,10 +152,10 @@ ambiguous. Both sides bold the leading clause, which is presentation rather than
 ## Elsewhere in the app
 
 - **The home page** (`pages/homePage/homePageEnvelopes.dart`) carries the same cards in a horizontal
-  carousel, the shape the pinned budgets use, as its own section — toggled and reordered from Edit
-  Home like every other one (`showEnvelopes`, key `"envelopes"`). It shows **only envelopes with an
-  amount set for this month**: every main category has an envelope, which is right for the envelopes
-  page and wrong here, where a household with twenty categories would get twenty cards to swipe
+  carousel — `widgets/homePageCardCarousel.dart`, shared with the pinned budgets — as its own
+  section, toggled and reordered from Edit Home like every other one (`showEnvelopes`, key
+  `"envelopes"`). It shows **only envelopes with an amount set for this month**: every main category
+  has an envelope, which is right for the envelopes page and wrong here, where a household with twenty categories would get twenty cards to swipe
   through, most of them empty.
 - **Planned vs Actual** (`pages/homePage/homePagePlannedVsActual.dart`) reads envelope totals for its
   Planned card and the month's transactions for its Actual one. It sits on the home page and at the
