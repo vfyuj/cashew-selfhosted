@@ -1251,5 +1251,9 @@
   "rates-are-shared-description": "Votre serveur conserve un seul jeu de taux de change pour que les totaux de chacun concordent. Un administrateur peut les modifier.",
   "rate-not-saved": "Taux non enregistré",
   "exchange-rates-unavailable": "Taux de change indisponibles",
-  "exchange-rates-unavailable-description": "Cet appareil n'a pas encore pu les charger, donc toutes les devises ci-dessous sont affichées à 1:1. Les montants dans d'autres devises seront faux jusque-là."
+  "exchange-rates-unavailable-description": "Cet appareil n'a pas encore pu les charger, donc toutes les devises ci-dessous sont affichées à 1:1. Les montants dans d'autres devises seront faux jusque-là.",
+  "changelog-1-4-0-rates-title": "Tout le monde voit les mêmes taux de change",
+  "changelog-1-4-0-rates-body": "Votre serveur conserve désormais un seul jeu de taux au lieu que chaque appareil charge le sien, donc les montants dans d'autres devises concordent enfin entre les comptes. Un administrateur peut en ajuster un dans Réglages, Taux de change.",
+  "changelog-1-4-0-sync-title": "Le bouton de synchronisation manuelle a disparu",
+  "changelog-1-4-0-sync-body": "Il copiait toute votre base de données à chaque fois, et avait cessé sans le dire de transporter certains de vos réglages. La synchronisation est automatique depuis longtemps, il a donc été retiré. Compte, Synchronisation garde l'interrupteur et Réinitialiser la synchronisation."
 }

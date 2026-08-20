@@ -1251,5 +1251,9 @@
   "rates-are-shared-description": "Tu servidor guarda un único conjunto de tipos de cambio para que los totales de todos coincidan. Un administrador puede cambiarlos.",
   "rate-not-saved": "Tipo no guardado",
   "exchange-rates-unavailable": "Tipos de cambio no disponibles",
-  "exchange-rates-unavailable-description": "Este dispositivo aún no ha podido cargarlos, así que todas las monedas de abajo se muestran a 1:1. Los importes en otras monedas serán incorrectos hasta entonces."
+  "exchange-rates-unavailable-description": "Este dispositivo aún no ha podido cargarlos, así que todas las monedas de abajo se muestran a 1:1. Los importes en otras monedas serán incorrectos hasta entonces.",
+  "changelog-1-4-0-rates-title": "Todos ven los mismos tipos de cambio",
+  "changelog-1-4-0-rates-body": "Tu servidor mantiene ahora un único conjunto de tipos en lugar de que cada dispositivo cargue el suyo, así que los importes en otras monedas por fin coinciden entre cuentas. Un administrador puede ajustar uno en Ajustes, Tipos de cambio.",
+  "changelog-1-4-0-sync-title": "El botón de sincronización manual ya no está",
+  "changelog-1-4-0-sync-body": "Copiaba toda la base de datos cada vez y había dejado de llevar algunos de tus ajustes sin avisar. La sincronización es automática desde hace tiempo, así que se ha eliminado. En Cuenta, Sincronización quedan el interruptor y Restablecer sincronización."
 }

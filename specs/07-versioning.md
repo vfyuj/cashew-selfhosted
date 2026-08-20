@@ -74,7 +74,8 @@ Format:
 - `    < 1.0.0-beta.14` opens a section and is rendered as its heading.
 - Any other non-empty line is a bullet; an empty line is a spacer.
 - Four-space indent on every line, which the parser strips.
-- Raw English strings, **not** `.tr()` keys. `assets/translations/generated/*.json` is machine-generated from an upstream sheet this fork does not control, so any key added there is lost on regeneration — see `specs/backlog/BL-003-upstream-legacy-translations-and-docs.md`.
+- A line starting with `## ` is a short bold title for the paragraph under it, so a version covering more than one change reads as sections rather than a wall of text. Skip it for a single bug fix.
+- **`.tr()` keys, not raw English** — title and bullet lines alike, translated into all 8 locales like any other user-facing string (`CLAUDE.md` § Translations). This used to be the opposite: `assets/translations/generated/*.json` was machine-generated from an upstream sheet this fork does not control, so a fork-local key would have been lost on regeneration. `BL-007` made the translations fork-owned and that pipeline is gone, so the exception went with it. Sections written before the change are still raw English and need no backfill — `.tr()` on a string with no key renders the string itself.
 
 `getMajorChanges()` (the highlighted, tappable cards above the bullets) is empty. Upstream's entries were all `.tr()` keys and could not be carried over. It remains as an extension point.
 

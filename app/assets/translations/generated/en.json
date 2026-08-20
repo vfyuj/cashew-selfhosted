@@ -1349,5 +1349,9 @@
   "rates-are-shared-description": "Your server keeps one set of exchange rates so everyone's totals agree. An administrator can change them.",
   "rate-not-saved": "Rate not saved",
   "exchange-rates-unavailable": "Exchange rates unavailable",
-  "exchange-rates-unavailable-description": "This device hasn't been able to load them yet, so every currency below is shown at 1:1. Amounts in other currencies will be wrong until it does."
+  "exchange-rates-unavailable-description": "This device hasn't been able to load them yet, so every currency below is shown at 1:1. Amounts in other currencies will be wrong until it does.",
+  "changelog-1-4-0-rates-title": "Everyone sees the same exchange rates",
+  "changelog-1-4-0-rates-body": "Your server now keeps one set of rates instead of each device fetching its own, so amounts in other currencies finally match between accounts. An administrator can adjust one under Settings, Exchange rates.",
+  "changelog-1-4-0-sync-title": "The manual sync button is gone",
+  "changelog-1-4-0-sync-body": "It copied your whole database every time, and had quietly stopped carrying some of your settings. Syncing has been automatic for a while, so it has been removed. Account, Sync keeps the on/off switch and Reset Sync."
 }

@@ -1251,5 +1251,9 @@
   "rates-are-shared-description": "O seu servidor mantém um único conjunto de taxas de câmbio para que os totais de todos coincidam. Um administrador pode alterá-las.",
   "rate-not-saved": "Taxa não guardada",
   "exchange-rates-unavailable": "Taxas de câmbio indisponíveis",
-  "exchange-rates-unavailable-description": "Este dispositivo ainda não as conseguiu carregar, por isso todas as moedas abaixo aparecem a 1:1. Os valores noutras moedas estarão errados até lá."
+  "exchange-rates-unavailable-description": "Este dispositivo ainda não as conseguiu carregar, por isso todas as moedas abaixo aparecem a 1:1. Os valores noutras moedas estarão errados até lá.",
+  "changelog-1-4-0-rates-title": "Todos veem as mesmas taxas de câmbio",
+  "changelog-1-4-0-rates-body": "O seu servidor mantém agora um único conjunto de taxas em vez de cada dispositivo carregar o seu, por isso os valores noutras moedas finalmente coincidem entre contas. Um administrador pode ajustar uma em Definições, Taxas de câmbio.",
+  "changelog-1-4-0-sync-title": "O botão de sincronização manual desapareceu",
+  "changelog-1-4-0-sync-body": "Copiava a base de dados inteira de cada vez e tinha deixado de levar algumas das suas definições sem avisar. A sincronização é automática há já algum tempo, por isso foi removido. Em Conta, Sincronização ficam o interruptor e Repor sincronização."
 }

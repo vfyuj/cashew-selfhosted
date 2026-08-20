@@ -1251,5 +1251,9 @@
   "rates-are-shared-description": "服务器保存一份统一的汇率，让所有人的合计都能对上。管理员可以修改。",
   "rate-not-saved": "汇率未保存",
   "exchange-rates-unavailable": "汇率不可用",
-  "exchange-rates-unavailable-description": "此设备尚未能加载汇率，因此下方所有货币都按 1:1 显示。在加载成功前，其他货币的金额都是错的。"
+  "exchange-rates-unavailable-description": "此设备尚未能加载汇率，因此下方所有货币都按 1:1 显示。在加载成功前，其他货币的金额都是错的。",
+  "changelog-1-4-0-rates-title": "所有人看到同一套汇率",
+  "changelog-1-4-0-rates-body": "服务器现在保存统一的一套汇率，不再由每台设备各自获取，其他货币的金额终于能在各账户之间对上。管理员可在「设置 → 汇率」中调整。",
+  "changelog-1-4-0-sync-title": "手动同步按钮已移除",
+  "changelog-1-4-0-sync-body": "它每次都要复制整个数据库，而且已经悄悄不再携带你的部分设置。同步早已自动进行，因此该按钮被移除。「账户 → 同步」保留了开关和重置同步。"
 }
