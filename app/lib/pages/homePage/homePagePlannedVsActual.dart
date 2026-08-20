@@ -49,10 +49,7 @@ class HomePagePlannedVsActual extends StatelessWidget {
   Widget build(BuildContext context) {
     final AllWallets allWallets = Provider.of<AllWallets>(context);
     final DateTime periodStart = envelopePeriodStart(month ?? DateTime.now());
-    final DateTimeRange thisMonth = DateTimeRange(
-      start: periodStart,
-      end: DateTime(periodStart.year, periodStart.month + 1, 0),
-    );
+    final DateTimeRange thisMonth = envelopeMonthRange(periodStart);
 
     Widget plannedCardFor(EnvelopePlan plan) => _CashFlowCard(
           tag: "planned".tr(),

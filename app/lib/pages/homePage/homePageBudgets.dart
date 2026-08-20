@@ -6,15 +6,14 @@ import 'package:cashew_selfhosted/pages/editBudgetPage.dart';
 import 'package:cashew_selfhosted/struct/databaseGlobal.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
+import 'package:cashew_selfhosted/widgets/homePageCardCarousel.dart';
 import 'package:cashew_selfhosted/widgets/util/keepAliveClientMixin.dart';
 import 'package:cashew_selfhosted/widgets/budgetContainer.dart';
 import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
 import 'package:cashew_selfhosted/widgets/openPopup.dart';
 import 'package:cashew_selfhosted/widgets/selectItems.dart';
-import 'package:carousel_slider/carousel_slider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:cashew_selfhosted/widgets/util/widgetSize.dart';
 import 'package:cashew_selfhosted/pages/addButton.dart';
 
 class HomePageBudgets extends StatefulWidget {
@@ -25,8 +24,6 @@ class HomePageBudgets extends StatefulWidget {
 }
 
 class _HomePageBudgetsState extends State<HomePageBudgets> {
-  double height = 0;
-
   @override
   Widget build(BuildContext context) {
     return KeepAliveClientMixin(
@@ -94,73 +91,13 @@ class _HomePageBudgetsState extends State<HomePageBudgets> {
                 ),
               ),
             ];
-            return Stack(
-              children: [
-                IgnorePointer(
-                  child: Visibility(
-                    maintainSize: true,
-                    maintainAnimation: true,
-                    maintainState: true,
-                    child: Opacity(
-                      opacity: 0,
-                      child: WidgetSize(
-                        onChange: (Size size) {
-                          setState(() {
-                            height = size.height;
-                          });
-                        },
-                        child: BudgetContainer(
-                          budget: snapshot.data![0],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(bottom: 13),
-                  child: getIsFullScreen(context)
-                      ? SizedBox(
-                          height: height,
-                          child: ListView(
-                            addAutomaticKeepAlives: true,
-                            clipBehavior: Clip.none,
-                            scrollDirection: Axis.horizontal,
-                            children: [
-                              for (Widget widget in budgetItems)
-                                Padding(
-                                  padding:
-                                      const EdgeInsetsDirectional.only(end: 7),
-                                  child: SizedBox(
-                                    width: 500,
-                                    child: widget,
-                                  ),
-                                )
-                            ],
-                            padding: EdgeInsetsDirectional.symmetric(
-                              horizontal: 10,
-                            ),
-                          ),
-                        )
-                      : CarouselSlider(
-                          options: CarouselOptions(
-                            height: height,
-                            enableInfiniteScroll: false,
-                            enlargeCenterPage: true,
-                            enlargeStrategy: CenterPageEnlargeStrategy.zoom,
-                            viewportFraction: 0.95,
-                            clipBehavior: Clip.none,
-                            // onPageChanged: (index, reason) {
-                            //   if (index == snapshot.data!.length) {
-                            //     pushRoute(context,
-                            //         AddBudgetPage());
-                            //   }
-                            // },
-                            enlargeFactor: 0.3,
-                          ),
-                          items: budgetItems,
-                        ),
-                ),
-              ],
+            // The measured card is a real one rather than the whole list's
+            // first item, which may be the "add budget" button -- shorter than
+            // a budget card, and measuring it would clip every real card.
+            return HomePageCardCarousel(
+              measureChild: BudgetContainer(budget: snapshot.data![0]),
+              items: budgetItems,
+              listItemPadding: const EdgeInsetsDirectional.only(end: 7),
             );
           } else {
             return SizedBox.shrink();

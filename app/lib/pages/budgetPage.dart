@@ -36,9 +36,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:async/async.dart' show StreamZip;
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:cashew_selfhosted/widgets/countNumber.dart';
+import 'package:cashew_selfhosted/widgets/swappableTotal.dart';
 import 'package:cashew_selfhosted/struct/currencyFunctions.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 
@@ -1271,7 +1270,14 @@ class _BudgetLineGraphState extends State<BudgetLineGraph> {
   }
 }
 
-class TotalSpent extends StatefulWidget {
+/// A budget's headline figure, and the tap that swaps which of its two numbers
+/// leads.
+///
+/// The mechanics live in [SwappableTotal], shared with the envelope page. This
+/// used to be two near-identical `Row` branches, one for under budget and one
+/// for over: they differed only in the sign of the same subtraction and in
+/// which caption went beside it, so they collapse to one.
+class TotalSpent extends StatelessWidget {
   const TotalSpent({
     super.key,
     required this.totalSpent,
@@ -1282,122 +1288,22 @@ class TotalSpent extends StatefulWidget {
   final Budget budget;
 
   @override
-  State<TotalSpent> createState() => _TotalSpentState();
-}
-
-class _TotalSpentState extends State<TotalSpent> {
-  bool showTotalSpent = appStateSettings["showTotalSpentForBudget"];
-
-  _swapTotalSpentDisplay() {
-    setState(() {
-      showTotalSpent = !showTotalSpent;
-    });
-    updateSettings("showTotalSpentForBudget", showTotalSpent,
-        pagesNeedingRefresh: [0, 2], updateGlobalState: false);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    double budgetAmount = budgetAmountToPrimaryCurrency(
-        Provider.of<AllWallets>(context, listen: true), widget.budget);
+    final AllWallets allWallets = Provider.of<AllWallets>(context, listen: true);
+    final double budgetAmount = budgetAmountToPrimaryCurrency(allWallets, budget);
+    final double remaining = budgetAmount - totalSpent;
 
-    return GestureDetector(
-      onTap: () {
-        _swapTotalSpentDisplay();
-      },
-      onLongPress: () {
-        HapticFeedback.heavyImpact();
-        _swapTotalSpentDisplay();
-      },
-      child: AnimatedSwitcher(
-        duration: Duration(milliseconds: 200),
-        child: IntrinsicWidth(
-          child: budgetAmount - widget.totalSpent >= 0
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      child: CountNumber(
-                        count: showTotalSpent
-                            ? widget.totalSpent
-                            : budgetAmount - widget.totalSpent,
-                        duration: Duration(milliseconds: 400),
-                        initialCount: (0),
-                        textBuilder: (number) {
-                          return TextFont(
-                            text: convertToMoney(
-                                Provider.of<AllWallets>(context), number,
-                                finalNumber: showTotalSpent
-                                    ? widget.totalSpent
-                                    : budgetAmount - widget.totalSpent),
-                            fontSize: 22,
-                            textAlign: TextAlign.start,
-                            fontWeight: FontWeight.bold,
-                            textColor: Theme.of(context)
-                                .colorScheme
-                                .onSecondaryContainer,
-                          );
-                        },
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsetsDirectional.only(bottom: 1.5),
-                      child: TextFont(
-                        text: getBudgetSpentText(widget.budget.income) +
-                            convertToMoney(
-                                Provider.of<AllWallets>(context), budgetAmount),
-                        fontSize: 15,
-                        textAlign: TextAlign.start,
-                        textColor:
-                            Theme.of(context).colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                  ],
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      child: CountNumber(
-                        count: showTotalSpent
-                            ? widget.totalSpent
-                            : widget.totalSpent - budgetAmount,
-                        duration: Duration(milliseconds: 400),
-                        initialCount: (0),
-                        textBuilder: (number) {
-                          return TextFont(
-                            text: convertToMoney(
-                                Provider.of<AllWallets>(context), number,
-                                finalNumber: showTotalSpent
-                                    ? widget.totalSpent
-                                    : widget.totalSpent - budgetAmount),
-                            fontSize: 22,
-                            textAlign: TextAlign.start,
-                            fontWeight: FontWeight.bold,
-                            textColor: Theme.of(context)
-                                .colorScheme
-                                .onSecondaryContainer,
-                          );
-                        },
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsetsDirectional.only(bottom: 1.5),
-                      child: TextFont(
-                        text: getBudgetOverSpentText(widget.budget.income) +
-                            convertToMoney(
-                                Provider.of<AllWallets>(context), budgetAmount),
-                        fontSize: 15,
-                        textAlign: TextAlign.start,
-                        textColor:
-                            Theme.of(context).colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
+    return SwappableTotal(
+      settingKey: "showTotalSpentForBudget",
+      pagesNeedingRefresh: const [0, 2],
+      // getBudgetSpentText and getBudgetOverSpentText read the setting
+      // themselves, so they already reflect whichever way it was just swapped.
+      contentFor: (bool showTotalSpent) => SwappableTotalContent(
+        amount: showTotalSpent ? totalSpent : remaining.abs(),
+        trailing: (remaining >= 0
+                ? getBudgetSpentText(budget.income)
+                : getBudgetOverSpentText(budget.income)) +
+            convertToMoney(allWallets, budgetAmount),
       ),
     );
   }

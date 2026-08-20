@@ -359,11 +359,12 @@ class _EnvelopeSectionState extends State<EnvelopeSection> {
     // -- it spans every wallet and every transaction filter. If constructing it
     // ever throws, the section must still draw its rows; "spent" simply shows
     // as zero, which is visibly wrong rather than invisibly missing.
+    final DateTimeRange range = envelopeMonthRange(widget.month);
     try {
       _spent = database.watchTotalSpentInEachCategoryInTimeRangeFromCategories(
         allWallets: allWallets,
-        start: widget.month,
-        end: DateTime(widget.month.year, widget.month.month + 1, 0),
+        start: range.start,
+        end: range.end,
         categoryFks: null,
         categoryFksExclude: null,
         budgetTransactionFilters: null,
@@ -463,10 +464,7 @@ class EnvelopeEntry extends StatelessWidget {
     // it to mark -- the same reason the budget card only shows it on the
     // current period.
     final DateTime now = DateTime.now();
-    final DateTimeRange monthRange = DateTimeRange(
-      start: month,
-      end: DateTime(month.year, month.month + 1, 0),
-    );
+    final DateTimeRange monthRange = envelopeMonthRange(month);
     final bool isCurrentMonth =
         month.year == now.year && month.month == now.month;
 
