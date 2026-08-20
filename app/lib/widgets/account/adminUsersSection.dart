@@ -1,6 +1,7 @@
 import 'package:cashew_selfhosted/colors.dart';
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
+import 'package:cashew_selfhosted/widgets/account/accountForm.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/account/accountSheets.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
@@ -341,14 +342,12 @@ class _AddUserForm extends StatefulWidget {
   State<_AddUserForm> createState() => _AddUserFormState();
 }
 
-class _AddUserFormState extends State<_AddUserForm> {
+class _AddUserFormState extends State<_AddUserForm> with AccountFormState {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final FocusNode emailFocus = FocusNode();
 
-  bool submitting = false;
   bool shareHousehold = false;
-  String? errorText;
 
   @override
   void dispose() {
@@ -358,41 +357,29 @@ class _AddUserFormState extends State<_AddUserForm> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (submitting) return;
-    final email = emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => errorText = "email-required".tr());
-      return;
-    }
-    setState(() {
-      submitting = true;
-      errorText = null;
-    });
+  Future<void> _submit() => submitForm(() async {
+        final email = emailController.text.trim();
+        if (email.isEmpty) return "email-required".tr();
 
-    final (result, created) = await selfHostedCreateUser(
-      email: email,
-      name: nameController.text.trim(),
-      shareHousehold: shareHousehold,
-    );
-    if (!mounted) return;
+        final (result, created) = await selfHostedCreateUser(
+          email: email,
+          name: nameController.text.trim(),
+          shareHousehold: shareHousehold,
+        );
+        if (result != ServerCallResult.ok || created == null) {
+          return messageForServerCallResult(result);
+        }
 
-    if (result != ServerCallResult.ok || created == null) {
-      setState(() {
-        submitting = false;
-        errorText = messageForServerCallResult(result);
+        // Show the password dialog *before* popping this sheet, using this
+        // form's own still-valid context -- popping first and then reusing that
+        // same (now-defunct) context to open the next dialog is what left the
+        // password dialog's own Done button unable to find its Navigator.
+        await showTemporaryPassword(
+            context, created.user.email, created.temporaryPassword);
+        if (mounted) popRoute(context);
+        await widget.onCreated();
+        return null;
       });
-      return;
-    }
-
-    // Show the password dialog *before* popping this sheet, using this
-    // form's own still-valid context -- popping first and then reusing that
-    // same (now-defunct) context to open the next dialog is what left the
-    // password dialog's own Done button unable to find its Navigator.
-    await showTemporaryPassword(context, created.user.email, created.temporaryPassword);
-    if (mounted) popRoute(context);
-    await widget.onCreated();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -440,16 +427,7 @@ class _AddUserFormState extends State<_AddUserForm> {
           enableBorderRadius: true,
           isOutlined: true,
         ),
-        if (errorText != null)
-          Padding(
-            padding: const EdgeInsetsDirectional.only(top: 12),
-            child: TextFont(
-              text: errorText!,
-              textColor: Theme.of(context).colorScheme.error,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-            ),
-          ),
+        AccountFormError(errorText),
         const SizedBox(height: 20),
         Button(label: "add-user".tr(), disabled: submitting, onTap: _submit),
       ],

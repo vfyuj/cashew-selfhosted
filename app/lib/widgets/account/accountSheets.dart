@@ -1,5 +1,6 @@
 import 'package:cashew_selfhosted/functions.dart';
 import 'package:cashew_selfhosted/struct/selfHostedClient.dart';
+import 'package:cashew_selfhosted/widgets/account/accountForm.dart';
 import 'package:cashew_selfhosted/struct/settings.dart';
 import 'package:cashew_selfhosted/widgets/accountAndBackup.dart';
 import 'package:cashew_selfhosted/widgets/button.dart';
@@ -51,16 +52,14 @@ class _EditProfileForm extends StatefulWidget {
   State<_EditProfileForm> createState() => _EditProfileFormState();
 }
 
-class _EditProfileFormState extends State<_EditProfileForm> {
+class _EditProfileFormState extends State<_EditProfileForm>
+    with AccountFormState {
   late final TextEditingController nameController =
       TextEditingController(text: cachedServerProfile?.name ?? "");
   late final TextEditingController emailController = TextEditingController(
       text: cachedServerProfile?.email ??
           (appStateSettings["currentUserEmail"] ?? "").toString());
   final FocusNode emailFocus = FocusNode();
-
-  bool submitting = false;
-  String? errorText;
 
   @override
   void dispose() {
@@ -70,41 +69,28 @@ class _EditProfileFormState extends State<_EditProfileForm> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (submitting) return;
-    final email = emailController.text.trim();
-    if (email.isEmpty) {
-      setState(() => errorText = "email-required".tr());
-      return;
-    }
-    setState(() {
-      submitting = true;
-      errorText = null;
-    });
+  Future<void> _submit() => submitForm(() async {
+        final email = emailController.text.trim();
+        if (email.isEmpty) return "email-required".tr();
 
-    final result = await selfHostedUpdateProfile(
-      name: nameController.text.trim(),
-      email: email,
-    );
-    if (!mounted) return;
+        final result = await selfHostedUpdateProfile(
+          name: nameController.text.trim(),
+          email: email,
+        );
+        if (result != ServerCallResult.ok) {
+          return messageForServerCallResult(result);
+        }
 
-    if (result != ServerCallResult.ok) {
-      setState(() {
-        submitting = false;
-        errorText = messageForServerCallResult(result);
+        refreshUIAfterLoginChange();
+        popRoute(context);
+        openSnackbar(SnackbarMessage(
+          title: "profile-updated".tr(),
+          icon: appStateSettings["outlinedIcons"]
+              ? Icons.check_circle_outlined
+              : Icons.check_circle_rounded,
+        ));
+        return null;
       });
-      return;
-    }
-
-    refreshUIAfterLoginChange();
-    popRoute(context);
-    openSnackbar(SnackbarMessage(
-      title: "profile-updated".tr(),
-      icon: appStateSettings["outlinedIcons"]
-          ? Icons.check_circle_outlined
-          : Icons.check_circle_rounded,
-    ));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -142,16 +128,7 @@ class _EditProfileFormState extends State<_EditProfileForm> {
             ],
           ),
         ),
-        if (errorText != null)
-          Padding(
-            padding: const EdgeInsetsDirectional.only(top: 12),
-            child: TextFont(
-              text: errorText!,
-              textColor: Theme.of(context).colorScheme.error,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-            ),
-          ),
+        AccountFormError(errorText),
         const SizedBox(height: 20),
         Button(label: "save".tr(), disabled: submitting, onTap: _submit),
       ],
@@ -177,15 +154,13 @@ class _ChangePasswordForm extends StatefulWidget {
   State<_ChangePasswordForm> createState() => _ChangePasswordFormState();
 }
 
-class _ChangePasswordFormState extends State<_ChangePasswordForm> {
+class _ChangePasswordFormState extends State<_ChangePasswordForm>
+    with AccountFormState {
   final TextEditingController currentController = TextEditingController();
   final TextEditingController newController = TextEditingController();
   final TextEditingController confirmController = TextEditingController();
   final FocusNode newFocus = FocusNode();
   final FocusNode confirmFocus = FocusNode();
-
-  bool submitting = false;
-  String? errorText;
 
   @override
   void dispose() {
@@ -197,55 +172,40 @@ class _ChangePasswordFormState extends State<_ChangePasswordForm> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (submitting) return;
-    if (currentController.text.isEmpty) {
-      setState(() => errorText = "password-required".tr());
-      return;
-    }
-    if (newController.text.length < 8) {
-      setState(() => errorText = "password-too-short".tr());
-      return;
-    }
-    if (newController.text != confirmController.text) {
-      setState(() => errorText = "passwords-do-not-match".tr());
-      return;
-    }
-    setState(() {
-      submitting = true;
-      errorText = null;
-    });
+  Future<void> _submit() => submitForm(() async {
+        if (currentController.text.isEmpty) return "password-required".tr();
+        if (newController.text.length < 8) return "password-too-short".tr();
+        if (newController.text != confirmController.text) {
+          return "passwords-do-not-match".tr();
+        }
 
-    final result = await selfHostedChangePassword(
-      currentPassword: currentController.text,
-      newPassword: newController.text,
-    );
-    if (!mounted) return;
+        final result = await selfHostedChangePassword(
+          currentPassword: currentController.text,
+          newPassword: newController.text,
+        );
+        if (result != ServerCallResult.ok) {
+          // The one place a bare "invalid login" would be misleading: the
+          // session is fine, it is the password they just typed that is wrong.
+          return result == ServerCallResult.invalidCredentials
+              ? "incorrect-current-password".tr()
+              : messageForServerCallResult(result);
+        }
 
-    if (result != ServerCallResult.ok) {
-      setState(() {
-        submitting = false;
-        errorText = result == ServerCallResult.invalidCredentials
-            ? "incorrect-current-password".tr()
-            : messageForServerCallResult(result);
+        minimizeKeyboard(context);
+        await Future.delayed(const Duration(milliseconds: 50));
+        services.TextInput.finishAutofillContext(shouldSave: true);
+        if (!mounted) return null;
+
+        popRoute(context);
+        openSnackbar(SnackbarMessage(
+          title: "password-changed".tr(),
+          description: "other-devices-signed-out".tr(),
+          icon: appStateSettings["outlinedIcons"]
+              ? Icons.lock_outlined
+              : Icons.lock_rounded,
+        ));
+        return null;
       });
-      return;
-    }
-
-    minimizeKeyboard(context);
-    await Future.delayed(const Duration(milliseconds: 50));
-    services.TextInput.finishAutofillContext(shouldSave: true);
-    if (!mounted) return;
-
-    popRoute(context);
-    openSnackbar(SnackbarMessage(
-      title: "password-changed".tr(),
-      description: "other-devices-signed-out".tr(),
-      icon: appStateSettings["outlinedIcons"]
-          ? Icons.lock_outlined
-          : Icons.lock_rounded,
-    ));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -312,16 +272,7 @@ class _ChangePasswordFormState extends State<_ChangePasswordForm> {
             ],
           ),
         ),
-        if (errorText != null)
-          Padding(
-            padding: const EdgeInsetsDirectional.only(top: 12),
-            child: TextFont(
-              text: errorText!,
-              textColor: Theme.of(context).colorScheme.error,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-            ),
-          ),
+        AccountFormError(errorText),
         const SizedBox(height: 12),
         TextFont(
           text: "change-password-signs-out-other-devices".tr(),
