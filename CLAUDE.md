@@ -103,8 +103,9 @@ Stage docs carry the authoritative checkboxes; this is the map.
 |---|---|---|
 | Stage 0/1 foundations — app, server, Docker, repointed sign-in/sync/backup | built | `specs/02-*`, `specs/03-*` |
 | De-Googling — Firebase, Sign-In, Drive, Play all gone; attachments replaced server-side | complete | `specs/03-*`; the one gap with no replacement is `backlog/BL-005` |
+| Currency rates — served per deployment so a household's figures agree | shipped | `docs/server/rates.md` |
 | Accounts, first-run setup wizard, admin provisioning | shipped | `specs/05-*` |
-| Stage 2 live sync — row feed, WebSocket wake-up, Reset Sync | implemented end to end; owner's acceptance pass outstanding | `specs/04-*` |
+| Stage 2 live sync — row feed, WebSocket wake-up, Reset Sync | implemented end to end; the Stage 1 snapshot transport it replaced is now deleted; owner's acceptance pass outstanding | `specs/04-*` |
 | Stage 4 shared household data — datasets, per-user views | shipped; personal budgets withdrawn in 1.2.0 | `specs/06-*` |
 | Releases — signed APK, multi-arch GHCR image, tag workflow | working | `specs/09-*` |
 | Per-period budget amounts | withdrawn in 1.2.0 — envelopes store one row per month instead | `backlog/BL-006` |

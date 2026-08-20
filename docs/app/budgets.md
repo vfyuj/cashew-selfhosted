@@ -4,9 +4,13 @@ There is nothing fork-specific left on this page, and that is the point of it.
 
 Budgets — `pages/addBudgetPage.dart`, `pages/budgetsListPage.dart`, `pages/budgetPage.dart`,
 `pages/pastBudgetsPage.dart`, `pages/editBudgetPage.dart`, `widgets/budgetContainer.dart`,
-`pages/homePage/homePageBudgets.dart` — are upstream Cashew's, line for line, apart from the
-package rename and the deletions that removed Google (the paywall around past budgets, the Firestore
-"shared budget" mode and its member chips). Category spending goals (`widgets/categoryLimits.dart`,
+`pages/homePage/homePageBudgets.dart` — are upstream Cashew's, apart from the package rename, the
+deletions that removed Google (the paywall around past budgets, the Firestore "shared budget" mode
+and its member chips), and two pieces since lifted out to be shared with envelopes: the home-page
+carousel (`widgets/homePageCardCarousel.dart`) and the tap-to-swap headline figure
+(`widgets/swappableTotal.dart`, which also collapsed `TotalSpent`'s two near-identical branches into
+one). Behaviour is unchanged in both cases; see `specs/00-overview.md`, "On not treating `upstream/`
+as an authority", for why touching an upstream file to share something is now the preferred move. Category spending goals (`widgets/categoryLimits.dart`,
 `pages/editBudgetLimitsPage.dart`) were never touched at all.
 
 So: any cycle you like, any set of categories, added-transactions-only, per-category goals inside a
