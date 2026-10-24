@@ -1,4 +1,5 @@
 import 'package:cashew_selfhosted/struct/settings.dart';
+import 'package:cashew_selfhosted/pages/addTransactionPage.dart';
 import 'package:cashew_selfhosted/widgets/framework/popupFramework.dart';
 import 'package:cashew_selfhosted/widgets/navigationFramework.dart';
 import 'package:cashew_selfhosted/widgets/openBottomSheet.dart';
@@ -6,6 +7,7 @@ import 'package:cashew_selfhosted/widgets/openContainerNavigation.dart';
 import 'package:cashew_selfhosted/widgets/outlinedButtonStacked.dart';
 import 'package:cashew_selfhosted/widgets/tappable.dart';
 import 'package:cashew_selfhosted/widgets/textWidgets.dart';
+import 'package:cashew_selfhosted/widgets/util/iosWebKeyboardPrimer.dart';
 import 'package:flutter/material.dart';
 
 class AddFAB extends StatelessWidget {
@@ -31,6 +33,8 @@ class AddFAB extends StatelessWidget {
       colorIcon: colorIcon,
       color: color,
       tooltip: tooltip,
+      primeKeyboardOnTap: openPage is AddTransactionPage &&
+          (openPage as AddTransactionPage).opensTitleInputImmediately,
       iconData: appStateSettings["outlinedIcons"]
           ? Icons.add_outlined
           : Icons.add_rounded,
@@ -65,6 +69,7 @@ class FAB extends StatelessWidget {
     this.label,
     this.labelSize = 18,
     this.isOutlined = false,
+    this.primeKeyboardOnTap = false,
   }) : super(key: key);
 
   final Widget? openPage;
@@ -79,6 +84,7 @@ class FAB extends StatelessWidget {
   final String? label;
   final double labelSize;
   final bool isOutlined;
+  final bool primeKeyboardOnTap;
 
   @override
   Widget build(BuildContext context) {
@@ -118,6 +124,7 @@ class FAB extends StatelessWidget {
           child: Tappable(
             color: containerColor,
             onTap: () {
+              if (primeKeyboardOnTap) primeIOSWebKeyboard();
               if (onTap != null)
                 onTap!();
               else
