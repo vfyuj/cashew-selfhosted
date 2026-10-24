@@ -124,6 +124,12 @@ class AddTransactionPage extends StatefulWidget {
   final bool startInitialAddTransactionSequence;
   final bool transferBalancePopup;
 
+  bool get opensTitleInputImmediately =>
+      transaction == null &&
+      startInitialAddTransactionSequence &&
+      !transferBalancePopup &&
+      appStateSettings["askForTransactionTitle"];
+
   @override
   _AddTransactionPageState createState() => _AddTransactionPageState();
 }
