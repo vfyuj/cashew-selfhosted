@@ -1256,5 +1256,9 @@
   "changelog-1-4-0-rates-body": "服务器现在保存统一的一套汇率，不再由每台设备各自获取，其他货币的金额终于能在各账户之间对上。管理员可在「设置 → 汇率」中调整。",
   "changelog-1-4-0-sync-title": "手动同步按钮已移除",
   "changelog-1-4-0-sync-body": "它每次都要复制整个数据库，而且已经悄悄不再携带你的部分设置。同步早已自动进行，因此该按钮被移除。「账户 → 同步」保留了开关和重置同步。",
-  "changelog-1-4-1-default-categories-body": "把设备加入共享家庭时，不会再往大家的数据里塞十一个空的默认分类。如果已经出现了，删除一次即可，它们不会再回来。"
+  "changelog-1-4-1-default-categories-body": "把设备加入共享家庭时，不会再往大家的数据里塞十一个空的默认分类。如果已经出现了，删除一次即可，它们不会再回来。",
+  "changelog-1-4-4-attachments-title": "附件显示文件名并预览图片",
+  "changelog-1-4-4-attachments-body": "交易备注中的附件现在显示文件名而不是完整URL，图片可以直接在应用中预览。共享或收藏的附件链接现在也可以在浏览器中使用——服务器通过cookie保持会话。",
+  "changelog-1-4-4-password-autofill-title": "密码自动填充在iOS Safari上正常工作",
+  "changelog-1-4-4-password-autofill-body": "Web版本已更新到Flutter 3.44.0，修复了登录页面上的密码字段，使iOS Safari能够再次自动填充保存的凭据。"
 }

@@ -129,5 +129,12 @@ void main() {
       expect(response.statusCode, 200);
       expect(await response.readAsString(), contains('raw index'));
     });
+
+    test('a missing attachment is a 404, not the app home page', () async {
+      final response = await get('attachments/missing.pdf');
+
+      expect(response.statusCode, 404);
+      expect(await response.readAsString(), isNot(contains('raw index')));
+    });
   });
 }

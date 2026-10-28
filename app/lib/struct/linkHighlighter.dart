@@ -33,7 +33,7 @@ class LinkHighlighter extends TextEditingController {
     text.splitMapJoin(
       pattern,
       onMatch: (Match match) {
-        String websiteNameClean = getDomainNameFromURL(match[0] ?? "");
+        String websiteNameClean = formatAttachmentDisplayName(match[0] ?? "");
         children.add(
           TextSpan(
             text:

@@ -1256,5 +1256,9 @@
   "changelog-1-4-0-rates-body": "Votre serveur conserve désormais un seul jeu de taux au lieu que chaque appareil charge le sien, donc les montants dans d'autres devises concordent enfin entre les comptes. Un administrateur peut en ajuster un dans Réglages, Taux de change.",
   "changelog-1-4-0-sync-title": "Le bouton de synchronisation manuelle a disparu",
   "changelog-1-4-0-sync-body": "Il copiait toute votre base de données à chaque fois, et avait cessé sans le dire de transporter certains de vos réglages. La synchronisation est automatique depuis longtemps, il a donc été retiré. Compte, Synchronisation garde l'interrupteur et Réinitialiser la synchronisation.",
-  "changelog-1-4-1-default-categories-body": "Ajouter un appareil à un foyer partagé n'implante plus onze catégories vides dans les données de tout le monde. Si certaines sont déjà apparues, supprimez-les une fois : elles ne reviendront pas."
+  "changelog-1-4-1-default-categories-body": "Ajouter un appareil à un foyer partagé n'implante plus onze catégories vides dans les données de tout le monde. Si certaines sont déjà apparues, supprimez-les une fois : elles ne reviendront pas.",
+  "changelog-1-4-4-attachments-title": "Les pièces jointes affichent le nom du fichier et prévisualisent les images",
+  "changelog-1-4-4-attachments-body": "Les fichiers joints dans les notes de transactions affichent maintenant le nom du fichier au lieu de l'URL complète, et les images sont prévisualisées directement dans l'application. Les liens de pièces jointes partagés ou favorisés fonctionnent également dans le navigateur — le serveur maintient votre session avec un cookie.",
+  "changelog-1-4-4-password-autofill-title": "Le remplissage automatique du mot de passe fonctionne sur iOS Safari",
+  "changelog-1-4-4-password-autofill-body": "La version web est mise à jour vers Flutter 3.44.0, ce qui corrige le champ de mot de passe sur la page de connexion pour que iOS Safari puisse à nouveau remplir les identifiants sauvegardés."
 }

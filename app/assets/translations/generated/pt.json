@@ -1256,5 +1256,9 @@
   "changelog-1-4-0-rates-body": "O seu servidor mantém agora um único conjunto de taxas em vez de cada dispositivo carregar o seu, por isso os valores noutras moedas finalmente coincidem entre contas. Um administrador pode ajustar uma em Definições, Taxas de câmbio.",
   "changelog-1-4-0-sync-title": "O botão de sincronização manual desapareceu",
   "changelog-1-4-0-sync-body": "Copiava a base de dados inteira de cada vez e tinha deixado de levar algumas das suas definições sem avisar. A sincronização é automática há já algum tempo, por isso foi removido. Em Conta, Sincronização ficam o interruptor e Repor sincronização.",
-  "changelog-1-4-1-default-categories-body": "Adicionar um dispositivo a um agregado partilhado já não semeia onze categorias vazias nos dados de todos. Se algumas já apareceram, apague-as uma vez — não voltam."
+  "changelog-1-4-1-default-categories-body": "Adicionar um dispositivo a um agregado partilhado já não semeia onze categorias vazias nos dados de todos. Se algumas já apareceram, apague-as uma vez — não voltam.",
+  "changelog-1-4-4-attachments-title": "Os anexos mostram o nome do ficheiro e pré-visualizam imagens",
+  "changelog-1-4-4-attachments-body": "Os ficheiros anexados nas notas de transações agora mostram o nome do ficheiro em vez da URL completa, e as imagens são pré-visualizadas diretamente na aplicação. Os links de anexos partilhados ou guardados também funcionam agora no navegador — o servidor mantém a sessão com um cookie.",
+  "changelog-1-4-4-password-autofill-title": "O preenchimento automático de palavra-passe funciona no iOS Safari",
+  "changelog-1-4-4-password-autofill-body": "A versão web é atualizada para Flutter 3.44.0, o que corrige o campo de palavra-passe na página de login para que o iOS Safari possa novamente preencher as credenciais guardadas."
 }

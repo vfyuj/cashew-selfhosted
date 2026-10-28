@@ -6,6 +6,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 import 'package:server/src/admin/admin_routes.dart';
 import 'package:server/src/auth/auth_middleware.dart';
+import 'package:server/src/auth/auth_middleware.dart' as auth_middleware;
 import 'package:server/src/auth/auth_routes.dart';
 import 'package:server/src/auth/auth_service.dart';
 import 'package:server/src/attachments/attachment_routes.dart';
@@ -63,10 +64,11 @@ Router buildApiRouter(AuthService authService, Database db, String dataDir,
     '/backup',
     const Pipeline().addMiddleware(authMiddleware).addHandler(buildBackupRouter(dataDir).call),
   );
+  final attachmentAuthMiddleware = auth_middleware.requireAuthWithRedirect(authService);
   router.mount(
     '/attachments',
-    const Pipeline()
-        .addMiddleware(authMiddleware)
+    Pipeline()
+        .addMiddleware(attachmentAuthMiddleware)
         .addHandler(buildAttachmentRouter(dataDir).call),
   );
   // Everyone reads the rate table, only an administrator edits it. The two are

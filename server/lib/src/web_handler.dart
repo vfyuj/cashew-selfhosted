@@ -149,6 +149,13 @@ Handler buildWebHandler(String webDir) {
       }
     }
 
+    // /attachments is an API namespace, not a client-side route. A missing
+    // file there must stay a 404: answering it with index.html (HTTP 200) sends
+    // a browser that followed a dead attachment link to the home page.
+    if (path == 'attachments' || path.startsWith('attachments/')) {
+      return Response.notFound('not found');
+    }
+
     final response = await staticHandler(request);
     if (response.statusCode == 404 && await indexFile.exists()) {
       return Response.ok(await indexFile.readAsString(),

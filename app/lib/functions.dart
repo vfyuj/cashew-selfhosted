@@ -1160,6 +1160,60 @@ String getDomainNameFromURL(String text) {
   return match?.group(1) ?? '';
 }
 
+/// Image extensions that can be rendered in-app via the image preview bottom sheet.
+const _imageExtensions = {
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp',
+};
+
+/// Returns true when [url] ends with an image extension that the app can preview.
+bool isImageAttachment(String url) {
+  final lower = url.toLowerCase();
+  for (final ext in _imageExtensions) {
+    if (lower.endsWith(ext)) return true;
+  }
+  return false;
+}
+
+/// Formats an attachment URL into a short, readable display name.
+///
+/// For self-hosted attachment URLs (containing `/attachments/`), strips the
+/// timestamp prefix (`yyyy-MM-dd-HHmmss-`) and truncates long basenames while
+/// preserving the extension, e.g. `ticket18.... .jpeg`.
+///
+/// For non-attachment URLs falls back to the domain name.
+String formatAttachmentDisplayName(String url) {
+  // Check if this is a self-hosted attachment URL
+  final attachmentsIndex = url.indexOf('/attachments/');
+  if (attachmentsIndex == -1) {
+    return getDomainNameFromURL(url);
+  }
+
+  // Extract the filename after /attachments/
+  final filename = url.substring(attachmentsIndex + '/attachments/'.length);
+  if (filename.isEmpty) return getDomainNameFromURL(url);
+
+  // Strip the timestamp prefix: yyyy-MM-dd-HHmmss-
+  final stripped = filename.replaceFirst(
+      RegExp(r'^\d{4}-\d{2}-\d{2}-\d{6}-'), '');
+  final name = stripped.isEmpty ? filename : stripped;
+
+  // Find the extension
+  final dotIndex = name.lastIndexOf('.');
+  if (dotIndex == -1 || dotIndex == 0) {
+    // No extension
+    if (name.length <= 14) return name;
+    return '${name.substring(0, 10)}....';
+  }
+
+  final ext = name.substring(dotIndex); // includes the dot
+  final base = name.substring(0, dotIndex);
+
+  if (name.length <= 14) return name;
+
+  // Truncate the base and preserve the extension
+  return '${base.substring(0, 8)}.... $ext';
+}
+
 String cleanupNoteStringWithURLs(String text) {
   RegExp regExp = RegExp(r'https?:\/\/(?:www\.)?\S+(?=\s)',
       multiLine: true, caseSensitive: false);
@@ -1171,7 +1225,7 @@ String cleanupNoteStringWithURLs(String text) {
   for (Match match in matches) {
     if (match.group(0) != null)
       modifiedText = modifiedText.replaceFirst(
-          match.group(0)!, getDomainNameFromURL(match.group(0)!));
+          match.group(0)!, formatAttachmentDisplayName(match.group(0)!));
   }
 
   return modifiedText.trim();
