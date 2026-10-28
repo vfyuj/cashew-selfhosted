@@ -7,11 +7,24 @@ import 'auth_middleware.dart';
 import 'auth_service.dart';
 import 'rate_limiter.dart';
 
-Response _json(Object body, {int status = 200}) => Response(
+Response _json(Object body, {int status = 200, List<String>? setCookie}) => Response(
       status,
       body: jsonEncode(body),
-      headers: {'content-type': 'application/json'},
+      headers: {
+        'content-type': 'application/json',
+        if (setCookie != null) 'set-cookie': setCookie.join('; '),
+      },
     );
+
+/// Builds a `Set-Cookie` header value for the session token.
+String _setSessionCookie(String token) {
+  return 'session_token=$token; Path=/; SameSite=Lax; HttpOnly';
+}
+
+/// Builds a `Set-Cookie` header value that expires the session cookie immediately.
+String _clearSessionCookie() {
+  return 'session_token=; Path=/; Max-Age=0; HttpOnly';
+}
 
 Response _error(int status, String message) => _json({'error': message}, status: status);
 
@@ -36,11 +49,14 @@ String? _trimmedString(Object? value) {
 /// marked instant to convert. Dropping it makes the client read the timestamp
 /// as local time and mis-order things by the timezone offset. Regression-tested
 /// in test/api_test.dart -- do not "simplify" it away.
-Response _sessionResponse(Session session, AuthUser user) => _json({
-      'sessionToken': session.token,
-      'expiresAt': session.expiresAt.toUtc().toIso8601String(),
-      'user': user.toJson(),
-    });
+Response _sessionResponse(Session session, AuthUser user) => _json(
+      {
+        'sessionToken': session.token,
+        'expiresAt': session.expiresAt.toUtc().toIso8601String(),
+        'user': user.toJson(),
+      },
+      setCookie: [_setSessionCookie(session.token)],
+    );
 
 /// Unauthenticated auth surface: login, session lifecycle, and first-run setup.
 ///
@@ -111,10 +127,13 @@ Router buildAuthRouter(AuthService authService, {RateLimiter? passwordAttemptLim
     if (sessionToken == null) return _error(400, 'sessionToken is required');
     try {
       final session = authService.refresh(sessionToken);
-      return _json({
-        'sessionToken': session.token,
-        'expiresAt': session.expiresAt.toUtc().toIso8601String(),
-      });
+      return _json(
+        {
+          'sessionToken': session.token,
+          'expiresAt': session.expiresAt.toUtc().toIso8601String(),
+        },
+        setCookie: [_setSessionCookie(session.token)],
+      );
     } on InvalidSessionException {
       return _error(401, 'invalid or expired session');
     }
@@ -126,7 +145,7 @@ Router buildAuthRouter(AuthService authService, {RateLimiter? passwordAttemptLim
     final sessionToken = body['sessionToken'] as String?;
     if (sessionToken == null) return _error(400, 'sessionToken is required');
     authService.logout(sessionToken);
-    return Response.ok('');
+    return Response.ok('', headers: {'set-cookie': _clearSessionCookie()});
   });
 
   return router;

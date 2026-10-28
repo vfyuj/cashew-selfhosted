@@ -4203,7 +4203,7 @@ class LinkInNotes extends StatelessWidget {
             SizedBox(width: 10),
             Expanded(
               child: TextFont(
-                text: getDomainNameFromURL(link),
+                text: formatAttachmentDisplayName(link),
                 fontSize: 16,
                 maxLines: 1,
               ),
@@ -4473,50 +4473,66 @@ class _TransactionNotesTextInputState extends State<TransactionNotesTextInput> {
                           extraWidget: Row(
                             children: [
                               if (isSelfHostedAttachmentUrl(link))
-                                Padding(
-                                  padding: const EdgeInsetsDirectional.only(
-                                      end: 3, start: 5),
-                                  child: IconButtonScaled(
-                                    iconData: appStateSettings["outlinedIcons"]
-                                        ? Icons.photo_outlined
-                                        : Icons.photo_rounded,
-                                    iconSize: 16,
-                                    scale: 1.6,
-                                    onTap: () async {
-                                      List<int>? result =
-                                          await getServerAttachmentData(link);
-                                      if (result == null) {
-                                        openUrl(link);
-                                      } else {
-                                        openBottomSheet(
-                                          context,
-                                          PopupFramework(
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadiusDirectional
-                                                      .circular(getPlatform() ==
-                                                              PlatformOS.isIOS
-                                                          ? 10
-                                                          : 15),
-                                              child: RenderImageData(
-                                                imageData: result,
-                                                openLinkOnError: () {
-                                                  openUrl(link);
-                                                },
+                                if (isImageAttachment(link))
+                                  Padding(
+                                    padding: const EdgeInsetsDirectional.only(
+                                        end: 3, start: 5),
+                                    child: IconButtonScaled(
+                                      iconData: appStateSettings["outlinedIcons"]
+                                          ? Icons.photo_outlined
+                                          : Icons.photo_rounded,
+                                      iconSize: 16,
+                                      scale: 1.6,
+                                      onTap: () async {
+                                        List<int>? result =
+                                            await getServerAttachmentData(link);
+                                        if (result == null) {
+                                          openUrl(link);
+                                        } else {
+                                          openBottomSheet(
+                                            context,
+                                            PopupFramework(
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadiusDirectional
+                                                        .circular(getPlatform() ==
+                                                                PlatformOS.isIOS
+                                                            ? 10
+                                                            : 15),
+                                                child: RenderImageData(
+                                                  imageData: result,
+                                                  openLinkOnError: () {
+                                                    openUrl(link);
+                                                  },
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        );
-                                        // Update the size of the bottom sheet
-                                        Future.delayed(
-                                            Duration(milliseconds: 300), () {
-                                          bottomSheetControllerGlobal
-                                              .snapToExtent(0);
-                                        });
-                                      }
-                                    },
+                                          );
+                                          // Update the size of the bottom sheet
+                                          Future.delayed(
+                                              Duration(milliseconds: 300), () {
+                                            bottomSheetControllerGlobal
+                                                .snapToExtent(0);
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  )
+                                else
+                                  Padding(
+                                    padding: const EdgeInsetsDirectional.only(
+                                        end: 3, start: 5),
+                                    child: IconButtonScaled(
+                                      iconData: appStateSettings["outlinedIcons"]
+                                          ? Icons.open_in_browser_outlined
+                                          : Icons.open_in_browser_rounded,
+                                      iconSize: 16,
+                                      scale: 1.6,
+                                      onTap: () {
+                                        openUrl(link);
+                                      },
+                                    ),
                                   ),
-                                ),
                               Padding(
                                 padding: const EdgeInsetsDirectional.only(
                                     end: 11, start: 5),

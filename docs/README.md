@@ -29,6 +29,7 @@ belongs to another page, this one links it.
 |---|---|
 | [app/database.md](app/database.md) | Anything near the Drift schema. Explains the upstream-compatibility invariant and the one table the fork owns. |
 | [app/sync-client.md](app/sync-client.md) | The device side of sync: cursors, the cycle, triggers, rebootstrap. |
+| [app/attachments.md](app/attachments.md) | Attaching files to transactions, authenticated preview, and why PDFs cannot currently open through the browser fallback. |
 | [app/budgets.md](app/budgets.md) | Short: budgets are upstream's, unmodified. Read it to find out what used to be here and where it went. |
 | [app/envelopes.md](app/envelopes.md) | The monthly plan per category — the fork's own table, how a month resolves, and the one-shot conversion from the old envelope budgets. |
 | [app/settings.md](app/settings.md) | Which preferences follow a person between their devices, and why row 0 must never sync. |

@@ -1256,5 +1256,9 @@
   "changelog-1-4-0-rates-body": "Tu servidor mantiene ahora un único conjunto de tipos en lugar de que cada dispositivo cargue el suyo, así que los importes en otras monedas por fin coinciden entre cuentas. Un administrador puede ajustar uno en Ajustes, Tipos de cambio.",
   "changelog-1-4-0-sync-title": "El botón de sincronización manual ya no está",
   "changelog-1-4-0-sync-body": "Copiaba toda la base de datos cada vez y había dejado de llevar algunos de tus ajustes sin avisar. La sincronización es automática desde hace tiempo, así que se ha eliminado. En Cuenta, Sincronización quedan el interruptor y Restablecer sincronización.",
-  "changelog-1-4-1-default-categories-body": "Añadir un dispositivo a un hogar compartido ya no siembra once categorías vacías en los datos de todos. Si ya aparecieron algunas, bórralas una vez: no volverán."
+  "changelog-1-4-1-default-categories-body": "Añadir un dispositivo a un hogar compartido ya no siembra once categorías vacías en los datos de todos. Si ya aparecieron algunas, bórralas una vez: no volverán.",
+  "changelog-1-4-4-attachments-title": "Los adjuntos muestran el nombre del archivo y previsualizan imágenes",
+  "changelog-1-4-4-attachments-body": "Los archivos adjuntos en las notas de transacciones ahora muestran el nombre del archivo en lugar de la URL completa, y las imágenes se previsualizan directamente en la aplicación. Los enlaces de adjuntos compartidos o guardados también funcionan ahora en el navegador — el servidor mantiene la sesión con una cookie.",
+  "changelog-1-4-4-password-autofill-title": "El autocompletado de contraseña funciona en iOS Safari",
+  "changelog-1-4-4-password-autofill-body": "La versión web se actualiza a Flutter 3.44.0, lo que corrige el campo de contraseña en la página de inicio de sesión para que iOS Safari pueda completar las credenciales guardadas de nuevo."
 }

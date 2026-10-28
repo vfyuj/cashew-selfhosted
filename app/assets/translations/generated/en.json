@@ -1354,5 +1354,9 @@
   "changelog-1-4-0-rates-body": "Your server now keeps one set of rates instead of each device fetching its own, so amounts in other currencies finally match between accounts. An administrator can adjust one under Settings, Exchange rates.",
   "changelog-1-4-0-sync-title": "The manual sync button is gone",
   "changelog-1-4-0-sync-body": "It copied your whole database every time, and had quietly stopped carrying some of your settings. Syncing has been automatic for a while, so it has been removed. Account, Sync keeps the on/off switch and Reset Sync.",
-  "changelog-1-4-1-default-categories-body": "Adding a device to a shared household no longer plants eleven empty default categories in everyone's data. If some already appeared, delete them once — they will not come back."
+  "changelog-1-4-1-default-categories-body": "Adding a device to a shared household no longer plants eleven empty default categories in everyone's data. If some already appeared, delete them once — they will not come back.",
+  "changelog-1-4-4-attachments-title": "Attachments show their filename and preview images",
+  "changelog-1-4-4-attachments-body": "File attachments in transaction notes now display their filename instead of the full URL, and images preview directly in the app. Shared or bookmarked attachment links also work in the browser now — the server keeps you signed in with a session cookie.",
+  "changelog-1-4-4-password-autofill-title": "Password autofill works on iOS Safari",
+  "changelog-1-4-4-password-autofill-body": "The web build is updated to Flutter 3.44.0, which fixes the password field on the sign-in page so iOS Safari can fill saved credentials again."
 }

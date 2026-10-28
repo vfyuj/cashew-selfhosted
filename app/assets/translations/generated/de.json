@@ -1256,5 +1256,9 @@
   "changelog-1-4-0-rates-body": "Dein Server hält jetzt einen einzigen Satz Kurse, statt dass jedes Gerät seinen eigenen lädt — Beträge in anderen Währungen stimmen endlich zwischen Konten überein. Ein Administrator kann einen Kurs unter Einstellungen, Wechselkurse anpassen.",
   "changelog-1-4-0-sync-title": "Die Schaltfläche für manuelle Synchronisierung ist weg",
   "changelog-1-4-0-sync-body": "Sie kopierte jedes Mal die ganze Datenbank und hatte stillschweigend aufgehört, einige Einstellungen mitzunehmen. Synchronisiert wird längst automatisch, also ist sie entfernt. Unter Konto, Synchronisierung bleiben der Schalter und Sync zurücksetzen.",
-  "changelog-1-4-1-default-categories-body": "Ein Gerät zu einem gemeinsamen Haushalt hinzuzufügen legt nicht länger elf leere Standardkategorien in den gemeinsamen Daten ab. Falls schon welche aufgetaucht sind, lösche sie einmal — sie kommen nicht wieder."
+  "changelog-1-4-1-default-categories-body": "Ein Gerät zu einem gemeinsamen Haushalt hinzuzufügen legt nicht länger elf leere Standardkategorien in den gemeinsamen Daten ab. Falls schon welche aufgetaucht sind, lösche sie einmal — sie kommen nicht wieder.",
+  "changelog-1-4-4-attachments-title": "Anhänge zeigen Dateinamen und Vorschauen von Bildern",
+  "changelog-1-4-4-attachments-body": "Dateianhänge in Transaktionsnotizen zeigen jetzt den Dateinamen statt der vollständigen URL, und Bilder werden direkt in der App angezeigt. Geteilte oder gespeicherte Anhang-Links funktionieren jetzt auch im Browser — der Server hält Sie mit einem Session-Cookie angemeldet.",
+  "changelog-1-4-4-password-autofill-title": "Passwort-Autofill funktioniert auf iOS Safari",
+  "changelog-1-4-4-password-autofill-body": "Der Web-Build ist auf Flutter 3.44.0 aktualisiert, was das Passwortfeld auf der Anmeldeseite behebt, sodass iOS Safari gespeicherte Anmeldeinformationen wieder automatisch ausfüllen kann."
 }

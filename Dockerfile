@@ -10,21 +10,23 @@
 # break `docker compose up --build` on any host whose Docker lacks buildx, and
 # that command is the operator's whole deploy loop. release.yml builds each
 # architecture on its own native runner instead, so nothing is emulated anyway.
-FROM ghcr.io/cirruslabs/flutter:3.19.6 AS web-build
+# 3.44 is the first release with flutter/flutter#182024, which fixes password
+# autofill in iOS 26 Safari. Safari sends `blur` before `input` there, and the
+# older web engine stopped listening after `blur`, so the password manager's
+# fill reached the email field and the password was dropped. Do not pin an
+# older release without re-testing sign-in from a password manager on an iPhone.
+FROM ghcr.io/cirruslabs/flutter:3.44.0 AS web-build
 WORKDIR /web
 COPY app/ .
 RUN flutter pub get
-# CanvasKit everywhere, pinned -- do not go back to the default "auto".
-#
-# "auto" does not mean "pick the best one"; it means `useCanvasKit = isDesktop`
-# (flutter_web_sdk/lib/_engine/engine/renderer.dart in the pinned 3.19.6 SDK).
-# A phone browser is not desktop, so auto quietly served **the html renderer to
-# every phone** while desktop got CanvasKit -- two different rendering engines
-# for the same deploy, and only the desktop one was ever looked at. That is the
-# renderer specs/03-stage-1-kill-google.md records the owner rejecting on looks;
-# iPhone Safari had been getting it all along, and got a repeatable WebContent
-# crash on the budgets tab with it. Pinning canvaskit makes the phone render
-# exactly what the desktop does.
+# CanvasKit everywhere. Under Flutter 3.19 this was pinned with
+# `--web-renderer canvaskit`, because the default "auto" meant
+# `useCanvasKit = isDesktop` and quietly served the html renderer to every
+# phone -- the renderer specs/03-stage-1-kill-google.md records the owner
+# rejecting on looks, and which crashed iPhone Safari's WebContent process on
+# the budgets tab. Flutter 3.29+ removed the html renderer and that flag, and a
+# plain JS build is CanvasKit for every client, so nothing needs pinning now.
+# Do not add `--wasm` (skwasm) without re-testing on iPhone Safari.
 #
 # FLUTTER_WEB_CANVASKIT_URL points the engine at the CanvasKit copy Flutter
 # already writes into build/web/canvaskit/. Without it the CanvasKit renderer
@@ -33,7 +35,6 @@ RUN flutter pub get
 # matters more now than it did under auto: every client takes this path, not
 # just desktop ones.
 RUN flutter build web --release \
-      --web-renderer canvaskit \
       --dart-define=FLUTTER_WEB_CANVASKIT_URL=/canvaskit/
 
 # Pre-compress everything worth compressing, keeping the original beside it

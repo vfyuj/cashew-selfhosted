@@ -565,4 +565,223 @@ void main() {
       expect((await api.pullAll(adminToken)).single['pk'], 'w1');
     });
   });
+
+  group('cookie-based session authentication', () {
+    test('POST /auth/login returns Set-Cookie header', () async {
+      await api.setupAdmin();
+      final response = await api.send('POST', '/auth/login',
+          body: {'email': 'owner@example.com', 'password': 'owner-password'});
+
+      expect(response.statusCode, 200);
+      final setCookie = response.headers['set-cookie'];
+      expect(setCookie, isNotNull, reason: 'login should set a session cookie');
+      expect(setCookie, contains('session_token='));
+      expect(setCookie, contains('HttpOnly'));
+      expect(setCookie, contains('SameSite=Lax'));
+    });
+
+    test('POST /auth/setup returns Set-Cookie header', () async {
+      final response = await api.send('POST', '/auth/setup', body: {
+        'email': 'owner@example.com',
+        'name': 'The Owner',
+        'password': 'owner-password',
+      });
+
+      expect(response.statusCode, 200);
+      final setCookie = response.headers['set-cookie'];
+      expect(setCookie, isNotNull, reason: 'setup should set a session cookie');
+      expect(setCookie, contains('session_token='));
+    });
+
+    test('POST /auth/refresh returns Set-Cookie header', () async {
+      final token = await api.setupAdmin();
+      final response = await api.send('POST', '/auth/refresh',
+          body: {'sessionToken': token});
+
+      expect(response.statusCode, 200);
+      final setCookie = response.headers['set-cookie'];
+      expect(setCookie, isNotNull, reason: 'refresh should set a session cookie');
+      expect(setCookie, contains('session_token='));
+    });
+
+    test('POST /auth/logout clears session cookie', () async {
+      final token = await api.setupAdmin();
+      final response = await api.send('POST', '/auth/logout',
+          body: {'sessionToken': token});
+
+      expect(response.statusCode, 200);
+      final setCookie = response.headers['set-cookie'];
+      expect(setCookie, isNotNull, reason: 'logout should clear the session cookie');
+      expect(setCookie, contains('session_token='));
+      expect(setCookie, contains('Max-Age=0'));
+    });
+
+    test('Bearer-authenticated request without a cookie gets one set', () async {
+      final token = await api.setupAdmin();
+      final response = await api.send('GET', '/attachments', token: token);
+
+      final setCookie = response.headers['set-cookie'];
+      expect(setCookie, isNotNull,
+          reason: 'sessions restored from client storage need a cookie');
+      expect(setCookie, contains('session_token=$token'));
+      expect(setCookie, contains('HttpOnly'));
+    });
+
+    test('Bearer-authenticated API request without a cookie gets one set',
+        () async {
+      final token = await api.setupAdmin();
+      final response = await api.send('GET', '/backup', token: token);
+
+      final setCookie = response.headers['set-cookie'];
+      expect(setCookie, isNotNull);
+      expect(setCookie, contains('session_token=$token'));
+    });
+
+    test('Bearer-authenticated request with a matching cookie sets no new one',
+        () async {
+      final token = await api.setupAdmin();
+      final response = await api.handler(Request(
+        'GET',
+        Uri.parse('http://localhost/attachments'),
+        headers: {
+          'authorization': 'Bearer $token',
+          'cookie': 'session_token=$token',
+        },
+      ));
+
+      expect(response.headers['set-cookie'], isNull);
+    });
+
+    test('attachment access with cookie auth succeeds', () async {
+      final token = await api.setupAdmin();
+      // Upload an attachment via Bearer token
+      await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/attachments/receipt.jpg'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer $token'},
+      ));
+
+      // Access attachment via cookie (use the same token, delivered as a cookie)
+      final attachResponse = await api.handler(Request(
+        'GET',
+        Uri.parse('http://localhost/attachments/receipt.jpg'),
+        headers: {'cookie': 'session_token=$token'},
+      ));
+      expect(attachResponse.statusCode, 200);
+    });
+
+    test('PUT /attachments/<filename> without auth is 401, not a redirect', () async {
+      final response = await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/attachments/receipt.jpg'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer not-a-real-session'},
+      ));
+      expect(response.statusCode, 401);
+      expect(response.headers['location'], isNull);
+    });
+
+    test('GET /attachments/<filename> without auth redirects to /', () async {
+      final token = await api.setupAdmin();
+      // Upload an attachment
+      await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/attachments/receipt.jpg'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer $token'},
+      ));
+
+      // Access without any auth
+      final response = await api.handler(Request(
+        'GET',
+        Uri.parse('http://localhost/attachments/receipt.jpg'),
+      ));
+      expect(response.statusCode, 302);
+      expect(response.headers['location'], '/');
+    });
+
+    test('GET /attachments/<filename> returns correct MIME type for images',
+        () async {
+      final token = await api.setupAdmin();
+      await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/attachments/photo.png'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer $token'},
+      ));
+
+      final response = await api.send('GET', '/attachments/photo.png', token: token);
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], 'image/png');
+    });
+
+    test('GET /attachments/<filename> returns correct MIME type for PDFs',
+        () async {
+      final token = await api.setupAdmin();
+      await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/attachments/document.pdf'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer $token'},
+      ));
+
+      final response = await api.send('GET', '/attachments/document.pdf', token: token);
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], 'application/pdf');
+    });
+
+    test('GET /attachments/<filename> returns correct MIME type for JPEGs',
+        () async {
+      final token = await api.setupAdmin();
+      await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/attachments/receipt.jpeg'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer $token'},
+      ));
+
+      final response = await api.send('GET', '/attachments/receipt.jpeg', token: token);
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], 'image/jpeg');
+    });
+
+    test('GET /attachments/<filename> falls back to octet-stream for unknown extensions',
+        () async {
+      final token = await api.setupAdmin();
+      await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/attachments/file.unknown'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer $token'},
+      ));
+
+      final response = await api.send('GET', '/attachments/file.unknown', token: token);
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], 'application/octet-stream');
+    });
+
+    test('expired cookie is redirected to /', () async {
+      final token = await api.setupAdmin();
+      // Upload an attachment
+      await api.handler(Request(
+        'PUT',
+        Uri.parse('http://localhost/attachments/receipt.jpg'),
+        body: [1, 2, 3],
+        headers: {'authorization': 'Bearer $token'},
+      ));
+
+      // Logout to invalidate the token
+      await api.send('POST', '/auth/logout', body: {'sessionToken': token});
+
+      // Try to access with the now-invalid cookie
+      final response = await api.handler(Request(
+        'GET',
+        Uri.parse('http://localhost/attachments/receipt.jpg'),
+        headers: {'cookie': 'session_token=$token'},
+      ));
+      expect(response.statusCode, 302);
+      expect(response.headers['location'], '/');
+    });
+  });
 }

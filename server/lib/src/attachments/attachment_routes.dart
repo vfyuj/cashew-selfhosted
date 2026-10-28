@@ -6,6 +6,35 @@ import 'package:shelf_router/shelf_router.dart';
 import '../auth/auth_middleware.dart';
 import '../storage.dart';
 
+/// Maps common file extensions to their MIME types so browsers can render
+/// attachments natively (images inline, PDFs with the built-in viewer).
+const _mimeTypes = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain',
+  '.html': 'text/html',
+  '.csv': 'text/csv',
+  '.json': 'application/json',
+};
+
+/// Resolves the MIME type for [filename] from its extension, defaulting to
+/// `application/octet-stream` for unknown types.
+String _mimeTypeForFilename(String filename) {
+  final lower = filename.toLowerCase();
+  for (final entry in _mimeTypes.entries) {
+    if (lower.endsWith(entry.key)) {
+      return entry.value;
+    }
+  }
+  return 'application/octet-stream';
+}
+
 /// Transaction attachments (receipt photos and picked files), stored in the
 /// user's own namespace on this server. Replaces the Google Drive upload the
 /// fork inherited from upstream -- see specs/03-stage-1-kill-google.md.
@@ -46,8 +75,8 @@ Router buildAttachmentRouter(String dataDir) {
     try {
       final bytes = storeFor(request).read(filename);
       if (bytes == null) return Response.notFound('not found');
-      return Response.ok(bytes,
-          headers: {'content-type': 'application/octet-stream'});
+      final mimeType = _mimeTypeForFilename(filename);
+      return Response.ok(bytes, headers: {'content-type': mimeType});
     } on InvalidFilenameException {
       return Response(400, body: 'invalid filename');
     }
