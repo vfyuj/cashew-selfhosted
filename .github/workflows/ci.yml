@@ -23,7 +23,7 @@ jobs:
         with:
           # Pinned to match the Dockerfile's `ghcr.io/cirruslabs/flutter` tag,
           # so CI and the real deploy build with the same toolchain.
-          flutter-version: "3.19.6"
+          flutter-version: "3.44.0"
           channel: "stable"
           cache: true
       - run: flutter pub get
