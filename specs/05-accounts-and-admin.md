@@ -103,7 +103,7 @@ Rules that are easy to break by accident:
 
 ### What this actually delivers on web — do not overpromise
 
-Verified against the engine shipped with Flutter 3.19.6, the version pinned in `/Dockerfile`:
+Verified against the engine shipped with Flutter 3.19.6, which was the version pinned in `/Dockerfile` at the time. The pin is now 3.44.0, and the list below has **not** been re-verified against it — 3.44 was taken for flutter/flutter#182024, which fixes iOS 26 Safari autofill, so the first bullet is likely better than it reads here:
 
 - **Works:** hints become real `autocomplete`/`name`/`id` attributes; `AutofillGroup` makes the engine emit an actual `<form>`, which is what makes a browser treat the page as a login form at all; `finishAutofillContext` triggers the save prompt. Renderer-independent.
 - **Does not:** nothing exists in the DOM until a field is focused. Built-in managers (Chrome, Safari/iCloud Keychain, Firefox) hook the focused input and work. **Extension-based managers — 1Password, Bitwarden, Dashlane — are unreliable**, often with no in-field badge; the user triggers fill from the extension's own UI. No app-side fix exists in this Flutter version.

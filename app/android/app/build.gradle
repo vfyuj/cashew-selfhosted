@@ -1,29 +1,12 @@
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
-    }
+// Declarative plugin application, required from Flutter 3.44 -- the old
+// imperative form (applying the Android, Kotlin and Flutter plugins by script)
+// is now a hard error. The Flutter plugin must come last of the three.
+// Versions are declared once, in ../settings.gradle.
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
 }
-
-def flutterRoot = localProperties.getProperty('flutter.sdk')
-if (flutterRoot == null) {
-    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
-}
-
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
-
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
-}
-
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
@@ -32,7 +15,12 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    compileSdk 35
+    // 36, not 35: app_links, flutter_plugin_android_lifecycle,
+    // image_picker_android, local_auth_android and quick_actions_android all
+    // require Android SDK 36 under Flutter 3.44. targetSdk stays at 34 --
+    // compiling against newer APIs is separate from opting in to new runtime
+    // behaviour.
+    compileSdk 36
     // AGP 8 reads the application id from here, not from a `package` attribute
     // in AndroidManifest.xml (which it now rejects). Must stay in sync with
     // applicationId below and with the Kotlin package under src/main/kotlin.
@@ -45,10 +33,12 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId "com.selfhosted.cashew"
-        minSdkVersion 23
+        // Explicit, not flutter.minSdkVersion: platform views need API 23, and
+        // the floor is a device-support decision rather than an SDK default.
+        minSdkVersion flutter.minSdkVersion
         targetSdkVersion 34
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+        versionCode flutter.versionCode
+        versionName flutter.versionName
         multiDexEnabled true
     }
 
@@ -93,7 +83,6 @@ flutter {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.2.2'
     implementation 'androidx.window:window:1.0.0'
     implementation 'androidx.window:window-java:1.0.0'
