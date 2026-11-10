@@ -24,19 +24,25 @@ Break one of these and it usually fails silently. One line each; the reasoning i
 
 Fast and cheap; run them yourself before handing anything off.
 
+**Flutter 3.44.0 is required** — `app/pubspec.yaml` declares it, `/Dockerfile` builds on it, and all three
+workflows pin it. An older SDK fails at `flutter pub get`, not at compile time, so the error names a
+dependency rather than the SDK. 3.19.6 will not resolve this project any more.
+
 ```bash
 cd app && flutter analyze --no-fatal-infos --no-fatal-warnings && flutter test
 cd server && dart analyze && dart test
 ```
 
-`--no-fatal-infos/--no-fatal-warnings` because the fork carries ~260 pre-existing warning/info issues, zero errors — real errors still fail.
+`--no-fatal-infos/--no-fatal-warnings` because the fork carries ~670 pre-existing warning/info issues, zero errors — real errors still fail. (It was ~260 before the Flutter 3.44 upgrade; most of the rest are deprecations that 3.44 only warns about — `WillPopScope`, `textScaleFactor`, `MaterialState`, `ColorScheme.onBackground`. None is removed yet, and the removal waves stopped after 3.22, but Flutter 3.50 moves Material into standalone `material_ui`/`cupertino_ui` packages, which is when this debt stops being free.)
 
 ```bash
 # Upstream's tables still identical? Empty output = yes. (The sed drops the
 # fork's own CategoryEnvelopes table; every other difference is a finding.)
 diff <(sed '/^@DataClassName..CategoryEnvelope../,/^}/d' app/lib/database/tables.dart | grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column") <(grep -E "^class [A-Za-z]+ extends Table|^  [A-Za-z]+Column" upstream/budget/lib/database/tables.dart)
 
-# Still de-Googled? Must print nothing.
+# Still de-Googled? The only expected hit is `flutter_displaymode` -- "dis-play-mode"
+# matches `play`. Any other match, and especially a `google*`/`firebase*` package
+# name, is a finding.
 grep -iE "google|firebase|firestore|gms|play" app/pubspec.lock
 
 # Every server route documented? (also runs in CI as api_docs_test.dart)

@@ -1,11 +1,50 @@
-include ':app'
+// Flutter's Gradle plugins are applied declaratively. The old form -- an
+// `apply from: ".../app_plugin_loader.gradle"` at the bottom of this file --
+// was deprecated in Flutter 3.19 and became a hard error in 3.44:
+// "You are applying Flutter's app_plugin_loader Gradle plugin imperatively
+// using the apply script method, which is not possible anymore."
+// See https://flutter.dev/to/flutter-gradle-plugin-apply
+//
+// The AGP and Kotlin versions live here now rather than on a `buildscript`
+// classpath in the root build.gradle. They are declared `apply false` so each
+// module opts in, and so the root project still has the Kotlin plugin classes
+// on its classpath for the JVM-target hook there.
+pluginManagement {
+    def flutterSdkPath = {
+        def properties = new Properties()
+        file("local.properties").withInputStream { properties.load(it) }
+        def flutterSdkPath = properties.getProperty("flutter.sdk")
+        assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+        return flutterSdkPath
+    }()
 
-def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
-def properties = new Properties()
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
-assert localPropertiesFile.exists()
-localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
 
-def flutterSdkPath = properties.getProperty("flutter.sdk")
-assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
+plugins {
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+    // AGP 8.x is required, not merely preferred: Android 15's android.jar
+    // encodes its resource table in a form the aapt2 bundled with AGP 7.x
+    // cannot parse ("RES_TABLE_TYPE_TYPE entry offsets overlap actual entry
+    // data"), which broke `flutter build apk --release` outright while debug
+    // builds passed -- verifyReleaseResources is a release-only task.
+    //
+    // 8.11.1 rather than 8.7.3 because Flutter 3.44's own AndroidX dependencies
+    // demand it: androidx.core 1.18.0 and androidx.navigationevent 1.0.0 both
+    // "require Android Gradle plugin 8.9.1 or higher", and the Flutter tool
+    // warns below 8.11.1. That also forces Gradle >= 8.13 (wrapper is 8.14.3)
+    // and compileSdk 36.
+    id "com.android.application" version "8.11.1" apply false
+    // Flutter 3.44 refuses to apply its Gradle plugin below Kotlin 2.0.0
+    // ("Your project's Kotlin version (1.9.0) is lower than Flutter's minimum
+    // supported version of 2.0.0"). 2.2.20 is the floor the 3.44 tool asks for.
+    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
+}
+
+include ":app"
